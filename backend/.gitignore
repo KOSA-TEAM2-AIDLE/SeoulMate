@@ -1,0 +1,26 @@
+# 파이썬 가상환경 (Virtual Environment)
+venv/
+.venv/
+env/
+ENV/
+
+# 파이썬 컴파일 및 캐시 파일
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 환경 변수 및 기밀 정보 (FastAPI 세팅용)
+.env
+.env.local
+*.pem
+*.key
+
+# 에디터 및 운영체제(OS) 특화 파일
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
