@@ -1,0 +1,602 @@
+[
+  {
+    "id": 1,
+    "cafe_id": "CAFE001",
+    "content": "좋아요"
+  },
+  {
+    "id": 2,
+    "cafe_id": "CAFE001",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 3,
+    "cafe_id": "CAFE001",
+    "content": "커피 맛있어요"
+  },
+  {
+    "id": 4,
+    "cafe_id": "CAFE001",
+    "content": "조용해요"
+  },
+  {
+    "id": 5,
+    "cafe_id": "CAFE001",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 6,
+    "cafe_id": "CAFE001",
+    "content": "친절해요"
+  },
+  {
+    "id": 7,
+    "cafe_id": "CAFE001",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 8,
+    "cafe_id": "CAFE001",
+    "content": "넓어요"
+  },
+  {
+    "id": 9,
+    "cafe_id": "CAFE001",
+    "content": "작업하기 좋아요"
+  },
+  {
+    "id": 10,
+    "cafe_id": "CAFE001",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 11,
+    "cafe_id": "CAFE001",
+    "content": "인테리어 예뻐요"
+  },
+  {
+    "id": 12,
+    "cafe_id": "CAFE001",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 13,
+    "cafe_id": "CAFE001",
+    "content": "음료 종류 다양해요"
+  },
+  {
+    "id": 14,
+    "cafe_id": "CAFE001",
+    "content": "자리 여유 있어요"
+  },
+  {
+    "id": 15,
+    "cafe_id": "CAFE001",
+    "content": "주차 가능해요"
+  },
+  {
+    "id": 16,
+    "cafe_id": "CAFE001",
+    "content": "와이파이 빨라요"
+  },
+  {
+    "id": 17,
+    "cafe_id": "CAFE001",
+    "content": "콘센트 많아요"
+  },
+  {
+    "id": 18,
+    "cafe_id": "CAFE001",
+    "content": "디저트 맛있어요"
+  },
+  {
+    "id": 19,
+    "cafe_id": "CAFE001",
+    "content": "혼자 오기 좋아요"
+  },
+  {
+    "id": 20,
+    "cafe_id": "CAFE001",
+    "content": "또 올게요"
+  },
+  {
+    "id": 21,
+    "cafe_id": "CAFE002",
+    "content": "좋아요"
+  },
+  {
+    "id": 22,
+    "cafe_id": "CAFE002",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 23,
+    "cafe_id": "CAFE002",
+    "content": "커피 맛있어요"
+  },
+  {
+    "id": 24,
+    "cafe_id": "CAFE002",
+    "content": "조용해요"
+  },
+  {
+    "id": 25,
+    "cafe_id": "CAFE002",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 26,
+    "cafe_id": "CAFE002",
+    "content": "친절해요"
+  },
+  {
+    "id": 27,
+    "cafe_id": "CAFE002",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 28,
+    "cafe_id": "CAFE002",
+    "content": "넓어요"
+  },
+  {
+    "id": 29,
+    "cafe_id": "CAFE002",
+    "content": "작업하기 좋아요"
+  },
+  {
+    "id": 30,
+    "cafe_id": "CAFE002",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 31,
+    "cafe_id": "CAFE002",
+    "content": "인테리어 예뻐요"
+  },
+  {
+    "id": 32,
+    "cafe_id": "CAFE002",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 33,
+    "cafe_id": "CAFE002",
+    "content": "음료 종류 다양해요"
+  },
+  {
+    "id": 34,
+    "cafe_id": "CAFE002",
+    "content": "자리 여유 있어요"
+  },
+  {
+    "id": 35,
+    "cafe_id": "CAFE002",
+    "content": "주차 가능해요"
+  },
+  {
+    "id": 36,
+    "cafe_id": "CAFE002",
+    "content": "와이파이 빨라요"
+  },
+  {
+    "id": 37,
+    "cafe_id": "CAFE002",
+    "content": "콘센트 많아요"
+  },
+  {
+    "id": 38,
+    "cafe_id": "CAFE002",
+    "content": "디저트 맛있어요"
+  },
+  {
+    "id": 39,
+    "cafe_id": "CAFE002",
+    "content": "혼자 오기 좋아요"
+  },
+  {
+    "id": 40,
+    "cafe_id": "CAFE002",
+    "content": "또 올게요"
+  },
+  {
+    "id": 41,
+    "cafe_id": "CAFE003",
+    "content": "좋아요"
+  },
+  {
+    "id": 42,
+    "cafe_id": "CAFE003",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 43,
+    "cafe_id": "CAFE003",
+    "content": "커피 맛있어요"
+  },
+  {
+    "id": 44,
+    "cafe_id": "CAFE003",
+    "content": "조용해요"
+  },
+  {
+    "id": 45,
+    "cafe_id": "CAFE003",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 46,
+    "cafe_id": "CAFE003",
+    "content": "친절해요"
+  },
+  {
+    "id": 47,
+    "cafe_id": "CAFE003",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 48,
+    "cafe_id": "CAFE003",
+    "content": "넓어요"
+  },
+  {
+    "id": 49,
+    "cafe_id": "CAFE003",
+    "content": "작업하기 좋아요"
+  },
+  {
+    "id": 50,
+    "cafe_id": "CAFE003",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 51,
+    "cafe_id": "CAFE003",
+    "content": "인테리어 예뻐요"
+  },
+  {
+    "id": 52,
+    "cafe_id": "CAFE003",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 53,
+    "cafe_id": "CAFE003",
+    "content": "음료 종류 다양해요"
+  },
+  {
+    "id": 54,
+    "cafe_id": "CAFE003",
+    "content": "자리 여유 있어요"
+  },
+  {
+    "id": 55,
+    "cafe_id": "CAFE003",
+    "content": "주차 가능해요"
+  },
+  {
+    "id": 56,
+    "cafe_id": "CAFE003",
+    "content": "와이파이 빨라요"
+  },
+  {
+    "id": 57,
+    "cafe_id": "CAFE003",
+    "content": "콘센트 많아요"
+  },
+  {
+    "id": 58,
+    "cafe_id": "CAFE003",
+    "content": "디저트 맛있어요"
+  },
+  {
+    "id": 59,
+    "cafe_id": "CAFE003",
+    "content": "혼자 오기 좋아요"
+  },
+  {
+    "id": 60,
+    "cafe_id": "CAFE003",
+    "content": "또 올게요"
+  },
+  {
+    "id": 61,
+    "cafe_id": "CAFE004",
+    "content": "좋아요"
+  },
+  {
+    "id": 62,
+    "cafe_id": "CAFE004",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 63,
+    "cafe_id": "CAFE004",
+    "content": "커피 맛있어요"
+  },
+  {
+    "id": 64,
+    "cafe_id": "CAFE004",
+    "content": "조용해요"
+  },
+  {
+    "id": 65,
+    "cafe_id": "CAFE004",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 66,
+    "cafe_id": "CAFE004",
+    "content": "친절해요"
+  },
+  {
+    "id": 67,
+    "cafe_id": "CAFE004",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 68,
+    "cafe_id": "CAFE004",
+    "content": "넓어요"
+  },
+  {
+    "id": 69,
+    "cafe_id": "CAFE004",
+    "content": "작업하기 좋아요"
+  },
+  {
+    "id": 70,
+    "cafe_id": "CAFE004",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 71,
+    "cafe_id": "CAFE004",
+    "content": "인테리어 예뻐요"
+  },
+  {
+    "id": 72,
+    "cafe_id": "CAFE004",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 73,
+    "cafe_id": "CAFE004",
+    "content": "음료 종류 다양해요"
+  },
+  {
+    "id": 74,
+    "cafe_id": "CAFE004",
+    "content": "자리 여유 있어요"
+  },
+  {
+    "id": 75,
+    "cafe_id": "CAFE004",
+    "content": "주차 가능해요"
+  },
+  {
+    "id": 76,
+    "cafe_id": "CAFE004",
+    "content": "와이파이 빨라요"
+  },
+  {
+    "id": 77,
+    "cafe_id": "CAFE004",
+    "content": "콘센트 많아요"
+  },
+  {
+    "id": 78,
+    "cafe_id": "CAFE004",
+    "content": "디저트 맛있어요"
+  },
+  {
+    "id": 79,
+    "cafe_id": "CAFE004",
+    "content": "혼자 오기 좋아요"
+  },
+  {
+    "id": 80,
+    "cafe_id": "CAFE004",
+    "content": "또 올게요"
+  },
+  {
+    "id": 81,
+    "cafe_id": "CAFE005",
+    "content": "좋아요"
+  },
+  {
+    "id": 82,
+    "cafe_id": "CAFE005",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 83,
+    "cafe_id": "CAFE005",
+    "content": "커피 맛있어요"
+  },
+  {
+    "id": 84,
+    "cafe_id": "CAFE005",
+    "content": "조용해요"
+  },
+  {
+    "id": 85,
+    "cafe_id": "CAFE005",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 86,
+    "cafe_id": "CAFE005",
+    "content": "친절해요"
+  },
+  {
+    "id": 87,
+    "cafe_id": "CAFE005",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 88,
+    "cafe_id": "CAFE005",
+    "content": "넓어요"
+  },
+  {
+    "id": 89,
+    "cafe_id": "CAFE005",
+    "content": "작업하기 좋아요"
+  },
+  {
+    "id": 90,
+    "cafe_id": "CAFE005",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 91,
+    "cafe_id": "CAFE005",
+    "content": "인테리어 예뻐요"
+  },
+  {
+    "id": 92,
+    "cafe_id": "CAFE005",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 93,
+    "cafe_id": "CAFE005",
+    "content": "음료 종류 다양해요"
+  },
+  {
+    "id": 94,
+    "cafe_id": "CAFE005",
+    "content": "자리 여유 있어요"
+  },
+  {
+    "id": 95,
+    "cafe_id": "CAFE005",
+    "content": "주차 가능해요"
+  },
+  {
+    "id": 96,
+    "cafe_id": "CAFE005",
+    "content": "와이파이 빨라요"
+  },
+  {
+    "id": 97,
+    "cafe_id": "CAFE005",
+    "content": "콘센트 많아요"
+  },
+  {
+    "id": 98,
+    "cafe_id": "CAFE005",
+    "content": "디저트 맛있어요"
+  },
+  {
+    "id": 99,
+    "cafe_id": "CAFE005",
+    "content": "혼자 오기 좋아요"
+  },
+  {
+    "id": 100,
+    "cafe_id": "CAFE005",
+    "content": "또 올게요"
+  },
+  {
+    "id": 101,
+    "cafe_id": "CAFE006",
+    "content": "좋아요"
+  },
+  {
+    "id": 102,
+    "cafe_id": "CAFE006",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 103,
+    "cafe_id": "CAFE006",
+    "content": "커피 맛있어요"
+  },
+  {
+    "id": 104,
+    "cafe_id": "CAFE006",
+    "content": "조용해요"
+  },
+  {
+    "id": 105,
+    "cafe_id": "CAFE006",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 106,
+    "cafe_id": "CAFE006",
+    "content": "친절해요"
+  },
+  {
+    "id": 107,
+    "cafe_id": "CAFE006",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 108,
+    "cafe_id": "CAFE006",
+    "content": "넓어요"
+  },
+  {
+    "id": 109,
+    "cafe_id": "CAFE006",
+    "content": "작업하기 좋아요"
+  },
+  {
+    "id": 110,
+    "cafe_id": "CAFE006",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 111,
+    "cafe_id": "CAFE006",
+    "content": "인테리어 예뻐요"
+  },
+  {
+    "id": 112,
+    "cafe_id": "CAFE006",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 113,
+    "cafe_id": "CAFE006",
+    "content": "음료 종류 다양해요"
+  },
+  {
+    "id": 114,
+    "cafe_id": "CAFE006",
+    "content": "자리 여유 있어요"
+  },
+  {
+    "id": 115,
+    "cafe_id": "CAFE006",
+    "content": "주차 가능해요"
+  },
+  {
+    "id": 116,
+    "cafe_id": "CAFE006",
+    "content": "와이파이 빨라요"
+  },
+  {
+    "id": 117,
+    "cafe_id": "CAFE006",
+    "content": "콘센트 많아요"
+  },
+  {
+    "id": 118,
+    "cafe_id": "CAFE006",
+    "content": "디저트 맛있어요"
+  },
+  {
+    "id": 119,
+    "cafe_id": "CAFE006",
+    "content": "혼자 오기 좋아요"
+  },
+  {
+    "id": 120,
+    "cafe_id": "CAFE006",
+    "content": "또 올게요"
+  }
+]

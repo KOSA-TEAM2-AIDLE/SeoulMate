@@ -1,28 +1,45 @@
-import os
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
+from core.config import ALLOWED_ORIGINS
+from routers import (
+    health,
+    tools,
+    places,
+    actions,
+    chat,
+    cafes,
+    restaurants,
+    accommodations,
+    events,
+    storage_lockers,
+)
+
 load_dotenv()
 
-app = FastAPI(title="CareMap Backend API")
+app = FastAPI(title="SeoulMate Backend API")
 
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-api_router = APIRouter(prefix="/api")
+# API 명세서 2장 엔드포인트 전체 목록 참고. 명세서상 base path prefix 없음.
+app.include_router(health.router)
+app.include_router(tools.router)
+app.include_router(places.router)
+app.include_router(actions.router)
+app.include_router(chat.router)
+app.include_router(cafes.router)
+app.include_router(restaurants.router)
+app.include_router(accommodations.router)
+app.include_router(events.router)
+app.include_router(storage_lockers.router)
 
-@api_router.get("/test")
-def get_users():
-    return "Hello World"
-
-app.include_router(api_router)
 
 @app.get("/")
 def read_root():

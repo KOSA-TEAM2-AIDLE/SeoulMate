@@ -1,0 +1,602 @@
+[
+  {
+    "id": 1,
+    "restaurant_id": "REST001",
+    "content": "맛있어요"
+  },
+  {
+    "id": 2,
+    "restaurant_id": "REST001",
+    "content": "양 많아요"
+  },
+  {
+    "id": 3,
+    "restaurant_id": "REST001",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 4,
+    "restaurant_id": "REST001",
+    "content": "친절해요"
+  },
+  {
+    "id": 5,
+    "restaurant_id": "REST001",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 6,
+    "restaurant_id": "REST001",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 7,
+    "restaurant_id": "REST001",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 8,
+    "restaurant_id": "REST001",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 9,
+    "restaurant_id": "REST001",
+    "content": "또 오고 싶어요"
+  },
+  {
+    "id": 10,
+    "restaurant_id": "REST001",
+    "content": "강추해요"
+  },
+  {
+    "id": 11,
+    "restaurant_id": "REST001",
+    "content": "메뉴 다양해요"
+  },
+  {
+    "id": 12,
+    "restaurant_id": "REST001",
+    "content": "빠르게 나와요"
+  },
+  {
+    "id": 13,
+    "restaurant_id": "REST001",
+    "content": "신선해요"
+  },
+  {
+    "id": 14,
+    "restaurant_id": "REST001",
+    "content": "짜지 않아요"
+  },
+  {
+    "id": 15,
+    "restaurant_id": "REST001",
+    "content": "달지 않아요"
+  },
+  {
+    "id": 16,
+    "restaurant_id": "REST001",
+    "content": "주차 편해요"
+  },
+  {
+    "id": 17,
+    "restaurant_id": "REST001",
+    "content": "넓어요"
+  },
+  {
+    "id": 18,
+    "restaurant_id": "REST001",
+    "content": "조용해요"
+  },
+  {
+    "id": 19,
+    "restaurant_id": "REST001",
+    "content": "포장 가능해요"
+  },
+  {
+    "id": 20,
+    "restaurant_id": "REST001",
+    "content": "혼밥하기 좋아요"
+  },
+  {
+    "id": 21,
+    "restaurant_id": "REST002",
+    "content": "맛있어요"
+  },
+  {
+    "id": 22,
+    "restaurant_id": "REST002",
+    "content": "양 많아요"
+  },
+  {
+    "id": 23,
+    "restaurant_id": "REST002",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 24,
+    "restaurant_id": "REST002",
+    "content": "친절해요"
+  },
+  {
+    "id": 25,
+    "restaurant_id": "REST002",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 26,
+    "restaurant_id": "REST002",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 27,
+    "restaurant_id": "REST002",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 28,
+    "restaurant_id": "REST002",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 29,
+    "restaurant_id": "REST002",
+    "content": "또 오고 싶어요"
+  },
+  {
+    "id": 30,
+    "restaurant_id": "REST002",
+    "content": "강추해요"
+  },
+  {
+    "id": 31,
+    "restaurant_id": "REST002",
+    "content": "메뉴 다양해요"
+  },
+  {
+    "id": 32,
+    "restaurant_id": "REST002",
+    "content": "빠르게 나와요"
+  },
+  {
+    "id": 33,
+    "restaurant_id": "REST002",
+    "content": "신선해요"
+  },
+  {
+    "id": 34,
+    "restaurant_id": "REST002",
+    "content": "짜지 않아요"
+  },
+  {
+    "id": 35,
+    "restaurant_id": "REST002",
+    "content": "달지 않아요"
+  },
+  {
+    "id": 36,
+    "restaurant_id": "REST002",
+    "content": "주차 편해요"
+  },
+  {
+    "id": 37,
+    "restaurant_id": "REST002",
+    "content": "넓어요"
+  },
+  {
+    "id": 38,
+    "restaurant_id": "REST002",
+    "content": "조용해요"
+  },
+  {
+    "id": 39,
+    "restaurant_id": "REST002",
+    "content": "포장 가능해요"
+  },
+  {
+    "id": 40,
+    "restaurant_id": "REST002",
+    "content": "혼밥하기 좋아요"
+  },
+  {
+    "id": 41,
+    "restaurant_id": "REST003",
+    "content": "맛있어요"
+  },
+  {
+    "id": 42,
+    "restaurant_id": "REST003",
+    "content": "양 많아요"
+  },
+  {
+    "id": 43,
+    "restaurant_id": "REST003",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 44,
+    "restaurant_id": "REST003",
+    "content": "친절해요"
+  },
+  {
+    "id": 45,
+    "restaurant_id": "REST003",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 46,
+    "restaurant_id": "REST003",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 47,
+    "restaurant_id": "REST003",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 48,
+    "restaurant_id": "REST003",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 49,
+    "restaurant_id": "REST003",
+    "content": "또 오고 싶어요"
+  },
+  {
+    "id": 50,
+    "restaurant_id": "REST003",
+    "content": "강추해요"
+  },
+  {
+    "id": 51,
+    "restaurant_id": "REST003",
+    "content": "메뉴 다양해요"
+  },
+  {
+    "id": 52,
+    "restaurant_id": "REST003",
+    "content": "빠르게 나와요"
+  },
+  {
+    "id": 53,
+    "restaurant_id": "REST003",
+    "content": "신선해요"
+  },
+  {
+    "id": 54,
+    "restaurant_id": "REST003",
+    "content": "짜지 않아요"
+  },
+  {
+    "id": 55,
+    "restaurant_id": "REST003",
+    "content": "달지 않아요"
+  },
+  {
+    "id": 56,
+    "restaurant_id": "REST003",
+    "content": "주차 편해요"
+  },
+  {
+    "id": 57,
+    "restaurant_id": "REST003",
+    "content": "넓어요"
+  },
+  {
+    "id": 58,
+    "restaurant_id": "REST003",
+    "content": "조용해요"
+  },
+  {
+    "id": 59,
+    "restaurant_id": "REST003",
+    "content": "포장 가능해요"
+  },
+  {
+    "id": 60,
+    "restaurant_id": "REST003",
+    "content": "혼밥하기 좋아요"
+  },
+  {
+    "id": 61,
+    "restaurant_id": "REST004",
+    "content": "맛있어요"
+  },
+  {
+    "id": 62,
+    "restaurant_id": "REST004",
+    "content": "양 많아요"
+  },
+  {
+    "id": 63,
+    "restaurant_id": "REST004",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 64,
+    "restaurant_id": "REST004",
+    "content": "친절해요"
+  },
+  {
+    "id": 65,
+    "restaurant_id": "REST004",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 66,
+    "restaurant_id": "REST004",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 67,
+    "restaurant_id": "REST004",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 68,
+    "restaurant_id": "REST004",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 69,
+    "restaurant_id": "REST004",
+    "content": "또 오고 싶어요"
+  },
+  {
+    "id": 70,
+    "restaurant_id": "REST004",
+    "content": "강추해요"
+  },
+  {
+    "id": 71,
+    "restaurant_id": "REST004",
+    "content": "메뉴 다양해요"
+  },
+  {
+    "id": 72,
+    "restaurant_id": "REST004",
+    "content": "빠르게 나와요"
+  },
+  {
+    "id": 73,
+    "restaurant_id": "REST004",
+    "content": "신선해요"
+  },
+  {
+    "id": 74,
+    "restaurant_id": "REST004",
+    "content": "짜지 않아요"
+  },
+  {
+    "id": 75,
+    "restaurant_id": "REST004",
+    "content": "달지 않아요"
+  },
+  {
+    "id": 76,
+    "restaurant_id": "REST004",
+    "content": "주차 편해요"
+  },
+  {
+    "id": 77,
+    "restaurant_id": "REST004",
+    "content": "넓어요"
+  },
+  {
+    "id": 78,
+    "restaurant_id": "REST004",
+    "content": "조용해요"
+  },
+  {
+    "id": 79,
+    "restaurant_id": "REST004",
+    "content": "포장 가능해요"
+  },
+  {
+    "id": 80,
+    "restaurant_id": "REST004",
+    "content": "혼밥하기 좋아요"
+  },
+  {
+    "id": 81,
+    "restaurant_id": "REST005",
+    "content": "맛있어요"
+  },
+  {
+    "id": 82,
+    "restaurant_id": "REST005",
+    "content": "양 많아요"
+  },
+  {
+    "id": 83,
+    "restaurant_id": "REST005",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 84,
+    "restaurant_id": "REST005",
+    "content": "친절해요"
+  },
+  {
+    "id": 85,
+    "restaurant_id": "REST005",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 86,
+    "restaurant_id": "REST005",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 87,
+    "restaurant_id": "REST005",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 88,
+    "restaurant_id": "REST005",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 89,
+    "restaurant_id": "REST005",
+    "content": "또 오고 싶어요"
+  },
+  {
+    "id": 90,
+    "restaurant_id": "REST005",
+    "content": "강추해요"
+  },
+  {
+    "id": 91,
+    "restaurant_id": "REST005",
+    "content": "메뉴 다양해요"
+  },
+  {
+    "id": 92,
+    "restaurant_id": "REST005",
+    "content": "빠르게 나와요"
+  },
+  {
+    "id": 93,
+    "restaurant_id": "REST005",
+    "content": "신선해요"
+  },
+  {
+    "id": 94,
+    "restaurant_id": "REST005",
+    "content": "짜지 않아요"
+  },
+  {
+    "id": 95,
+    "restaurant_id": "REST005",
+    "content": "달지 않아요"
+  },
+  {
+    "id": 96,
+    "restaurant_id": "REST005",
+    "content": "주차 편해요"
+  },
+  {
+    "id": 97,
+    "restaurant_id": "REST005",
+    "content": "넓어요"
+  },
+  {
+    "id": 98,
+    "restaurant_id": "REST005",
+    "content": "조용해요"
+  },
+  {
+    "id": 99,
+    "restaurant_id": "REST005",
+    "content": "포장 가능해요"
+  },
+  {
+    "id": 100,
+    "restaurant_id": "REST005",
+    "content": "혼밥하기 좋아요"
+  },
+  {
+    "id": 101,
+    "restaurant_id": "REST006",
+    "content": "맛있어요"
+  },
+  {
+    "id": 102,
+    "restaurant_id": "REST006",
+    "content": "양 많아요"
+  },
+  {
+    "id": 103,
+    "restaurant_id": "REST006",
+    "content": "가격 적당해요"
+  },
+  {
+    "id": 104,
+    "restaurant_id": "REST006",
+    "content": "친절해요"
+  },
+  {
+    "id": 105,
+    "restaurant_id": "REST006",
+    "content": "깨끗해요"
+  },
+  {
+    "id": 106,
+    "restaurant_id": "REST006",
+    "content": "분위기 좋아요"
+  },
+  {
+    "id": 107,
+    "restaurant_id": "REST006",
+    "content": "위치 좋아요"
+  },
+  {
+    "id": 108,
+    "restaurant_id": "REST006",
+    "content": "재방문 의사 있어요"
+  },
+  {
+    "id": 109,
+    "restaurant_id": "REST006",
+    "content": "또 오고 싶어요"
+  },
+  {
+    "id": 110,
+    "restaurant_id": "REST006",
+    "content": "강추해요"
+  },
+  {
+    "id": 111,
+    "restaurant_id": "REST006",
+    "content": "메뉴 다양해요"
+  },
+  {
+    "id": 112,
+    "restaurant_id": "REST006",
+    "content": "빠르게 나와요"
+  },
+  {
+    "id": 113,
+    "restaurant_id": "REST006",
+    "content": "신선해요"
+  },
+  {
+    "id": 114,
+    "restaurant_id": "REST006",
+    "content": "짜지 않아요"
+  },
+  {
+    "id": 115,
+    "restaurant_id": "REST006",
+    "content": "달지 않아요"
+  },
+  {
+    "id": 116,
+    "restaurant_id": "REST006",
+    "content": "주차 편해요"
+  },
+  {
+    "id": 117,
+    "restaurant_id": "REST006",
+    "content": "넓어요"
+  },
+  {
+    "id": 118,
+    "restaurant_id": "REST006",
+    "content": "조용해요"
+  },
+  {
+    "id": 119,
+    "restaurant_id": "REST006",
+    "content": "포장 가능해요"
+  },
+  {
+    "id": 120,
+    "restaurant_id": "REST006",
+    "content": "혼밥하기 좋아요"
+  }
+]
