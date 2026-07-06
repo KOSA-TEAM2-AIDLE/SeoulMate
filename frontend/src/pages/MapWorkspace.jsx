@@ -1,13 +1,9 @@
+import KakaoMap from '../components/map/KakaoMap';
+
 export default function MapWorkspace() {
   return (
     <section className="relative min-h-[460px] overflow-hidden bg-blue-50">
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(37,99,235,0.12)_1px,transparent_1px),linear-gradient(rgba(37,99,235,0.12)_1px,transparent_1px)] bg-[size:48px_48px]" />
-
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="rounded-full border-4 border-blue-600 px-8 py-4 text-lg font-bold text-blue-700">
-          지도 영역
-        </div>
-      </div>
+      <KakaoMap />
 
       <div className="absolute right-4 top-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <button type="button" className="block px-4 py-3 text-xl font-semibold text-slate-700">

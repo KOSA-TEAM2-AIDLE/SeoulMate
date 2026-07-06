@@ -157,22 +157,22 @@ function filterPlaceWithCoordinates(places){
     return places.filter(hasValidCoordinates);
 }
 
-export function normalizedMapPlaces({
-    cafes = [],
-    restaurant = [],
-    accommodation = [],
-    events = [],
-    storageLockers = [],
+export function normalizeMapPlaces({
+  cafes = [],
+  restaurants = [],
+  accommodations = [],
+  events = [],
+  storageLockers = [],
 }) {
-    const normalizedPlaces = [
-        ...cafes.map(normalizeCafe),
-        ...restaurants.map(normalizeRestaurant),
-        ...accommodations.map(normalizeAccommodation),
-        ...events.map(normalizeEvent),
-        ...storageLockers.map(normalizeStorageLocker),
-    ];
+  const normalizedPlaces = [
+    ...cafes.map(normalizeCafe),
+    ...restaurants.map(normalizeRestaurant),
+    ...accommodations.map(normalizeAccommodation),
+    ...events.map(normalizeEvent),
+    ...storageLockers.map(normalizeStorageLocker),
+  ];
 
-    return filterPlaceWithCoordinates(normalizedPlaces);
+  return filterPlaceWithCoordinates(normalizedPlaces);
 }
 
 export { PLACE_TYPES };
