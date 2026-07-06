@@ -1,13 +1,13 @@
 import { useState } from 'react';
 
-// 1. 공통 인터페이스 규격으로 가공된 마스터 데이터셋
+// 1. 공통 인터페이스 규격으로 가공된 마스터 데이터셋 (desc -> address 변경 완료)
 const INTEGRATED_PLACE_ITEMS = [
   {
     id: "ACCO001",
     name: "파크 하얏트 서울",
     category: "숙소",
     subCategory: "럭셔리",
-    desc: "서울 강남구 테헤란로 606",
+    address: "서울 강남구 테헤란로 606",
     rating: "4.7",
     reviews: "1,842",
     time: "15:00 (체크인)",
@@ -18,7 +18,7 @@ const INTEGRATED_PLACE_ITEMS = [
     name: "롯데호텔 서울",
     category: "숙소",
     subCategory: "럭셔리",
-    desc: "서울 중구 을지로 30",
+    address: "서울 중구 을지로 30",
     rating: "4.6",
     reviews: "3,124",
     time: "15:00 (체크인)",
@@ -29,7 +29,7 @@ const INTEGRATED_PLACE_ITEMS = [
     name: "블루보틀 삼청",
     category: "카페",
     subCategory: "스페셜티 커피",
-    desc: "한옥 외관을 살린 인테리어의 전통과 현대의 조화",
+    address: "서울 종로구 삼청로 87",
     rating: "4.5",
     reviews: "120",
     time: "14:00 - 15:00",
@@ -40,7 +40,7 @@ const INTEGRATED_PLACE_ITEMS = [
     name: "어니언 성수",
     category: "카페",
     subCategory: "베이커리 카페",
-    desc: "옛 군복 공장을 개조한 성수동 대표 베이커리",
+    address: "서울 성동구 아차산로9길 8",
     rating: "4.7",
     reviews: "1,450",
     time: "16:30 - 17:30",
@@ -51,7 +51,7 @@ const INTEGRATED_PLACE_ITEMS = [
     name: "경복궁 야간개장",
     category: "명소",
     subCategory: "궁궐/야간",
-    desc: "봄·가을 한정 경복궁 야간 특별 관람 프로그램",
+    address: "서울 종로구 사직로 161",
     rating: "4.9",
     reviews: "2,840",
     time: "19:30 - 21:00",
@@ -62,7 +62,7 @@ const INTEGRATED_PLACE_ITEMS = [
     name: "광장시장 박가네 빈대떡",
     category: "맛집",
     subCategory: "한식/분식",
-    desc: "광장시장에서 3대째 이어온 빈대떡 노포 명가",
+    address: "서울 종로구 창경궁로 88",
     rating: "4.6",
     reviews: "934",
     time: "12:00 - 13:00",
@@ -73,7 +73,7 @@ const INTEGRATED_PLACE_ITEMS = [
     name: "경복궁역 물품보관소",
     category: "보관소",
     subCategory: "지하철역 내",
-    desc: "3호선 경복궁역 5번 출구 내 역내 보관소",
+    address: "서울 종로구 사직로 130",
     rating: "4.4",
     reviews: "45",
     time: "09:00 (짐 보관)",
@@ -94,7 +94,7 @@ export default function PlaceSidebar() {
   const [activeFilter, setActiveFilter] = useState('전체');
   const [selectedDay, setSelectedDay] = useState(1);
   const [routes, setRoutes] = useState(INITIAL_ROUTES);
-  const [days] = useState([1, 2, 3]); // fixed 고정 일정을 위해 setDays 제거
+  const [days] = useState([1, 2, 3]);
   const [toastMessage, setToastMessage] = useState('');
 
   const filteredPlaces = INTEGRATED_PLACE_ITEMS.filter((place) => {
@@ -197,7 +197,8 @@ export default function PlaceSidebar() {
                             {place.subCategory}
                           </span>
                                 </div>
-                                <p className="mt-1 text-sm text-slate-400 truncate">{place.desc}</p>
+                                {/* 💡 개정 포인트: place.desc 대신 수정한 실제 도로명 주소 매핑 */}
+                                <p className="mt-1 text-sm text-slate-400 truncate">{place.address}</p>
                                 <p className="mt-1.5 text-sm text-amber-500 font-semibold">★ {place.rating}</p>
                               </div>
                             </div>
@@ -225,7 +226,7 @@ export default function PlaceSidebar() {
                   </div>
                 </div>
 
-                {/* Day 탭 목록 (💡 플러스 버튼 아이콘 제거 및 레이아웃 정리) */}
+                {/* Day 탭 목록 */}
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   {days.map((day) => (
                       <button
