@@ -1,4 +1,4 @@
-export default function ChatInputBox({ value = '', onChange, onSubmit }) {
+export default function ChatInputBox({ value = '', onChange, onSubmit, disabled = false }) {
   const handleSubmit = (event) => {
     event.preventDefault();
     onSubmit?.();
@@ -13,12 +13,14 @@ export default function ChatInputBox({ value = '', onChange, onSubmit }) {
         type="text"
         value={value}
         onChange={onChange}
+        disabled={disabled}
         placeholder="메시지를 입력하세요..."
-        className="min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-500"
+        className="min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed"
       />
       <button
         type="submit"
-        className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white transition hover:bg-blue-700"
+        disabled={disabled || !value.trim()}
+        className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         aria-label="메시지 전송"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
