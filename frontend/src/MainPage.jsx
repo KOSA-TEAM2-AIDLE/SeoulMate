@@ -4,14 +4,14 @@ import MapWorkspace from "./pages/MapWorkspace";
 import PlaceSidebar from "./pages/PlaceSidebar";
 
 export default function MainPage() {
-  return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <Header />
-      <main className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[360px_minmax(420px,1fr)_380px]">
-        <PlaceSidebar />
-        <MapWorkspace />
-        <ChatSidebar />
-      </main>
-    </div>
-  );
+    return (
+        <div className="flex h-screen w-screen flex-col bg-slate-50 text-slate-900 overflow-hidden">
+            <Header />
+            <main className="grid h-[calc(100vh-64px)] flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[380px_minmax(420px,1fr)_380px]">
+                <PlaceSidebar />
+                <MapWorkspace />
+                <ChatSidebar />
+            </main>
+        </div>
+    );
 }
