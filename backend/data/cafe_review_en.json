@@ -1,0 +1,602 @@
+[
+  {
+    "id": 1,
+    "cafe_id": "CAFE001",
+    "content": "Good"
+  },
+  {
+    "id": 2,
+    "cafe_id": "CAFE001",
+    "content": "Nice atmosphere"
+  },
+  {
+    "id": 3,
+    "cafe_id": "CAFE001",
+    "content": "Coffee is delicious"
+  },
+  {
+    "id": 4,
+    "cafe_id": "CAFE001",
+    "content": "Quiet"
+  },
+  {
+    "id": 5,
+    "cafe_id": "CAFE001",
+    "content": "Would visit again"
+  },
+  {
+    "id": 6,
+    "cafe_id": "CAFE001",
+    "content": "Staff are friendly"
+  },
+  {
+    "id": 7,
+    "cafe_id": "CAFE001",
+    "content": "Very clean"
+  },
+  {
+    "id": 8,
+    "cafe_id": "CAFE001",
+    "content": "Spacious"
+  },
+  {
+    "id": 9,
+    "cafe_id": "CAFE001",
+    "content": "Great for working"
+  },
+  {
+    "id": 10,
+    "cafe_id": "CAFE001",
+    "content": "Reasonable prices"
+  },
+  {
+    "id": 11,
+    "cafe_id": "CAFE001",
+    "content": "Lovely interior"
+  },
+  {
+    "id": 12,
+    "cafe_id": "CAFE001",
+    "content": "Great location"
+  },
+  {
+    "id": 13,
+    "cafe_id": "CAFE001",
+    "content": "Wide drink menu"
+  },
+  {
+    "id": 14,
+    "cafe_id": "CAFE001",
+    "content": "Plenty of seating"
+  },
+  {
+    "id": 15,
+    "cafe_id": "CAFE001",
+    "content": "Parking available"
+  },
+  {
+    "id": 16,
+    "cafe_id": "CAFE001",
+    "content": "Fast wifi"
+  },
+  {
+    "id": 17,
+    "cafe_id": "CAFE001",
+    "content": "Lots of outlets"
+  },
+  {
+    "id": 18,
+    "cafe_id": "CAFE001",
+    "content": "Desserts are great"
+  },
+  {
+    "id": 19,
+    "cafe_id": "CAFE001",
+    "content": "Good for solo visits"
+  },
+  {
+    "id": 20,
+    "cafe_id": "CAFE001",
+    "content": "Will come back"
+  },
+  {
+    "id": 21,
+    "cafe_id": "CAFE002",
+    "content": "Good"
+  },
+  {
+    "id": 22,
+    "cafe_id": "CAFE002",
+    "content": "Nice atmosphere"
+  },
+  {
+    "id": 23,
+    "cafe_id": "CAFE002",
+    "content": "Coffee is delicious"
+  },
+  {
+    "id": 24,
+    "cafe_id": "CAFE002",
+    "content": "Quiet"
+  },
+  {
+    "id": 25,
+    "cafe_id": "CAFE002",
+    "content": "Would visit again"
+  },
+  {
+    "id": 26,
+    "cafe_id": "CAFE002",
+    "content": "Staff are friendly"
+  },
+  {
+    "id": 27,
+    "cafe_id": "CAFE002",
+    "content": "Very clean"
+  },
+  {
+    "id": 28,
+    "cafe_id": "CAFE002",
+    "content": "Spacious"
+  },
+  {
+    "id": 29,
+    "cafe_id": "CAFE002",
+    "content": "Great for working"
+  },
+  {
+    "id": 30,
+    "cafe_id": "CAFE002",
+    "content": "Reasonable prices"
+  },
+  {
+    "id": 31,
+    "cafe_id": "CAFE002",
+    "content": "Lovely interior"
+  },
+  {
+    "id": 32,
+    "cafe_id": "CAFE002",
+    "content": "Great location"
+  },
+  {
+    "id": 33,
+    "cafe_id": "CAFE002",
+    "content": "Wide drink menu"
+  },
+  {
+    "id": 34,
+    "cafe_id": "CAFE002",
+    "content": "Plenty of seating"
+  },
+  {
+    "id": 35,
+    "cafe_id": "CAFE002",
+    "content": "Parking available"
+  },
+  {
+    "id": 36,
+    "cafe_id": "CAFE002",
+    "content": "Fast wifi"
+  },
+  {
+    "id": 37,
+    "cafe_id": "CAFE002",
+    "content": "Lots of outlets"
+  },
+  {
+    "id": 38,
+    "cafe_id": "CAFE002",
+    "content": "Desserts are great"
+  },
+  {
+    "id": 39,
+    "cafe_id": "CAFE002",
+    "content": "Good for solo visits"
+  },
+  {
+    "id": 40,
+    "cafe_id": "CAFE002",
+    "content": "Will come back"
+  },
+  {
+    "id": 41,
+    "cafe_id": "CAFE003",
+    "content": "Good"
+  },
+  {
+    "id": 42,
+    "cafe_id": "CAFE003",
+    "content": "Nice atmosphere"
+  },
+  {
+    "id": 43,
+    "cafe_id": "CAFE003",
+    "content": "Coffee is delicious"
+  },
+  {
+    "id": 44,
+    "cafe_id": "CAFE003",
+    "content": "Quiet"
+  },
+  {
+    "id": 45,
+    "cafe_id": "CAFE003",
+    "content": "Would visit again"
+  },
+  {
+    "id": 46,
+    "cafe_id": "CAFE003",
+    "content": "Staff are friendly"
+  },
+  {
+    "id": 47,
+    "cafe_id": "CAFE003",
+    "content": "Very clean"
+  },
+  {
+    "id": 48,
+    "cafe_id": "CAFE003",
+    "content": "Spacious"
+  },
+  {
+    "id": 49,
+    "cafe_id": "CAFE003",
+    "content": "Great for working"
+  },
+  {
+    "id": 50,
+    "cafe_id": "CAFE003",
+    "content": "Reasonable prices"
+  },
+  {
+    "id": 51,
+    "cafe_id": "CAFE003",
+    "content": "Lovely interior"
+  },
+  {
+    "id": 52,
+    "cafe_id": "CAFE003",
+    "content": "Great location"
+  },
+  {
+    "id": 53,
+    "cafe_id": "CAFE003",
+    "content": "Wide drink menu"
+  },
+  {
+    "id": 54,
+    "cafe_id": "CAFE003",
+    "content": "Plenty of seating"
+  },
+  {
+    "id": 55,
+    "cafe_id": "CAFE003",
+    "content": "Parking available"
+  },
+  {
+    "id": 56,
+    "cafe_id": "CAFE003",
+    "content": "Fast wifi"
+  },
+  {
+    "id": 57,
+    "cafe_id": "CAFE003",
+    "content": "Lots of outlets"
+  },
+  {
+    "id": 58,
+    "cafe_id": "CAFE003",
+    "content": "Desserts are great"
+  },
+  {
+    "id": 59,
+    "cafe_id": "CAFE003",
+    "content": "Good for solo visits"
+  },
+  {
+    "id": 60,
+    "cafe_id": "CAFE003",
+    "content": "Will come back"
+  },
+  {
+    "id": 61,
+    "cafe_id": "CAFE004",
+    "content": "Good"
+  },
+  {
+    "id": 62,
+    "cafe_id": "CAFE004",
+    "content": "Nice atmosphere"
+  },
+  {
+    "id": 63,
+    "cafe_id": "CAFE004",
+    "content": "Coffee is delicious"
+  },
+  {
+    "id": 64,
+    "cafe_id": "CAFE004",
+    "content": "Quiet"
+  },
+  {
+    "id": 65,
+    "cafe_id": "CAFE004",
+    "content": "Would visit again"
+  },
+  {
+    "id": 66,
+    "cafe_id": "CAFE004",
+    "content": "Staff are friendly"
+  },
+  {
+    "id": 67,
+    "cafe_id": "CAFE004",
+    "content": "Very clean"
+  },
+  {
+    "id": 68,
+    "cafe_id": "CAFE004",
+    "content": "Spacious"
+  },
+  {
+    "id": 69,
+    "cafe_id": "CAFE004",
+    "content": "Great for working"
+  },
+  {
+    "id": 70,
+    "cafe_id": "CAFE004",
+    "content": "Reasonable prices"
+  },
+  {
+    "id": 71,
+    "cafe_id": "CAFE004",
+    "content": "Lovely interior"
+  },
+  {
+    "id": 72,
+    "cafe_id": "CAFE004",
+    "content": "Great location"
+  },
+  {
+    "id": 73,
+    "cafe_id": "CAFE004",
+    "content": "Wide drink menu"
+  },
+  {
+    "id": 74,
+    "cafe_id": "CAFE004",
+    "content": "Plenty of seating"
+  },
+  {
+    "id": 75,
+    "cafe_id": "CAFE004",
+    "content": "Parking available"
+  },
+  {
+    "id": 76,
+    "cafe_id": "CAFE004",
+    "content": "Fast wifi"
+  },
+  {
+    "id": 77,
+    "cafe_id": "CAFE004",
+    "content": "Lots of outlets"
+  },
+  {
+    "id": 78,
+    "cafe_id": "CAFE004",
+    "content": "Desserts are great"
+  },
+  {
+    "id": 79,
+    "cafe_id": "CAFE004",
+    "content": "Good for solo visits"
+  },
+  {
+    "id": 80,
+    "cafe_id": "CAFE004",
+    "content": "Will come back"
+  },
+  {
+    "id": 81,
+    "cafe_id": "CAFE005",
+    "content": "Good"
+  },
+  {
+    "id": 82,
+    "cafe_id": "CAFE005",
+    "content": "Nice atmosphere"
+  },
+  {
+    "id": 83,
+    "cafe_id": "CAFE005",
+    "content": "Coffee is delicious"
+  },
+  {
+    "id": 84,
+    "cafe_id": "CAFE005",
+    "content": "Quiet"
+  },
+  {
+    "id": 85,
+    "cafe_id": "CAFE005",
+    "content": "Would visit again"
+  },
+  {
+    "id": 86,
+    "cafe_id": "CAFE005",
+    "content": "Staff are friendly"
+  },
+  {
+    "id": 87,
+    "cafe_id": "CAFE005",
+    "content": "Very clean"
+  },
+  {
+    "id": 88,
+    "cafe_id": "CAFE005",
+    "content": "Spacious"
+  },
+  {
+    "id": 89,
+    "cafe_id": "CAFE005",
+    "content": "Great for working"
+  },
+  {
+    "id": 90,
+    "cafe_id": "CAFE005",
+    "content": "Reasonable prices"
+  },
+  {
+    "id": 91,
+    "cafe_id": "CAFE005",
+    "content": "Lovely interior"
+  },
+  {
+    "id": 92,
+    "cafe_id": "CAFE005",
+    "content": "Great location"
+  },
+  {
+    "id": 93,
+    "cafe_id": "CAFE005",
+    "content": "Wide drink menu"
+  },
+  {
+    "id": 94,
+    "cafe_id": "CAFE005",
+    "content": "Plenty of seating"
+  },
+  {
+    "id": 95,
+    "cafe_id": "CAFE005",
+    "content": "Parking available"
+  },
+  {
+    "id": 96,
+    "cafe_id": "CAFE005",
+    "content": "Fast wifi"
+  },
+  {
+    "id": 97,
+    "cafe_id": "CAFE005",
+    "content": "Lots of outlets"
+  },
+  {
+    "id": 98,
+    "cafe_id": "CAFE005",
+    "content": "Desserts are great"
+  },
+  {
+    "id": 99,
+    "cafe_id": "CAFE005",
+    "content": "Good for solo visits"
+  },
+  {
+    "id": 100,
+    "cafe_id": "CAFE005",
+    "content": "Will come back"
+  },
+  {
+    "id": 101,
+    "cafe_id": "CAFE006",
+    "content": "Good"
+  },
+  {
+    "id": 102,
+    "cafe_id": "CAFE006",
+    "content": "Nice atmosphere"
+  },
+  {
+    "id": 103,
+    "cafe_id": "CAFE006",
+    "content": "Coffee is delicious"
+  },
+  {
+    "id": 104,
+    "cafe_id": "CAFE006",
+    "content": "Quiet"
+  },
+  {
+    "id": 105,
+    "cafe_id": "CAFE006",
+    "content": "Would visit again"
+  },
+  {
+    "id": 106,
+    "cafe_id": "CAFE006",
+    "content": "Staff are friendly"
+  },
+  {
+    "id": 107,
+    "cafe_id": "CAFE006",
+    "content": "Very clean"
+  },
+  {
+    "id": 108,
+    "cafe_id": "CAFE006",
+    "content": "Spacious"
+  },
+  {
+    "id": 109,
+    "cafe_id": "CAFE006",
+    "content": "Great for working"
+  },
+  {
+    "id": 110,
+    "cafe_id": "CAFE006",
+    "content": "Reasonable prices"
+  },
+  {
+    "id": 111,
+    "cafe_id": "CAFE006",
+    "content": "Lovely interior"
+  },
+  {
+    "id": 112,
+    "cafe_id": "CAFE006",
+    "content": "Great location"
+  },
+  {
+    "id": 113,
+    "cafe_id": "CAFE006",
+    "content": "Wide drink menu"
+  },
+  {
+    "id": 114,
+    "cafe_id": "CAFE006",
+    "content": "Plenty of seating"
+  },
+  {
+    "id": 115,
+    "cafe_id": "CAFE006",
+    "content": "Parking available"
+  },
+  {
+    "id": 116,
+    "cafe_id": "CAFE006",
+    "content": "Fast wifi"
+  },
+  {
+    "id": 117,
+    "cafe_id": "CAFE006",
+    "content": "Lots of outlets"
+  },
+  {
+    "id": 118,
+    "cafe_id": "CAFE006",
+    "content": "Desserts are great"
+  },
+  {
+    "id": 119,
+    "cafe_id": "CAFE006",
+    "content": "Good for solo visits"
+  },
+  {
+    "id": 120,
+    "cafe_id": "CAFE006",
+    "content": "Will come back"
+  }
+]
