@@ -1,23 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
-import { streamChat } from '../api/chat';
-import AssistantMessage from '../components/chat/AssistantMessage';
-import ChatInputBox from '../components/chat/ChatInputBox';
-import QuestionCard from '../components/chat/QuestionCard';
-import UserMessage from '../components/chat/UserMessage';
-
-const QUESTION_OPTIONS = ['조용한 분위기와 감성적인 사진', '맛집과 카페 탐방', '전통문화 및 역사 체험'];
+import { useEffect, useRef, useState } from "react";
+import { streamChat } from "../api/chat";
+import AssistantMessage from "../components/chat/AssistantMessage";
+import ChatInputBox from "../components/chat/ChatInputBox";
+import UserMessage from "../components/chat/UserMessage";
 
 const INITIAL_MESSAGES = [
   {
-    id: 'welcome',
-    role: 'assistant',
-    content: '서울에서 2박 3일 감성 여행을 원하시는군요!',
+    id: "welcome",
+    role: "assistant",
+    content: "궁금한 점은 물어봐주세요!",
   },
 ];
 
 function toChatHistory(messages) {
   return messages
-    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .filter(
+      (message) => message.role === "user" || message.role === "assistant",
+    )
     .map((message) => ({
       role: message.role,
       content: message.content,
@@ -26,19 +25,20 @@ function toChatHistory(messages) {
 
 export default function ChatSidebar() {
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
-  const [inputValue, setInputValue] = useState('');
-  const [selectedOption, setSelectedOption] = useState(QUESTION_OPTIONS[0]);
+  const [inputValue, setInputValue] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const messageEndRef = useRef(null);
 
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isStreaming]);
 
   const appendAssistantToken = (assistantId, token) => {
     setMessages((currentMessages) =>
       currentMessages.map((message) =>
-        message.id === assistantId ? { ...message, content: `${message.content}${token}` } : message,
+        message.id === assistantId
+          ? { ...message, content: `${message.content}${token}` }
+          : message,
       ),
     );
   };
@@ -52,27 +52,33 @@ export default function ChatSidebar() {
 
     const userMessage = {
       id: `user-${Date.now()}`,
-      role: 'user',
+      role: "user",
       content: trimmedMessage,
     };
     const assistantMessage = {
       id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: '',
+      role: "assistant",
+      content: "",
     };
 
-    setMessages((currentMessages) => [...currentMessages, userMessage, assistantMessage]);
-    setInputValue('');
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      userMessage,
+      assistantMessage,
+    ]);
+    setInputValue("");
     setIsStreaming(true);
 
     try {
       await streamChat({
         message: trimmedMessage,
         history: toChatHistory(messages),
-        lang: 'ko',
+        lang: "ko",
         onToken: (token) => appendAssistantToken(assistantMessage.id, token),
         onError: (payload) => {
-          throw new Error(payload.message ?? '채팅 응답 중 오류가 발생했습니다.');
+          throw new Error(
+            payload.message ?? "채팅 응답 중 오류가 발생했습니다.",
+          );
         },
       });
     } catch (error) {
@@ -84,7 +90,7 @@ export default function ChatSidebar() {
                 content:
                   error instanceof Error
                     ? error.message
-                    : '채팅 응답을 불러오지 못했습니다.',
+                    : "채팅 응답을 불러오지 못했습니다.",
               }
             : message,
         ),
@@ -92,11 +98,6 @@ export default function ChatSidebar() {
     } finally {
       setIsStreaming(false);
     }
-  };
-
-  const handleSelectOption = (option) => {
-    setSelectedOption(option);
-    handleSendMessage(option);
   };
 
   return (
@@ -107,28 +108,23 @@ export default function ChatSidebar() {
         </div>
         <div>
           <h2 className="font-bold text-blue-600">SeoulMate 챗봇</h2>
-          <p className="text-[14px] font-normal text-slate-500">여행 추천 대화 영역</p>
+          <p className="text-[14px] font-normal text-slate-500">
+            외국인을 위한 서울 여행 가이드 챗봇
+          </p>
         </div>
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
         {messages.map((message) =>
-          message.role === 'user' ? (
+          message.role === "user" ? (
             <UserMessage key={message.id}>{message.content}</UserMessage>
           ) : (
             <AssistantMessage key={message.id}>
-              {message.content || (isStreaming ? '답변을 준비하고 있어요...' : '')}
+              {message.content ||
+                (isStreaming ? "답변을 준비하고 있어요..." : "")}
             </AssistantMessage>
           ),
         )}
-
-        <QuestionCard
-          question="Q1. 여행에서 가장 중요하게 생각하는 것은 무엇인가요?"
-          options={QUESTION_OPTIONS}
-          selectedOption={selectedOption}
-          onSelect={handleSelectOption}
-          disabled={isStreaming}
-        />
         <div ref={messageEndRef} />
       </div>
 
