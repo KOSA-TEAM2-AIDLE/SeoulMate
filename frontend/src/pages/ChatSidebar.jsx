@@ -102,16 +102,16 @@ export default function ChatSidebar() {
   return (
     <aside className="flex min-h-[360px] flex-col border-l border-slate-200 bg-white">
       <div className="flex items-center gap-3 border-b border-slate-200 p-5">
-        <div className="flex size-11 items-center justify-center rounded-xl bg-blue-100 text-xl font-bold text-blue-700">
-          AI
+        <div className="flex size-11 items-center justify-center rounded-xl bg-blue-50 text-2xl shadow-sm">
+          🤖
         </div>
         <div>
           <h2 className="font-bold text-blue-600">SeoulMate 챗봇</h2>
-          <p className="text-sm text-slate-500">여행 추천 대화 영역</p>
+          <p className="text-[14px] font-normal text-slate-500">여행 추천 대화 영역</p>
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-5">
+      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
         {messages.map((message) =>
           message.role === 'user' ? (
             <UserMessage key={message.id}>{message.content}</UserMessage>
@@ -132,7 +132,7 @@ export default function ChatSidebar() {
         <div ref={messageEndRef} />
       </div>
 
-      <div className="border-t border-slate-200 p-4">
+      <div className="border-t border-slate-200 p-3">
         <ChatInputBox
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}

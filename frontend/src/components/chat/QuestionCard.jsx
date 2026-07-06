@@ -1,9 +1,9 @@
 export default function QuestionCard({ question, options, selectedOption, onSelect, disabled = false }) {
   return (
-    <section className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-base font-bold leading-relaxed text-slate-900">{question}</h3>
+    <section className="rounded-3xl border border-[#E7EAF2] bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.06)]">
+      <h3 className="text-[15px] font-semibold leading-[1.55] text-slate-900">{question}</h3>
 
-      <div className="mt-5 space-y-3">
+      <div className="mt-4 space-y-2.5">
         {options.map((option) => {
           const isSelected = option === selectedOption;
 
@@ -13,15 +13,15 @@ export default function QuestionCard({ question, options, selectedOption, onSele
               type="button"
               onClick={() => onSelect?.(option)}
               disabled={disabled}
-              className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-base font-semibold transition ${
+              className={`flex w-full items-center justify-between rounded-2xl border px-3.5 py-2.5 text-left text-[14px] font-medium leading-[1.45] transition ${
                 isSelected
-                  ? 'border-2 border-blue-600 bg-blue-50 text-blue-600'
+                  ? 'border-2 border-[#2F6BFF] bg-blue-50 text-[#2F6BFF]'
                   : 'border-slate-300 bg-white text-slate-600 hover:border-blue-300'
               } disabled:cursor-not-allowed disabled:opacity-70`}
             >
               <span>{option}</span>
               {isSelected && (
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm text-white">
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#2F6BFF] text-xs font-semibold text-white">
                   ✓
                 </span>
               )}
