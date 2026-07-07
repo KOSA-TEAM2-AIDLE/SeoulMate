@@ -1,12 +1,15 @@
 import { useKakaoMap } from '../../hooks/map/useKakaoMap';
+import { useMapMarkers } from '../../hooks/map/useMapMarkers';
 
 const SEOUL_CENTER = {
   lat: 37.5665,
   lng: 126.978,
 };
 
-export default function KakaoMap() {
+export default function KakaoMap({ places = []}) {
   const {
+    kakao,
+    map,
     mapContainerRef,
     isLoading,
     isMapReady,
@@ -15,6 +18,13 @@ export default function KakaoMap() {
     center: SEOUL_CENTER,
     level: 7,
   });
+
+  useMapMarkers({
+    kakao,
+    map,
+    places,
+  })
+
 
   if (error) {
     return (

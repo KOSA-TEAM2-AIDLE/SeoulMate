@@ -1,9 +1,9 @@
-import api from './axios';
-import { normalizedMapPlaces } from '../services/map/placeNormalizer';
+import api from '../../api/axios';
+import { normalizeMapPlaces } from './placeNormalizer';
 
 export async function getCafes(lang='ko') {
     const response = await api.get('/cafes', {
-        param : { lang }
+        params : { lang }
     })
     return response.data;
 }
@@ -58,11 +58,11 @@ export async function getMapPlaces(lang = "ko"){
         getStorageLockers(lang)
     ]);
 
-    return normalizedMapPlaces({
-        cafes,
-        restaurants,
-        accommodations,
-        events,
-        storageLockers,
-    })
+    return normalizeMapPlaces({
+          cafes,
+          restaurants,
+          accommodations,
+          events,
+          storageLockers,
+        });
 }

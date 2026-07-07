@@ -16,6 +16,7 @@ export function useKakaoMap({
   const mapRef = useRef(null);
 
   const [isMapReady, setIsMapReady] = useState(false);
+  const [ map, setMap ] = useState(null);
 
   const {
     kakao,
@@ -37,7 +38,9 @@ export function useKakaoMap({
         level,
       };
 
-      mapRef.current = new kakao.maps.Map(mapContainerRef.current, options);
+      const createMap = new kakao.maps.Map(mapContainerRef.current, options);
+      mapRef.current = createMap
+      setMap(createMap)
       setIsMapReady(true);
 
       return;
@@ -48,11 +51,12 @@ export function useKakaoMap({
   }, [kakao, isLoaded, center.lat, center.lng, level]);
 
   return {
-    mapContainerRef,
-    mapRef,
-    isMapReady,
-    isLoading,
-    isLoaded,
-    error,
-  };
+        kakao,
+        mapContainerRef,
+        map,
+        isMapReady,
+        isLoading,
+        isLoaded,
+        error,
+    };
 }
