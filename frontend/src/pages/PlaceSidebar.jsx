@@ -6,23 +6,14 @@ import TravelRouteTab from '../components/sidebar/TravelRouteTab';
 export default function PlaceSidebar() {
   const [activeTab, setActiveTab] = useState('search');
   const [activeFilter, setActiveFilter] = useState('전체');
-  const [selectedDay, setSelectedDay] = useState(1);
-  const [days] = useState([1, 2, 3]);
   const [toastMessage, setToastMessage] = useState('');
 
   const recommendList = useTravelStore((state) => state.recommendList);
-  const travelPath = useTravelStore((state) => state.travelPath);
-  const addPathItem = useTravelStore((state) => state.addPathItem);
-  const removePathItem = useTravelStore((state) => state.removePathItem);
 
   const filteredPlaces = recommendList.filter((place) => {
     if (activeFilter === '전체') return true;
     return place.category === activeFilter;
   });
-
-  const handleDeletePlace = (id) => {
-    removePathItem(selectedDay, id);
-  };
 
   const showToast = (message) => {
     setToastMessage(message);
@@ -69,16 +60,9 @@ export default function PlaceSidebar() {
                   setActiveFilter={setActiveFilter}
                   filteredPlaces={filteredPlaces}
                   showToast={showToast}
-                  selectedDay={selectedDay}
-                  addPathItem={addPathItem}
               />
           ) : (
               <TravelRouteTab
-                  days={days}
-                  selectedDay={selectedDay}
-                  setSelectedDay={setSelectedDay}
-                  currentRoute={travelPath[selectedDay] || []}
-                  handleDeletePlace={handleDeletePlace}
                   showToast={showToast}
               />
           )}

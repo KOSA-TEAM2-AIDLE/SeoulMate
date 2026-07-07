@@ -12,21 +12,36 @@ const mockRecommendList = [
 
 const useTravelStore = create((set) => ({
     recommendList: mockRecommendList,
-    travelPath: {
-        1: [mockRecommendList[6], mockRecommendList[4], mockRecommendList[2]],
-        2: [mockRecommendList[5], mockRecommendList[3]],
-        3: [mockRecommendList[0]],
-    },
+    travelPath: {},
+    day: 1,
 
     setRecommendList: (newList) => set({ recommendList: newList }),
+    setDay: (newDay) => set({ day: newDay }),
 
-    addPathItem: (day, item) =>
-        set((state) => ({
-            travelPath: {
-                ...state.travelPath,
-                [day]: [...(state.travelPath[day] || []), item]
+    addPathItem: (day, item) => {
+        let isAdded = false;
+
+        set((state) => {
+            const currentDayPath = state.travelPath[day] || [];
+
+            const alreadyExists = currentDayPath.some((p) => p.id === item.id);
+
+            if (alreadyExists) {
+                isAdded = false;
+                return state;
             }
-        })),
+
+            isAdded = true;
+            return {
+                travelPath: {
+                    ...state.travelPath,
+                    [day]: [...currentDayPath, item]
+                }
+            };
+        });
+
+        return isAdded;
+    },
 
     removePathItem: (day, itemId) =>
         set((state) => ({
