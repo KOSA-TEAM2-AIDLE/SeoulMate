@@ -40,8 +40,13 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                         <article
                             key={place.id}
                             onClick={() => {
-                                addPathItem(currentSelectedDay, place);
-                                showToast(`${currentSelectedDay}일차 루트에 '${place.name}'이(가) 추가되었습니다.`);
+                                const isAdded = addPathItem(currentSelectedDay, place);
+
+                                if (isAdded) {
+                                    showToast(`${currentSelectedDay}일차 루트에 '${place.name}'이(가) 추가되었습니다.`);
+                                } else {
+                                    showToast(`'${place.name}'은(는) 이미 해당 일차 루트에 존재합니다.`);
+                                }
                             }}
                             className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all cursor-pointer group"
                         >

@@ -2,14 +2,21 @@ import { useState } from 'react';
 import useTravelStore from '../../stores/useTravelStore';
 
 export default function TravelRouteTab({ showToast }) {
-    const [days] = useState([1, 2, 3]);
-
-    const [viewDay, setViewDay] = useState(1);
-
+    const allDay = useTravelStore((state) => state.all_day);
     const travelPath = useTravelStore((state) => state.travelPath);
     const removePathItem = useTravelStore((state) => state.removePathItem);
 
-    const currentRoute = travelPath[viewDay] || [];
+    const days = Array.from({ length: allDay }, (_, i) => i + 1);
+
+    const [viewDay, setViewDay] = useState(1);
+
+    let currentDay = viewDay;
+    if (viewDay > allDay) {
+        currentDay = 1;
+        setViewDay(1);
+    }
+
+    const currentRoute = travelPath[currentDay] || [];
 
     return (
         <div className="flex-1 flex flex-col min-h-0 p-5 space-y-6">
@@ -34,7 +41,7 @@ export default function TravelRouteTab({ showToast }) {
                         type="button"
                         onClick={() => setViewDay(d)}
                         className={`rounded-full px-5 py-2.5 text-sm font-semibold transition-all shadow-sm ${
-                            viewDay === d
+                            currentDay === d
                                 ? 'bg-blue-600 text-white border border-blue-600'
                                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                         }`}
@@ -91,9 +98,8 @@ export default function TravelRouteTab({ showToast }) {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        const targetDay = Number(viewDay);
+                                        const targetDay = Number(currentDay);
                                         removePathItem(targetDay, place.id);
-
                                         showToast(`${place.name}이 루트에서 삭제되었습니다.`);
                                     }}
                                     className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:bg-slate-200 transition-colors"
@@ -109,7 +115,7 @@ export default function TravelRouteTab({ showToast }) {
                 ) : (
                     <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed border-slate-100 rounded-2xl">
                         <span className="text-3xl mb-2">📍</span>
-                        <p className="text-sm font-semibold text-slate-700">{viewDay}일차는 아직 루트가 없습니다</p>
+                        <p className="text-sm font-semibold text-slate-700">{currentDay}일차는 아직 루트가 없습니다</p>
                         <p className="text-xs text-slate-400 mt-1">장소 검색 탭에서 갈 곳들을 추가해보세요!</p>
                     </div>
                 )}
