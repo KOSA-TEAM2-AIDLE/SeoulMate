@@ -1,12 +1,13 @@
 import { useKakaoMap } from '../../hooks/map/useKakaoMap';
 import { useMapMarkers } from '../../hooks/map/useMapMarkers';
+import { useRoutePolyline } from '../../hooks/map/useRoutePolyline';
 
 const SEOUL_CENTER = {
   lat: 37.5665,
   lng: 126.978,
 };
 
-export default function KakaoMap({ places = []}) {
+export default function KakaoMap({ places = [], showRouteLine = true }) {
   const {
     kakao,
     map,
@@ -23,7 +24,14 @@ export default function KakaoMap({ places = []}) {
     kakao,
     map,
     places,
-  })
+  });
+
+  useRoutePolyline({
+    kakao,
+    map,
+    places,
+    enabled: showRouteLine,
+  });
 
 
   if (error) {

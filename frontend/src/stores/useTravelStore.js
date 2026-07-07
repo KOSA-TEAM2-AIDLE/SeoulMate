@@ -15,10 +15,13 @@ const useTravelStore = create((set) => ({
     travelPath: {},
     day: 1,
     all_day: 1,
+    allPlaces : [],
 
     setRecommendList: (newList) => set({ recommendList: newList }),
     setDay: (newDay) => set({ day: newDay }),
     setAllDay: (newDay) => set({ all_day: newDay }),
+    
+    setAllPlaces: (places) => set({allPlaces: places}),
 
     addPathItem: (day, item) => {
         let isAdded = false;
