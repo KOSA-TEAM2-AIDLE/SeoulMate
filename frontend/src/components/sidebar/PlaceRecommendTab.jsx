@@ -1,16 +1,15 @@
+import useTravelStore from '../../stores/useTravelStore';
+
 const PLACE_FILTERS = ['전체', '명소', '맛집', '카페', '숙소', '보관소'];
 
-export default function PlaceRecommendTab({
-                                           activeFilter,
-                                           setActiveFilter,
-                                           filteredPlaces,
-                                           showToast
-                                       }) {
+export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filteredPlaces, showToast }) {
+    const currentSelectedDay = useTravelStore((state) => state.day);
+    const addPathItem = useTravelStore((state) => state.addPathItem);
+
     return (
         <div className="flex-1 flex flex-col min-h-0">
             {/* 고정 필터 바 영역 */}
             <div className="pt-5 pb-3 space-y-4 shrink-0 border-b border-slate-50">
-                {/* 카테고리 필터 스크롤 바 */}
                 <div className="flex gap-2 overflow-x-auto pb-1 px-5 scrollbar-hide">
                     {PLACE_FILTERS.map((filter) => (
                         <button
@@ -28,7 +27,6 @@ export default function PlaceRecommendTab({
                     ))}
                 </div>
 
-                {/* 결과 카운트 안내 헤더 */}
                 <div className="flex items-center justify-between pt-1 px-5">
                     <h2 className="text-base font-bold text-slate-800">검색 결과</h2>
                     <span className="text-sm text-slate-500">{filteredPlaces.length}개 발견</span>
@@ -41,7 +39,15 @@ export default function PlaceRecommendTab({
                     filteredPlaces.map((place) => (
                         <article
                             key={place.id}
-                            onClick={() => showToast(`${place.name}이 선택되었습니다.`)}
+                            onClick={() => {
+                                const isAdded = addPathItem(currentSelectedDay, place);
+
+                                if (isAdded) {
+                                    showToast(`${currentSelectedDay}일차 루트에 '${place.name}'이(가) 추가되었습니다.`);
+                                } else {
+                                    showToast(`'${place.name}'은(는) 이미 해당 일차 루트에 존재합니다.`);
+                                }
+                            }}
                             className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all cursor-pointer group"
                         >
                             <div className="flex gap-3">
@@ -57,8 +63,8 @@ export default function PlaceRecommendTab({
                                                     place.category === '숙소' ? 'text-purple-500 bg-purple-50' :
                                                         place.category === '보관소' ? 'text-cyan-500 bg-cyan-50' : 'text-red-500 bg-red-50'
                                         }`}>
-                      {place.subCategory}
-                    </span>
+                                            {place.subCategory}
+                                        </span>
                                     </div>
                                     <p className="mt-1 text-sm text-slate-400 truncate">{place.address}</p>
                                     <p className="mt-1.5 text-sm text-amber-500 font-semibold">★ {place.rating}</p>
