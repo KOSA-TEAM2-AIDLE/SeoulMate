@@ -23,6 +23,10 @@ const useTravelStore = create((set) => ({
     
     setAllPlaces: (places) => set({allPlaces: places}),
 
+    selectedPlace: null,
+    setSelectedPlace: (place) => set({ selectedPlace: place }),
+    clearSelectedPlace: () => set({ selectedPlace: null }),
+
     addPathItem: (day, item) => {
         let isAdded = false;
 

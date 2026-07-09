@@ -5,6 +5,7 @@ export function useMapMarkers({
   kakao,
   map,
   places = [],
+  onMarkerClick
 }) {
   const markerItemsRef = useRef([]);
 
@@ -21,13 +22,14 @@ export function useMapMarkers({
       kakao,
       map,
       places,
+      onMarkerClick,
     });
 
     return () => {
       clearMarkers(markerItemsRef.current);
       markerItemsRef.current = [];
     };
-  }, [kakao, map, places]);
+  }, [kakao, map, places, onMarkerClick]);
 
   return {
     markerItemsRef
