@@ -11,10 +11,6 @@ export default function PlaceSidebar() {
 
   const recommendList = useTravelStore((state) => state.recommendList);
 
-  // const filteredPlaces = recommendList.filter((place) => {
-  //   if (activeFilter === '전체') return true;
-  //   return place.category === activeFilter;
-  // });
   const filteredPlaces = recommendList.filter((place) => {
     if (activeFilter === '전체') return true;
     return getPlaceDisplayCategory(place) === activeFilter;
