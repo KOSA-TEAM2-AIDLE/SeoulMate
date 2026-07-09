@@ -4,8 +4,6 @@ import {
   getPlaceDisplayCategory,
   getPlaceDisplaySubCategory,
   getPlaceDisplayRating,
-  getPlaceDisplayReviews,
-  getPlaceDisplayTime,
   getPlaceDisplayImage,
 } from '../../services/map/placeDisplayAdapter';
 
@@ -71,20 +69,18 @@ export default function TravelRouteTab({ showToast }) {
             const category = getPlaceDisplayCategory(place);
             const subCategory = getPlaceDisplaySubCategory(place);
             const rating = getPlaceDisplayRating(place);
-            const reviews = getPlaceDisplayReviews(place);
-            const time = getPlaceDisplayTime(place);
             const image = getPlaceDisplayImage(place);
 
             return (
               <article
                 key={place.id}
-                className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-all duration-200"
+                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all duration-200"
               >
                 <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">
                   {index + 1}
                 </div>
 
-                <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-100 bg-slate-50 shadow-inner">
+                <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
                   {image ? (
                     <img
                       src={image}
@@ -96,9 +92,9 @@ export default function TravelRouteTab({ showToast }) {
                   )}
                 </div>
 
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-slate-900 truncate tracking-tight text-base flex-1">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-800 truncate text-base flex-1">
                       {place.name}
                     </h3>
                     <span
@@ -118,15 +114,12 @@ export default function TravelRouteTab({ showToast }) {
                     </span>
                   </div>
 
-                  <p className="mt-1 text-sm font-medium text-slate-500 truncate">
-                    {time}
+                  <p className="mt-1 text-sm text-slate-400 truncate">
+                    {place.address}
                   </p>
 
-                  <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-400 font-medium whitespace-nowrap">
-                    <span className="text-amber-400 text-sm">★</span>
-                    <span className="text-slate-600 font-bold">{rating}</span>
-                    <span>·</span>
-                    <span className="truncate">리뷰 {reviews}</span>
+                  <p className="mt-1.5 text-sm text-amber-500 font-semibold">
+                    ★ {rating}
                   </p>
                 </div>
 

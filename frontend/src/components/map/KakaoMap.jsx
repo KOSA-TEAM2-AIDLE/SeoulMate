@@ -1,13 +1,21 @@
 import { useKakaoMap } from '../../hooks/map/useKakaoMap';
 import { useMapMarkers } from '../../hooks/map/useMapMarkers';
+import { usePlaceOverlay } from '../../hooks/map/usePlaceOverlay';
 import { useRoutePolyline } from '../../hooks/map/useRoutePolyline';
+import useTravelStore from '../../stores/useTravelStore';
 
 const SEOUL_CENTER = {
   lat: 37.5665,
   lng: 126.978,
 };
 
+
+
 export default function KakaoMap({ places = [], showRouteLine = true }) {
+  const setSelectedPlace = useTravelStore((state) => state.setSelectedPlace);
+  const selectedPlace = useTravelStore((state) => state.selectedPlace);
+  const clearSelectedPlace = useTravelStore((state) => state.clearSelectedPlace);
+  
   const {
     kakao,
     map,
@@ -24,6 +32,14 @@ export default function KakaoMap({ places = [], showRouteLine = true }) {
     kakao,
     map,
     places,
+    onMarkerClick: setSelectedPlace,
+  });
+
+  usePlaceOverlay({
+    kakao,
+    map,
+    place: selectedPlace,
+    onClose: clearSelectedPlace,
   });
 
   useRoutePolyline({

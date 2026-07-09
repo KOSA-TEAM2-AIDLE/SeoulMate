@@ -38,7 +38,7 @@ function createMarkerImage(kakao, type) {
   return new kakao.maps.MarkerImage(markerImageUrl, imageSize, imageOption);
 }
 
-export function createPlaceMarker({ kakao, map, place }) {
+export function createPlaceMarker({ kakao, map, place, onClick }) {
   const position = new kakao.maps.LatLng(place.lat, place.lng);
   const image = createMarkerImage(kakao, place.type);
 
@@ -49,16 +49,23 @@ export function createPlaceMarker({ kakao, map, place }) {
     title: place.name,
   });
 
+  if ( onClick ) {
+    kakao.maps.event.addListener(marker, 'click', () => {
+      onClick(place);
+    })
+  }
+
   return marker;
 }
 
-export function createPlaceMarkers({ kakao, map, places }) {
+export function createPlaceMarkers({ kakao, map, places, onMarkerClick }) {
   return places.map((place) => ({
     place,
     marker: createPlaceMarker({
       kakao,
       map,
       place,
+      onClick : onMarkerClick
     }),
   })); // Marker - place 구조를 통해 어느 마커가 어느 place 인지 추적가능 하기 위함
 }
