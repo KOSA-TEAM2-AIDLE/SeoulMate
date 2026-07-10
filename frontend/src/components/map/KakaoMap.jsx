@@ -9,8 +9,6 @@ const SEOUL_CENTER = {
   lng: 126.978,
 };
 
-
-
 export default function KakaoMap({ places = [], showRouteLine = true }) {
   const setSelectedPlace = useTravelStore((state) => state.setSelectedPlace);
   const selectedPlace = useTravelStore((state) => state.selectedPlace);
