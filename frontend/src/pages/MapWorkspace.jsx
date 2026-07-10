@@ -2,10 +2,10 @@ import KakaoMap from '../components/map/KakaoMap';
 import useTravelStore from '../stores/useTravelStore';
 
 export default function MapWorkspace() {
-    const currentDay = useTravelStore((state) => state.day);
+    const selectedDay = useTravelStore((state) => state.selectedDay);
     const travelPath = useTravelStore((state) => state.travelPath);
 
-    const routePlaces = travelPath[currentDay] || [];
+    const routePlaces = travelPath[selectedDay] || [];
 
     return (
         <section className="relative min-h-[460px] overflow-hidden bg-blue-50">
