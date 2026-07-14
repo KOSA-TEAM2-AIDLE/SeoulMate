@@ -1,9 +1,3 @@
-"""
-pydantic-settings
-- 자료형 변환
-- 필수 데이터들의 누락 여부 사전에 점검 가능
-"""
-
 from functools import lru_cache
 from pathlib import Path
 

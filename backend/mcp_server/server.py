@@ -8,7 +8,6 @@ from services.congestion import (
 )
 from services.poi_matcher import PoiNotSupportedError
 
-
 mcp = FastMCP(
     name="SeoulMate Congestion", # MCP Client에 표시되는 서버 이름이다.
     instructions=(
@@ -42,7 +41,7 @@ async def get_seoul_congestion(
         raise ValueError(
             "latitude와 longitude는 함께 입력해야 한다."
         )
-    
+
     try :
         if has_latitude and has_longitude : 
             location_result = (
@@ -57,6 +56,7 @@ async def get_seoul_congestion(
                 poi_match = location_result.poi_match,
                 congestion = location_result.congestion
             )
+        
         elif area is not None and area.strip():
             snapshot = await congestion_service.get_congestion(
                 area.strip()
@@ -71,8 +71,8 @@ async def get_seoul_congestion(
             raise ValueError(
                 "area 또는 latitude와 longitude가 필요하다"
             )
-        
-    # MCP ERROR 인지, API 에러 인지 구분짓기 위함    
+
+    # MCP ERROR 인지, API 에러 인지 구분짓기 위함
     except PoiNotSupportedError as error : 
         raise ValueError(str(error)) from None
     except CongestionServiceError as error : 
@@ -80,8 +80,8 @@ async def get_seoul_congestion(
     
     return result.model_dump(mode="json")
 
-def main() -> None : 
+def main() -> None :
     mcp.run(transport = "streamable-http")
 
-if __name__ == "__main__" : 
+if __name__ == "__main__" :
     main()
