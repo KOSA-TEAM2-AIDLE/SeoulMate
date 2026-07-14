@@ -4,14 +4,26 @@ import AssistantMessage from "../components/chat/AssistantMessage";
 import ChatInputBox from "../components/chat/ChatInputBox";
 import UserMessage from "../components/chat/UserMessage";
 import useTravelStore from "../stores/useTravelStore";
+import { useLangStore } from "../stores/useLangStore";
 
-const INITIAL_MESSAGES = [
-  {
-    id: "welcome",
-    role: "assistant",
-    content: "궁금한 점은 물어봐주세요!",
+const UI_TEXT = {
+  ko: {
+    welcome: "궁금한 점은 물어봐주세요!",
+    headerTitle: "SeoulMate 챗봇",
+    headerDesc: (day, allDay) => `외국인을 위한 서울 여행 가이드 챗봇 (현재: ${day} / ${allDay}일차)`,
+    preparing: "답변을 준비하고 있어요...",
+    errStreaming: "채팅 응답 중 오류가 발생했습니다.",
+    errFallback: "채팅 응답을 불러오지 못했습니다."
   },
-];
+  en: {
+    welcome: "Feel free to ask me anything!",
+    headerTitle: "SeoulMate Chatbot",
+    headerDesc: (day, allDay) => `Seoul travel guide chatbot for foreigners (Current: Day ${day} / ${allDay})`,
+    preparing: "Preparing an answer...",
+    errStreaming: "An error occurred while receiving the chat response.",
+    errFallback: "Failed to load chat response."
+  }
+};
 
 function toChatHistory(messages) {
   return messages
@@ -25,7 +37,16 @@ function toChatHistory(messages) {
 }
 
 export default function ChatSidebar() {
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const lang = useLangStore((state) => state.lang);
+  const t = UI_TEXT[lang];
+
+  const [messages, setMessages] = useState([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: UI_TEXT[lang].welcome,
+    }
+  ]);
   const [inputValue, setInputValue] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const messageEndRef = useRef(null);
@@ -37,6 +58,16 @@ export default function ChatSidebar() {
     day,
     all_day
   } = useTravelStore();
+
+  useEffect(() => {
+    setMessages((currentMessages) =>
+        currentMessages.map((msg) =>
+            msg.id === "welcome"
+                ? { ...msg, content: UI_TEXT[lang].welcome }
+                : msg
+        )
+    );
+  }, [lang]);
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -82,11 +113,11 @@ export default function ChatSidebar() {
       await streamChat({
         message: trimmedMessage,
         history: toChatHistory(messages),
-        lang: "ko",
+        lang: lang, // 4. API 호출 시 현재 설정된 언어('ko' 또는 'en')를 동적으로 전달!
         onToken: (token) => appendAssistantToken(assistantMessage.id, token),
         onError: (payload) => {
           throw new Error(
-              payload.message ?? "채팅 응답 중 오류가 발생했습니다.",
+              payload.message ?? t.errStreaming,
           );
         },
       });
@@ -143,6 +174,19 @@ export default function ChatSidebar() {
           reviews: "4,912",
           time: "19:00 - 21:00",
           image: "https://images.unsplash.com/photo-1578469550956-0e16b69c6a3d?auto=format&fit=crop&w=150&q=80"
+        },
+        {
+          id: "EVT009",
+          name: "N Seoul Tower Observatory",
+          category: "Attraction",
+          subCategory: "Night View/Landmark",
+          address: "105 Namsangongwon-gil, Yongsan-gu, Seoul",
+          lat: 37.5512,
+          lng: 126.9882,
+          rating: "4.7",
+          reviews: "4,912",
+          time: "19:00 - 21:00",
+          image: "https://images.unsplash.com/photo-1578469550956-0e16b69c6a3d?auto=format&fit=crop&w=150&q=80"
         }
       ];
 
@@ -159,7 +203,7 @@ export default function ChatSidebar() {
                     content:
                         error instanceof Error
                             ? error.message
-                            : "채팅 응답을 불러오지 못했습니다.",
+                            : t.errFallback,
                   }
                   : message,
           ),
@@ -176,9 +220,9 @@ export default function ChatSidebar() {
             🤖
           </div>
           <div>
-            <h2 className="font-bold text-blue-600">SeoulMate 챗봇</h2>
+            <h2 className="font-bold text-blue-600">{t.headerTitle}</h2>
             <p className="text-[14px] font-normal text-slate-500">
-              외국인을 위한 서울 여행 가이드 챗봇 (현재: {day} / {all_day}일차)
+              {t.headerDesc(day, all_day)}
             </p>
           </div>
         </div>
@@ -190,7 +234,7 @@ export default function ChatSidebar() {
               ) : (
                   <AssistantMessage key={message.id}>
                     {message.content ||
-                        (isStreaming ? "답변을 준비하고 있어요..." : "")}
+                        (isStreaming ? t.preparing : "")}
                   </AssistantMessage>
               ),
           )}

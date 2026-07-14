@@ -1,3 +1,4 @@
+import { useLangStore } from '../../stores/useLangStore';
 import {
   getPlaceDisplayCategory,
   getPlaceDisplayRating,
@@ -25,11 +26,11 @@ const CATEGORY_STYLE_BY_LABEL = {
 
 function escapeHtml(value) {
   return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
 }
 
 function createOverlayContent(place, onClose) {
@@ -37,6 +38,9 @@ function createOverlayContent(place, onClose) {
   const subCategory = getPlaceDisplaySubCategory(place);
   const rating = getPlaceDisplayRating(place);
   const reviews = getPlaceDisplayReviews(place);
+
+  const lang = useLangStore.getState().lang;
+
   const categoryStyle = CATEGORY_STYLE_BY_LABEL[category] ?? {
     badgeClass: 'bg-slate-100 text-slate-500',
   };
@@ -63,7 +67,7 @@ function createOverlayContent(place, onClose) {
         type="button"
         data-overlay-close="true"
         class="flex size-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-        aria-label="오버레이 닫기"
+        aria-label="${lang === 'ko' ? '오버레이 닫기' : 'Close overlay'}"
       >
         ×
       </button>
@@ -77,7 +81,9 @@ function createOverlayContent(place, onClose) {
       <span class="text-sm text-amber-400">★</span>
       <span class="font-bold text-slate-700">${escapeHtml(rating)}</span>
       <span>·</span>
-      <span>리뷰 ${escapeHtml(reviews)}</span>
+      <span>
+        ${lang === 'ko' ? `리뷰 ${escapeHtml(reviews)}` : `${escapeHtml(reviews)} Reviews`}
+      </span>
     </p>
 
     <div class="absolute left-1/2 top-full size-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-slate-200 bg-white"></div>
