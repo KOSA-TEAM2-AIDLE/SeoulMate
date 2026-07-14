@@ -45,6 +45,8 @@ def _distance_meters(first: Point, second: Point) -> float:
 
 
 class PoiMatcher:
+    MAX_NEARBY_RESULTS = 10
+
     def __init__(
         self,
         geojson: dict[str, Any],
@@ -125,6 +127,46 @@ class PoiMatcher:
             )
 
         return self._to_match(nearest_area, "nearest", nearest_distance)
+
+    def find_nearby(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_meters: float,
+        limit: int = 5,
+    ) -> list[PoiMatch]:
+        if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+            raise ValueError("위도 또는 경도의 범위가 올바르지 않습니다.")
+        if radius_meters < 0:
+            raise ValueError("검색 반경은 0 이상이어야 합니다.")
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= self.MAX_NEARBY_RESULTS
+        ):
+            raise ValueError("주변 POI 결과 수는 1~10 사이의 정수여야 합니다.")
+
+        point = Point(longitude, latitude)
+        matches: list[PoiMatch] = []
+        for area in self._areas:
+            if area.geometry.covers(point):
+                match = self._to_match(area, "contains", 0.0)
+            else:
+                boundary_point = nearest_points(area.geometry, point)[0]
+                distance = _distance_meters(point, boundary_point)
+                match = self._to_match(area, "nearest", distance)
+
+            if match.distance_meters <= radius_meters:
+                matches.append(match)
+
+        matches.sort(
+            key=lambda match: (
+                match.distance_meters,
+                match.area_name,
+                match.area_code,
+            )
+        )
+        return matches[:limit]
 
     @staticmethod
     def _to_match(
