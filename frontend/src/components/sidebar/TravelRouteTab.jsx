@@ -1,4 +1,5 @@
 import useTravelStore from '../../stores/useTravelStore';
+import { useLangStore } from '../../stores/useLangStore';
 import {
   getPlaceDisplayCategory,
   getPlaceDisplaySubCategory,
@@ -6,12 +7,44 @@ import {
   getPlaceDisplayImage,
 } from '../../services/map/placeDisplayAdapter';
 
+const UI_TEXT = {
+  ko: {
+    title: '내 여행 루트',
+    saveBtn: '저장',
+    shareBtn: '공유',
+    noImage: '이미지 없음',
+    moveOrder: '순서 이동',
+    deleteRoute: '루트 삭제',
+    toastSave: '여행 루트가 정상적으로 저장되었습니다.',
+    toastShare: '공유 링크가 클립보드에 복사되었습니다.',
+    toastDelete: (name) => `${name}이 루트에서 삭제되었습니다.`,
+    noRouteTitle: (day) => `${day}일차는 아직 루트가 없습니다`,
+    noRouteDesc: '장소 검색 탭에서 갈 곳들을 추가해보세요!'
+  },
+  en: {
+    title: 'My Travel Route',
+    saveBtn: 'Save',
+    shareBtn: 'Share',
+    noImage: 'No Image',
+    moveOrder: 'Move order',
+    deleteRoute: 'Delete route',
+    toastSave: 'Travel route has been saved successfully.',
+    toastShare: 'Share link has been copied to clipboard.',
+    toastDelete: (name) => `'${name}' has been deleted from the route.`,
+    noRouteTitle: (day) => `No route for Day ${day} yet`,
+    noRouteDesc: 'Try adding places from the Search tab!'
+  }
+};
+
 export default function TravelRouteTab({ showToast }) {
   const allDay = useTravelStore((state) => state.all_day);
   const travelPath = useTravelStore((state) => state.travelPath);
   const removePathItem = useTravelStore((state) => state.removePathItem);
   const selectedDay = useTravelStore((state) => state.selectedDay);
   const setSelectedDay = useTravelStore((state) => state.setSelectedDay);
+
+  const lang = useLangStore((state) => state.lang);
+  const t = UI_TEXT[lang];
 
   const days = Array.from({ length: allDay }, (_, i) => i + 1);
 
@@ -26,21 +59,23 @@ export default function TravelRouteTab({ showToast }) {
   return (
       <div className="flex-1 flex flex-col min-h-0 p-5 space-y-6">
         <div className="flex items-center justify-between shrink-0">
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">내 여행 루트</h2>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+            {t.title}
+          </h2>
           <div className="flex gap-2">
             <button
                 type="button"
-                onClick={() => showToast('여행 루트가 정상적으로 저장되었습니다.')}
+                onClick={() => showToast(t.toastSave)}
                 className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
             >
-              저장
+              {t.saveBtn}
             </button>
             <button
                 type="button"
-                onClick={() => showToast('공유 링크가 클립보드에 복사되었습니다.')}
+                onClick={() => showToast(t.toastShare)}
                 className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
             >
-              공유
+              {t.shareBtn}
             </button>
           </div>
         </div>
@@ -88,7 +123,9 @@ export default function TravelRouteTab({ showToast }) {
                                 className="h-full w-full object-cover"
                             />
                         ) : (
-                            <span className="text-xs font-semibold text-slate-400">No image</span>
+                            <span className="text-xs font-semibold text-slate-400">
+                              {t.noImage}
+                            </span>
                         )}
                       </div>
 
@@ -127,7 +164,7 @@ export default function TravelRouteTab({ showToast }) {
                         <button
                             type="button"
                             className="p-1 text-slate-300 hover:text-slate-400 cursor-grab"
-                            title="순서 이동"
+                            title={t.moveOrder}
                         >
                           <svg className="size-5" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M7 6a1 1 0 100-2 1 1 0 000 2zM7 11a1 1 0 100-2 1 1 0 000 2zM7 16a1 1 0 100-2 1 1 0 000 2zM13 6a1 1 0 100-2 1 1 0 000 2zM13 11a1 1 0 100-2 1 1 0 000 2zM13 16a1 1 0 100-2 1 1 0 000 2z" />
@@ -139,10 +176,10 @@ export default function TravelRouteTab({ showToast }) {
                             onClick={() => {
                               const targetDay = Number(currentDay);
                               removePathItem(targetDay, place.id);
-                              showToast(`${place.name}이 루트에서 삭제되었습니다.`);
+                              showToast(t.toastDelete(place.name));
                             }}
                             className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:bg-slate-200 transition-colors"
-                            title="루트 삭제"
+                            title={t.deleteRoute}
                         >
                           <svg className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -156,10 +193,10 @@ export default function TravelRouteTab({ showToast }) {
               <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed border-slate-100 rounded-2xl">
                 <span className="text-3xl mb-2">📍</span>
                 <p className="text-sm font-semibold text-slate-700">
-                  {currentDay}일차는 아직 루트가 없습니다
+                  {t.noRouteTitle(currentDay)}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  장소 검색 탭에서 갈 곳들을 추가해보세요!
+                  {t.noRouteDesc}
                 </p>
               </div>
           )}
