@@ -4,7 +4,8 @@
 """
 import json
 
-from core.config import ANTHROPIC_API_KEY
+# from core.config import ANTHROPIC_API_KEY
+from core.config import settings
 from schemas.chat import ChatMessage, Intent
 
 ROUTE_EDIT_KEYWORDS = [
@@ -67,7 +68,7 @@ def classify_intent(message: str, lang: str, history: list[ChatMessage]) -> Inte
         return "rag"
 
     # 키워드 미감지: LLM이 직접 대화(chitchat)로 응답. LLM 키 없으면 rag로 폴백.
-    return "chitchat" if ANTHROPIC_API_KEY else "rag"
+    return "chitchat" if settings.anthropic_api_key else "rag"
 
 
 def pick_mcp_tool(message: str) -> str:
