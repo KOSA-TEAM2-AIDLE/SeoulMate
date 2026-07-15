@@ -1,13 +1,12 @@
-from typing import Any, Literal, Optional, Self
+"""API 명세서 3-5 참고: /chat 요청/응답 및 루트 응답 스키마."""
+
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
 from schemas.common import Place, ToolResult
-from schemas.structured_query import (
-    SourceMode,
-    StructuredTravelQuery,
-    TravelIntent,
-)
+from schemas.frontend_response import FrontendResponse
+from schemas.structured_query import SourceMode, StructuredTravelQuery, TravelIntent
 
 
 class ChatMessage(BaseModel):
@@ -23,31 +22,31 @@ class RouteModificationRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
-    lang: Literal["ko", "en"] = "ko"
+    lang: str = "en"
+    history: list[ChatMessage] = Field(default_factory=list)
     lat: float | None = Field(default=None, ge=-90, le=90)
     lng: float | None = Field(default=None, ge=-180, le=180)
     location_name: str | None = None
-    parsed_intent: TravelIntent
+    min_rating: float | None = None
+    open_now: bool = False
     source_mode: SourceMode | None = None
-    parsed_query: StructuredTravelQuery
+    parsed_intent: TravelIntent | None = None
+    parsed_query: StructuredTravelQuery | None = None
     route_modification: RouteModificationRequest | None = None
 
     @model_validator(mode="after")
-    def validate_contract(self) -> Self:
+    def validate_structured_contract(self):
         if (self.lat is None) != (self.lng is None):
             raise ValueError("lat과 lng는 함께 제공해야 합니다.")
-        if self.parsed_intent != self.parsed_query.intent:
-            raise ValueError(
-                "parsed_intent는 parsed_query.intent와 같아야 합니다."
-            )
-        if (
-            self.source_mode is not None
-            and self.parsed_query.source_mode is not None
-            and self.source_mode != self.parsed_query.source_mode
-        ):
-            raise ValueError(
-                "source_mode는 parsed_query.source_mode와 같아야 합니다."
-            )
+        if self.parsed_query is not None:
+            if self.parsed_intent and self.parsed_intent != self.parsed_query.intent:
+                raise ValueError("parsed_intent와 parsed_query.intent가 일치해야 합니다.")
+            if (
+                self.source_mode
+                and self.parsed_query.source_mode
+                and self.source_mode != self.parsed_query.source_mode
+            ):
+                raise ValueError("source_mode와 parsed_query.source_mode가 일치해야 합니다.")
         if (
             self.route_modification is not None
             and self.parsed_intent != "modify_route"
@@ -59,9 +58,14 @@ class ChatRequest(BaseModel):
 
 
 class TimeSlot(BaseModel):
+    slot_id: Optional[str] = None
+    date: Optional[str] = None
     time: str
-    category: str  # 관광지 | 식당 | 카페 | 숙박
+    end_date: Optional[str] = None
+    end_time: Optional[str] = None
+    category: str
     place: Place
+    alternatives: list[Place] = Field(default_factory=list, max_length=2)
 
 
 class DayPlan(BaseModel):
@@ -71,30 +75,34 @@ class DayPlan(BaseModel):
 
 
 Intent = Literal[
-    "rag", "mcp", "both", "chitchat", "route_day", "route_multi", "route_edit"
+    "rag",
+    "mcp",
+    "both",
+    "chitchat",
+    "route_day",
+    "route_multi",
 ]
 
 
 class ChatMetaPlaces(BaseModel):
-    """intent: rag | mcp | both | chitchat 일 때의 meta 이벤트 payload."""
-
     type: Literal["meta"] = "meta"
     intent: Intent
-    places: list[Place] = []
-    tool_results: list[ToolResult] = []
-    reasons: list[str] = []
-    sources: list[str] = []
+    places: list[Place] = Field(default_factory=list)
+    tool_results: list[ToolResult] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    result: Optional[FrontendResponse] = None
 
 
 class ChatMetaRoute(BaseModel):
-    """intent: route_day | route_multi | route_edit 일 때의 meta 이벤트 payload."""
-
     type: Literal["meta"] = "meta"
     intent: Intent
     days: list[DayPlan]
-    tool_results: list[ToolResult] = []
+    tool_results: list[ToolResult] = Field(default_factory=list)
     total_days: int
     total_places: int
+    route_id: Optional[str] = None
+    result: Optional[FrontendResponse] = None
 
 
 class ChatToken(BaseModel):
@@ -109,3 +117,4 @@ class ChatDone(BaseModel):
 class ChatError(BaseModel):
     type: Literal["error"] = "error"
     message: str
+    result: Optional[FrontendResponse] = None
