@@ -5,11 +5,18 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from schemas.chat import ChatDone, ChatMetaPlaces, ChatMetaRoute, ChatRequest, ChatToken
-from services.intent import classify_intent
 
 router = APIRouter()
 
 ROUTE_INTENTS = {"route_day", "route_multi", "route_edit"}
+INTENT_MAP = {
+    "single_place_recommendation": "rag",
+    "day_trip_route": "route_day",
+    "multi_day_route": "route_multi",
+    "modify_route": "route_edit",
+    "weather_information": "mcp",
+    "general_response": "chitchat",
+}
 
 MOCK_TRAVEL_DATA = {
   "day": 1,
@@ -212,7 +219,7 @@ def _sse(payload: dict) -> str:
 
 
 async def _stream(body: ChatRequest):
-    intent = classify_intent(body.message, body.lang, body.history)
+    intent = INTENT_MAP[body.parsed_intent]
 
     if intent in ROUTE_INTENTS:
         meta = ChatMetaRoute(intent=intent, days=[], total_days=0, total_places=0)

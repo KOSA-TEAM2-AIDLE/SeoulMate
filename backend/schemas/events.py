@@ -1,4 +1,3 @@
-"""API 명세서 7장 참고."""
 from pydantic import BaseModel
 
 

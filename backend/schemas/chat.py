@@ -1,8 +1,13 @@
-"""API 명세서 3-5, 10장 참고: /chat 요청/응답 및 route_day, route_multi, route_edit용 스키마."""
-from typing import Literal, Optional
-from pydantic import BaseModel
+from typing import Any, Literal, Optional, Self
+
+from pydantic import BaseModel, Field, model_validator
 
 from schemas.common import Place, ToolResult
+from schemas.structured_query import (
+    SourceMode,
+    StructuredTravelQuery,
+    TravelIntent,
+)
 
 
 class ChatMessage(BaseModel):
@@ -11,9 +16,40 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
-    lang: str = "en"  # ko | en | ja
-    history: list[ChatMessage] = []
+    message: str = Field(min_length=1)
+    lang: Literal["ko", "en"] = "ko"
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    location_name: str | None = None
+    parsed_intent: TravelIntent
+    source_mode: SourceMode | None = None
+    parsed_query: StructuredTravelQuery
+    route_modification: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_contract(self) -> Self:
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("lat과 lng는 함께 제공해야 합니다.")
+        if self.parsed_intent != self.parsed_query.intent:
+            raise ValueError(
+                "parsed_intent는 parsed_query.intent와 같아야 합니다."
+            )
+        if (
+            self.source_mode is not None
+            and self.parsed_query.source_mode is not None
+            and self.source_mode != self.parsed_query.source_mode
+        ):
+            raise ValueError(
+                "source_mode는 parsed_query.source_mode와 같아야 합니다."
+            )
+        if (
+            self.route_modification is not None
+            and self.parsed_intent != "modify_route"
+        ):
+            raise ValueError(
+                "route_modification은 modify_route 요청에서만 사용할 수 있습니다."
+            )
+        return self
 
 
 class TimeSlot(BaseModel):
