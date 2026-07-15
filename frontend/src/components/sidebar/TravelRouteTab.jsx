@@ -13,7 +13,6 @@ const UI_TEXT = {
     saveBtn: '저장',
     shareBtn: '공유',
     noImage: '이미지 없음',
-    moveOrder: '순서 이동',
     deleteRoute: '루트 삭제',
     toastSave: '여행 루트가 정상적으로 저장되었습니다.',
     toastShare: '공유 링크가 클립보드에 복사되었습니다.',
@@ -26,7 +25,6 @@ const UI_TEXT = {
     saveBtn: 'Save',
     shareBtn: 'Share',
     noImage: 'No Image',
-    moveOrder: 'Move order',
     deleteRoute: 'Delete route',
     toastSave: 'Travel route has been saved successfully.',
     toastShare: 'Share link has been copied to clipboard.',
@@ -58,6 +56,7 @@ export default function TravelRouteTab({ showToast }) {
 
   return (
       <div className="flex-1 flex flex-col min-h-0 p-5 space-y-6">
+        {/* 상단 타이틀 및 버튼 영역 */}
         <div className="flex items-center justify-between shrink-0">
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
             {t.title}
@@ -98,6 +97,7 @@ export default function TravelRouteTab({ showToast }) {
           ))}
         </div>
 
+        {/* 루트 리스트 영역 */}
         <div className="flex-1 overflow-y-auto space-y-4 min-h-0 pr-1">
           {currentRoute.length > 0 ? (
               currentRoute.map((place, index) => {
@@ -109,68 +109,86 @@ export default function TravelRouteTab({ showToast }) {
                 return (
                     <article
                         key={place.id}
-                        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all duration-200"
+                        // 변경 포인트: 상하 구조를 나누기 위해 flex-col 구조 사용
+                        className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all duration-200 relative"
                     >
-                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">
-                        {index + 1}
-                      </div>
+                      {/* [상단 영역] 번호 + 이미지 + 텍스트 정보 */}
+                      <div className="flex items-start gap-4">
+                        {/* 왼쪽: 순서 번호와 썸네일 이미지 */}
+                        <div className="flex items-center gap-3 shrink-0 mt-0.5">
+                          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">
+                            {index + 1}
+                          </div>
 
-                      <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
-                        {image ? (
-                            <img
-                                src={image}
-                                alt={place.name}
-                                className="h-full w-full object-cover"
-                            />
-                        ) : (
-                            <span className="text-xs font-semibold text-slate-400">
-                              {t.noImage}
-                            </span>
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-slate-800 truncate text-base flex-1">
-                            {place.name}
-                          </h3>
-                          <span
-                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0 ${
-                                  category === '카페'
-                                      ? 'text-orange-500 bg-orange-50'
-                                      : category === '맛집'
-                                          ? 'text-green-500 bg-green-50'
-                                          : category === '숙소'
-                                              ? 'text-purple-500 bg-purple-50'
-                                              : category === '보관소'
-                                                  ? 'text-cyan-500 bg-cyan-50'
-                                                  : 'text-red-500 bg-red-50'
-                              }`}
-                          >
-                      {subCategory}
-                    </span>
+                          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
+                            {image ? (
+                                <img
+                                    src={image}
+                                    alt={place.name}
+                                    className="h-full w-full object-cover"
+                                />
+                            ) : (
+                                <span className="text-xs font-semibold text-slate-400">
+                                  {t.noImage}
+                                </span>
+                            )}
+                          </div>
                         </div>
 
-                        <p className="mt-1 text-sm text-slate-400 truncate">
-                          {place.address}
-                        </p>
+                        {/* 오른쪽: 텍스트 정보 */}
+                        <div className="flex-1 min-w-0 pr-8 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-slate-800 text-lg leading-snug truncate">
+                              {place.name}
+                            </h3>
+                            <span
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0 ${
+                                    category === '카페'
+                                        ? 'text-orange-500 bg-orange-50'
+                                        : category === '맛집'
+                                            ? 'text-green-500 bg-green-50'
+                                            : category === '숙소'
+                                                ? 'text-purple-500 bg-purple-50'
+                                                : category === '보관소'
+                                                    ? 'text-cyan-500 bg-cyan-50'
+                                                    : 'text-red-500 bg-red-50'
+                                }`}
+                            >
+                              {subCategory}
+                            </span>
+                          </div>
 
-                        <p className="mt-1.5 text-sm text-amber-500 font-semibold">
-                          ★ {rating}
-                        </p>
+                          <p className="text-sm text-slate-400 break-keep">
+                            {place.address}
+                          </p>
+
+                          <p className="text-sm text-amber-500 font-semibold flex items-center gap-1 mt-0.5">
+                            ★ {rating}
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <button
-                            type="button"
-                            className="p-1 text-slate-300 hover:text-slate-400 cursor-grab"
-                            title={t.moveOrder}
-                        >
-                          <svg className="size-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M7 6a1 1 0 100-2 1 1 0 000 2zM7 11a1 1 0 100-2 1 1 0 000 2zM7 16a1 1 0 100-2 1 1 0 000 2zM13 6a1 1 0 100-2 1 1 0 000 2zM13 11a1 1 0 100-2 1 1 0 000 2zM13 16a1 1 0 100-2 1 1 0 000 2z" />
-                          </svg>
-                        </button>
+                      {/* [하단 전체 영역] 추천 이유 박스 (카드 내 가로폭 전체 확보) */}
+                      {place.selectionReason && (
+                          <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-100 relative mt-1 mx-1">
+                            {/*
+                                말풍선 꼬리를 L7 명동 텍스트 시작 라인과 매칭되도록
+                                left 오프셋 값을 left-[116px](번호7 + 갭12 + 이미지64 + 갭16 + 꼬리보정17)으로 세밀하게 조정
+                            */}
+                            <div
+                                className="absolute top-0 left-[116px] -translate-y-[11px] w-4 h-3 bg-slate-50 border-t border-l border-slate-100"
+                                style={{
+                                  clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+                                }}
+                            />
+                            <p className="text-[13px] text-slate-600 leading-relaxed font-normal whitespace-pre-wrap break-keep relative z-10">
+                              💡 {place.selectionReason}
+                            </p>
+                          </div>
+                      )}
 
+                      {/* [우측 상단] X자 삭제 버튼 */}
+                      <div className="absolute top-4 right-4 z-10">
                         <button
                             type="button"
                             onClick={() => {
