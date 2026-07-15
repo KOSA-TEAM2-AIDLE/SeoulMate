@@ -1,0 +1,200 @@
+import asyncio
+import unittest
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from langchain_core.runnables import RunnableLambda
+
+from application.travel_query.extraction import TravelIntentExtractor
+from application.travel_query.required_info import (
+    ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE,
+    check_required_information,
+    find_missing_fields,
+)
+
+
+SEOUL_TIMEZONE = ZoneInfo("Asia/Seoul")
+
+
+def _base_state() -> dict:
+    return {
+        "status": "collecting",
+        "original_question": "내일 홍대에서 저녁 먹고 카페도 가고 싶어",
+        "language": "ko",
+        "reference_at": datetime(2026, 7, 15, 12, 0, tzinfo=SEOUL_TIMEZONE),
+        "current_latitude": None,
+        "current_longitude": None,
+        "current_location_name": None,
+        "collected": {},
+        "latest_user_answer": None,
+    }
+
+
+class TravelIntentExtractorTests(unittest.TestCase):
+    def test_explicit_day_slots_fill_deterministic_defaults(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "day_trip_route",
+                "normalized_question": "2026-07-16 홍대 저녁 식사 후 카페 방문",
+                "location": "홍대",
+                "start_date": "2026-07-16",
+                "explicit_visit_count": 2,
+                "requested_domains": ["restaurant", "cafe"],
+            }
+        )
+        extractor = TravelIntentExtractor(chain)
+
+        result = asyncio.run(extractor(_base_state()))
+
+        self.assertEqual("2026-07-16", result["collected"]["end_date"])
+        self.assertEqual(0, result["collected"]["nights"])
+        self.assertEqual(1, result["collected"]["days"])
+        self.assertEqual(2, result["collected"]["target_places_per_day"])
+        self.assertEqual("normal", result["collected"]["pace"])
+
+    def test_latest_answer_overrides_previously_collected_value(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "single_place_recommendation",
+                "normalized_question": "성수 조용한 카페 추천",
+                "location": "성수",
+                "requested_domains": ["cafe"],
+            }
+        )
+        extractor = TravelIntentExtractor(chain)
+        state = _base_state()
+        state["collected"] = {"location": "홍대"}
+        state["latest_user_answer"] = "홍대 말고 성수로 해줘"
+
+        result = asyncio.run(extractor(state))
+
+        self.assertEqual("성수", result["collected"]["location"])
+        self.assertEqual(
+            state["original_question"],
+            result["collected"]["original_question"],
+        )
+
+    def test_day_route_pace_maps_to_target_place_count(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "day_trip_route",
+                "normalized_question": "2026-07-16 홍대 여유로운 하루 코스",
+                "location": "홍대",
+                "start_date": "2026-07-16",
+                "pace": "relaxed",
+            }
+        )
+        extractor = TravelIntentExtractor(chain)
+
+        result = asyncio.run(extractor(_base_state()))
+
+        self.assertEqual(3, result["collected"]["target_places_per_day"])
+
+
+class RequiredInformationTests(unittest.TestCase):
+    def test_single_recommendation_requires_location(self) -> None:
+        state = _base_state()
+        state["intent"] = "single_place_recommendation"
+
+        result = check_required_information(state)
+
+        self.assertEqual(["filters.location"], result["missing_fields"])
+        self.assertEqual("collecting", result["status"])
+
+    def test_current_coordinates_can_satisfy_location(self) -> None:
+        state = _base_state()
+        state.update(
+            {
+                "intent": "single_place_recommendation",
+                "current_latitude": 37.5563,
+                "current_longitude": 126.9236,
+                "collected": {"use_current_location": True},
+            }
+        )
+
+        self.assertEqual([], find_missing_fields(state))
+
+    def test_generic_day_route_asks_for_target_place_count(self) -> None:
+        state = _base_state()
+        state.update(
+            {
+                "intent": "day_trip_route",
+                "collected": {
+                    "location": "홍대",
+                    "start_date": "2026-07-16",
+                    "end_date": "2026-07-16",
+                    "days": 1,
+                    "nights": 0,
+                },
+            }
+        )
+
+        result = check_required_information(state)
+
+        self.assertEqual(
+            ["route_request.target_places_per_day"],
+            result["missing_fields"],
+        )
+        self.assertIn("3곳", result["assistant_message"])
+
+    def test_explicit_mini_route_can_advance_without_count_question(self) -> None:
+        state = _base_state()
+        state.update(
+            {
+                "intent": "day_trip_route",
+                "collected": {
+                    "location": "홍대",
+                    "start_date": "2026-07-16",
+                    "end_date": "2026-07-16",
+                    "days": 1,
+                    "nights": 0,
+                    "explicit_visit_count": 2,
+                    "target_places_per_day": 2,
+                },
+            }
+        )
+
+        result = check_required_information(state)
+
+        self.assertEqual("building", result["status"])
+        self.assertEqual([], result["missing_fields"])
+
+    def test_questions_are_limited_to_two_per_turn(self) -> None:
+        state = _base_state()
+        state.update(
+            {
+                "intent": "multi_day_route",
+                "collected": {
+                    "budget_ambiguous": True,
+                    "relative_date_ambiguous": True,
+                },
+            }
+        )
+
+        result = check_required_information(state)
+
+        self.assertGreater(len(result["missing_fields"]), 2)
+        self.assertIn("여행할 지역", result["assistant_message"])
+        self.assertIn("시작일과 종료일", result["assistant_message"])
+        self.assertNotIn("정확한 날짜", result["assistant_message"])
+
+    def test_route_modification_stops_as_unsupported(self) -> None:
+        state = _base_state()
+        state["intent"] = "modify_route"
+
+        result = check_required_information(state)
+
+        self.assertEqual("unsupported", result["status"])
+        self.assertEqual([], result["missing_fields"])
+        self.assertEqual(
+            ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE,
+            result["assistant_message"],
+        )
+        self.assertIsNone(result["structured_query"])
+
+
+if __name__ == "__main__":
+    unittest.main()

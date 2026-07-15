@@ -5,6 +5,9 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from schemas.chat import ChatDone, ChatMetaPlaces, ChatMetaRoute, ChatRequest, ChatToken
+from application.travel_query.required_info import (
+    ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE,
+)
 
 router = APIRouter()
 
@@ -219,6 +222,17 @@ def _sse(payload: dict) -> str:
 
 
 async def _stream(body: ChatRequest):
+    if body.parsed_intent == "modify_route":
+        meta = ChatMetaPlaces(intent="chitchat")
+        yield _sse(meta.model_dump())
+        yield _sse(
+            ChatToken(
+                text=ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE
+            ).model_dump()
+        )
+        yield _sse(ChatDone().model_dump())
+        return
+
     intent = INTENT_MAP[body.parsed_intent]
 
     if intent in ROUTE_INTENTS:

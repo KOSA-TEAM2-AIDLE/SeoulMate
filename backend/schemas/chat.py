@@ -15,6 +15,12 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class RouteModificationRequest(BaseModel):
+    current_route: dict[str, Any]
+    target_slot_id: str = Field(min_length=1)
+    expected_version: int = Field(ge=0)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     lang: Literal["ko", "en"] = "ko"
@@ -24,7 +30,7 @@ class ChatRequest(BaseModel):
     parsed_intent: TravelIntent
     source_mode: SourceMode | None = None
     parsed_query: StructuredTravelQuery
-    route_modification: dict[str, Any] | None = None
+    route_modification: RouteModificationRequest | None = None
 
     @model_validator(mode="after")
     def validate_contract(self) -> Self:

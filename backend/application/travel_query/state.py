@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Literal, TypedDict
 
 from schemas.structured_query import StructuredTravelQuery, TravelIntent
@@ -6,10 +7,21 @@ from schemas.structured_query import StructuredTravelQuery, TravelIntent
 class TravelQueryGraphState(TypedDict, total=False):
     """LangGraph 노드 간에 공유하는 첫 GPT의 내부 상태."""
 
-    status: Literal["collecting", "ready", "failed"]
+    status: Literal[
+        "collecting",
+        "building",
+        "unsupported",
+        "ready",
+        "failed",
+    ]
     original_question: str
+    normalized_question: str
     language: Literal["ko", "en"]
     intent: TravelIntent
+    reference_at: datetime
+    current_latitude: float | None
+    current_longitude: float | None
+    current_location_name: str | None
     collected: dict[str, Any]
     missing_fields: list[str]
     assistant_message: str | None

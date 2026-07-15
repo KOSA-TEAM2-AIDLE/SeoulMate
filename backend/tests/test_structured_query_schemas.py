@@ -315,6 +315,15 @@ class HumanInTheLoopSchemaTests(unittest.TestCase):
 
         self.assertEqual(query, state.structured_query)
 
+    def test_unsupported_state_returns_fixed_message(self) -> None:
+        state = HumanInTheLoopResponse(
+            status="unsupported",
+            assistant_message="루트 수정은 지원하지 않습니다.",
+        )
+
+        self.assertIsNone(state.structured_query)
+        self.assertEqual([], state.missing_fields)
+
     def test_development_checkpointer_can_be_created(self) -> None:
         self.assertIsNotNone(create_development_checkpointer())
 
