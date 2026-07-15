@@ -14,6 +14,9 @@ from application.response.frontend_response_mapper import (
     recommendation_frontend_response,
     route_frontend_response,
 )
+from application.travel_query.required_info import (
+    ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE,
+)
 
 from schemas.chat import (
     ChatDone,
@@ -838,6 +841,21 @@ async def _restaurant_stream(
 
 async def _stream(body: ChatRequest):
     try:
+        if body.parsed_intent == "modify_route" or (
+            body.parsed_query is not None
+            and body.parsed_query.intent == "modify_route"
+        ):
+            yield _sse(
+                ChatMetaPlaces(
+                    intent="chitchat",
+                ).model_dump()
+            )
+            yield _sse(
+                ChatToken(text=ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE).model_dump()
+            )
+            yield _sse(ChatDone().model_dump())
+            return
+
         structured_task = None
         if body.parsed_query is not None:
             parsed = deduplicate_recommendation_tasks(body.parsed_query)
