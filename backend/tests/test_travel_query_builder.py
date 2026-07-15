@@ -38,10 +38,10 @@ class StructuredTravelQueryBuilderTests(unittest.TestCase):
 
         self.assertEqual("ready", result["status"])
         query = result["structured_query"]
-        self.assertEqual("사용자 원문", query.original_question)
-        self.assertEqual(3, query.tasks[0].desired_count)
-        self.assertEqual("성수 조용한 카페", query.tasks[0].search_query)
-        self.assertTrue(query.filters.is_active)
+        self.assertEqual("사용자 원문", query["original_question"])
+        self.assertEqual(3, query["tasks"][0]["desired_count"])
+        self.assertEqual("성수 조용한 카페", query["tasks"][0]["search_query"])
+        self.assertTrue(query["filters"]["is_active"])
 
     def test_day_route_builds_exact_target_number_of_slots(self) -> None:
         result = build_structured_query(
@@ -75,15 +75,15 @@ class StructuredTravelQueryBuilderTests(unittest.TestCase):
 
         query = result["structured_query"]
         self.assertEqual("ready", result["status"])
-        self.assertEqual(2, len(query.tasks))
-        self.assertEqual([1, 1], [task.desired_count for task in query.tasks])
+        self.assertEqual(2, len(query["tasks"]))
+        self.assertEqual([1, 1], [task["desired_count"] for task in query["tasks"]])
         self.assertEqual(
             ["d1-restaurant-1", "d1-cafe-1"],
-            [task.slot_id for task in query.tasks],
+            [task["slot_id"] for task in query["tasks"]],
         )
-        self.assertEqual(2, query.route_request.target_places_per_day)
-        self.assertEqual("2026-07-16", query.weather_request.target_date.isoformat())
-        dumped_tasks = query.model_dump(mode="json")["tasks"]
+        self.assertEqual(2, query["route_request"]["target_places_per_day"])
+        self.assertEqual("2026-07-16", query["weather_request"]["target_date"])
+        dumped_tasks = query["tasks"]
         self.assertEqual("19:00", dumped_tasks[0]["start_time"])
         self.assertEqual("22:00", dumped_tasks[1]["end_time"])
 
@@ -103,9 +103,12 @@ class StructuredTravelQueryBuilderTests(unittest.TestCase):
 
         query = result["structured_query"]
         self.assertEqual("ready", result["status"])
-        self.assertEqual(6, len(query.tasks))
-        self.assertEqual([1, 1, 1, 2, 2, 2], [task.day_number for task in query.tasks])
-        self.assertIsNone(query.route_request.target_places_per_day)
+        self.assertEqual(6, len(query["tasks"]))
+        self.assertEqual(
+            [1, 1, 1, 2, 2, 2],
+            [task["day_number"] for task in query["tasks"]],
+        )
+        self.assertIsNone(query["route_request"]["target_places_per_day"])
 
     def test_undated_explicit_slot_is_not_duplicated_on_every_day(self) -> None:
         result = build_structured_query(
@@ -129,10 +132,10 @@ class StructuredTravelQueryBuilderTests(unittest.TestCase):
             )
         )
 
-        tasks = result["structured_query"].tasks
-        self.assertEqual("cafe", tasks[0].domain)
-        self.assertEqual("restaurant", tasks[3].domain)
-        self.assertEqual(1, sum(task.domain == "cafe" for task in tasks))
+        tasks = result["structured_query"]["tasks"]
+        self.assertEqual("cafe", tasks[0]["domain"])
+        self.assertEqual("restaurant", tasks[3]["domain"])
+        self.assertEqual(1, sum(task["domain"] == "cafe" for task in tasks))
 
     def test_weather_intent_does_not_create_place_task(self) -> None:
         result = build_structured_query(
@@ -146,9 +149,9 @@ class StructuredTravelQueryBuilderTests(unittest.TestCase):
 
         query = result["structured_query"]
         self.assertEqual("ready", result["status"])
-        self.assertEqual([], query.tasks)
-        self.assertEqual("성수", query.weather_request.location_name)
-        self.assertEqual("15:00", query.model_dump(mode="json")["weather_request"]["target_time"])
+        self.assertEqual([], query["tasks"])
+        self.assertEqual("성수", query["weather_request"]["location_name"])
+        self.assertEqual("15:00", query["weather_request"]["target_time"])
 
     def test_validation_failure_never_exposes_partial_query(self) -> None:
         result = build_structured_query(

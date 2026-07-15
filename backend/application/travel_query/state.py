@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal, TypedDict
 
-from schemas.structured_query import StructuredTravelQuery, TravelIntent
+from schemas.structured_query import TravelIntent
 
 
 class TravelQueryGraphState(TypedDict, total=False):
@@ -28,6 +28,6 @@ class TravelQueryGraphState(TypedDict, total=False):
     assistant_message: str | None
     latest_user_answer: str | dict[str, Any] | None
     conversation_history: list[dict[str, str]]
-    structured_query: StructuredTravelQuery | None
+    structured_query: dict[str, Any] | None
     validation_errors: list[str]
     repair_attempts: int

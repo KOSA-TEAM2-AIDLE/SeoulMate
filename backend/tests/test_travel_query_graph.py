@@ -95,9 +95,9 @@ class TravelQueryGraphTests(unittest.TestCase):
         self.assertEqual("ready", resumed["status"])
         self.assertEqual(
             4,
-            resumed["structured_query"].route_request.target_places_per_day,
+            resumed["structured_query"]["route_request"]["target_places_per_day"],
         )
-        self.assertEqual(4, len(resumed["structured_query"].tasks))
+        self.assertEqual(4, len(resumed["structured_query"]["tasks"]))
         self.assertEqual(2, len(resumed["conversation_history"]))
         self.assertEqual(
             "보통",

@@ -31,7 +31,10 @@ class TravelQueryValidationTests(unittest.TestCase):
         self.assertEqual("repairing", classified["status"])
         self.assertEqual(1, repaired["repair_attempts"])
         self.assertEqual("ready", rebuilt["status"])
-        self.assertEqual("09:00", rebuilt["structured_query"].tasks[0].start_time)
+        self.assertEqual(
+            "09:00",
+            rebuilt["structured_query"]["tasks"][0]["start_time"],
+        )
 
     def test_budget_range_error_returns_to_user_question(self) -> None:
         state = _state(

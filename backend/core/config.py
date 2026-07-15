@@ -55,7 +55,6 @@ class Settings(BaseSettings):
     weather_cache_ttl_seconds: int = Field(default=600, ge=0)
     weather_rerank_weight: float = Field(default=0.10, ge=0, le=1)
 
-    anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
     openai_chat_model: str = "gpt-5-mini"
     openai_embed_model: str = "text-embedding-3-large"
@@ -120,7 +119,6 @@ SEOUL_API_ENABLED = settings.seoul_api_enabled
 WEATHER_API_ENABLED = settings.kma_api_key is not None
 LLM_MODE = settings.llm_mode
 
-ANTHROPIC_API_KEY = _secret_value(settings.anthropic_api_key)
 OPENAI_API_KEY = _secret_value(settings.openai_api_key)
 OPENAI_CHAT_MODEL = settings.openai_chat_model
 OPENAI_EMBED_MODEL = settings.openai_embed_model

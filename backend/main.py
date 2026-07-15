@@ -8,7 +8,6 @@ from core.config import settings
 from api.routers import (
     accommodations,
     actions,
-    attractions,
     cafes,
     chat,
     events,
@@ -18,6 +17,7 @@ from api.routers import (
     routes,
     storage_lockers,
     tools,
+    travel_query,
     weather,
 )
 
@@ -44,9 +44,9 @@ app.include_router(restaurants.router)
 app.include_router(accommodations.router)
 app.include_router(events.router)
 app.include_router(storage_lockers.router)
-app.include_router(attractions.router)
 app.include_router(weather.router)
 app.include_router(routes.router)
+app.include_router(travel_query.router)
 
 
 @app.get("/")

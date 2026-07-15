@@ -43,7 +43,7 @@ def build_structured_query(
         "assistant_message": None,
         "missing_fields": [],
         "collected": {},
-        "structured_query": query,
+        "structured_query": query.model_dump(mode="json"),
         "validation_errors": [],
     }
 
