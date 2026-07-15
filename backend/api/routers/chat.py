@@ -1,5 +1,5 @@
-"""기존 SSE chat router의 단계적 마이그레이션 진입점."""
-from routers.chat import router
+"""기존 api.routers 경로를 새 SSE chat router에 연결한다."""
 
-__all__ = ["router"]
+from routers.chat import _stream, router
 
+__all__ = ["router", "_stream"]

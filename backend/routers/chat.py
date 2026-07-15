@@ -14,6 +14,9 @@ from application.response.frontend_response_mapper import (
     recommendation_frontend_response,
     route_frontend_response,
 )
+from application.travel_query.required_info import (
+    ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE,
+)
 
 from schemas.chat import (
     ChatDone,
@@ -836,8 +839,34 @@ async def _restaurant_stream(
     yield _sse(ChatDone().model_dump())
 
 
+def _with_resolved_message(body: ChatRequest) -> ChatRequest:
+    if body.parsed_query is None:
+        return body
+    # 프론트엔드가 마지막 HITL 답변을 message로 보내더라도 다음 모델에는
+    # 전체 맥락이 반영된 최종 질문을 전달한다.
+    return body.model_copy(
+        update={"message": body.parsed_query.normalized_question}
+    )
+
+
 async def _stream(body: ChatRequest):
     try:
+        body = _with_resolved_message(body)
+        if body.parsed_intent == "modify_route" or (
+            body.parsed_query is not None
+            and body.parsed_query.intent == "modify_route"
+        ):
+            yield _sse(
+                ChatMetaPlaces(
+                    intent="chitchat",
+                ).model_dump()
+            )
+            yield _sse(
+                ChatToken(text=ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE).model_dump()
+            )
+            yield _sse(ChatDone().model_dump())
+            return
+
         structured_task = None
         if body.parsed_query is not None:
             parsed = deduplicate_recommendation_tasks(body.parsed_query)

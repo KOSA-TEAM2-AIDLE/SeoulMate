@@ -1,12 +1,19 @@
-"""다일 일정 GPT 입력·출력 계약과 안전한 백엔드 확정 결과."""
+"""여행 요청 계약과 백엔드 Route Planner 입출력 모델."""
 
 from __future__ import annotations
 
 from datetime import date, time, timedelta
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PlainSerializer,
+    field_validator,
+    model_validator,
+)
 
 
 MAX_ROUTE_DAYS = 7
@@ -16,6 +23,15 @@ ROUTE_CANDIDATES_PER_SLOT = 5
 ROUTE_FALLBACKS_PER_SLOT = 2
 
 RouteDomain = Literal["cafe", "restaurant", "accommodation", "attraction", "etc"]
+RoutePace = Literal["relaxed", "normal", "packed"]
+HHMMTime = Annotated[
+    time,
+    PlainSerializer(
+        lambda value: value.strftime("%H:%M"),
+        return_type=str,
+        when_used="json",
+    ),
+]
 
 
 class TripPeriod(BaseModel):
@@ -34,6 +50,10 @@ class TripPeriod(BaseModel):
         return self
 
 
+# 첫 GPT 계약에서 사용하던 이름을 Route Planner 계약과 동일 모델로 유지한다.
+TravelPeriod = TripPeriod
+
+
 class RouteBudget(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -44,7 +64,7 @@ class RouteBudget(BaseModel):
 
 
 class RouteRequest(BaseModel):
-    """원문 분석 GPT가 반환하는 신규 일정 요청."""
+    """첫 GPT가 확정한 신규 일정 요청."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -52,17 +72,14 @@ class RouteRequest(BaseModel):
     period: TripPeriod
     adults: int = Field(default=1, ge=1, le=100)
     children: int = Field(default=0, ge=0, le=100)
-    arrival_at: str | None = None
+    arrival_at: HHMMTime | None = None
     arrival_location: str | None = None
-    departure_at: str | None = None
+    departure_at: HHMMTime | None = None
     departure_location: str | None = None
     accommodation_id: str | None = None
     preferred_accommodation_areas: list[str] = Field(default_factory=list)
-    pace: Literal["relaxed", "normal", "packed"] = "normal"
+    pace: RoutePace = "normal"
     max_places_per_day: int = Field(default=5, ge=1, le=MAX_SLOTS_PER_DAY)
-    # max_places_per_day는 안전 상한이고, 이 값은 사용자가 원하는 실제 목표 슬롯 수다.
-    # 당일 루트에서만 Task 수와 정확히 일치하는지 검증한다. 기존 JSON과의 하위
-    # 호환을 위해 생략 가능하다.
     target_places_per_day: int | None = Field(
         default=None,
         ge=1,
@@ -83,7 +100,9 @@ class RouteRequest(BaseModel):
             self.target_places_per_day is not None
             and self.target_places_per_day > self.max_places_per_day
         ):
-            raise ValueError("target_places_per_day는 max_places_per_day를 초과할 수 없습니다.")
+            raise ValueError(
+                "target_places_per_day는 max_places_per_day를 초과할 수 없습니다."
+            )
         return self
 
 
@@ -138,7 +157,9 @@ class RouteSlotCandidates(BaseModel):
         ids = [candidate.candidate_id for candidate in self.candidates]
         if len(ids) != len(set(ids)):
             raise ValueError("한 슬롯의 candidate_id는 중복될 수 없습니다.")
-        place_keys = [(candidate.domain, candidate.place_id) for candidate in self.candidates]
+        place_keys = [
+            (candidate.domain, candidate.place_id) for candidate in self.candidates
+        ]
         if len(place_keys) != len(set(place_keys)):
             raise ValueError("한 슬롯에 같은 장소가 중복될 수 없습니다.")
         if self.end_date and self.end_date < self.date:
@@ -189,7 +210,6 @@ class RouteSlotSelection(BaseModel):
     slot_id: str
     selected_candidate_id: str
     selection_reason: str = ""
-    # GPT가 과다 반환해도 Draft 전체를 버리지 않고 서비스 검증기에서 2개로 자른다.
     alternatives: list["RouteAlternativeSelection"] = Field(default_factory=list)
 
 
@@ -228,8 +248,6 @@ class ConfirmedRouteSlot(BaseModel):
 
     @property
     def fallback_candidate_ids(self) -> list[str]:
-        """이전 내부 호출을 위한 읽기 전용 호환 속성."""
-
         return [item.candidate.candidate_id for item in self.alternatives]
 
 
@@ -244,7 +262,6 @@ class ConfirmedRoutePlan(BaseModel):
     slots: list[ConfirmedRouteSlot]
     warnings: list[str] = Field(default_factory=list)
     repaired: bool = False
-    # 전체 대안 루트는 기본 응답에서 만들지 않는다.
     alternative_routes: list[dict] = Field(default_factory=list, max_length=0)
 
 
@@ -253,7 +270,11 @@ __all__ = [
     "MAX_SLOTS_PER_DAY",
     "ROUTE_CANDIDATES_PER_SLOT",
     "ROUTE_FALLBACKS_PER_SLOT",
+    "RouteDomain",
+    "RoutePace",
+    "HHMMTime",
     "TripPeriod",
+    "TravelPeriod",
     "RouteBudget",
     "RouteRequest",
     "RouteCandidate",

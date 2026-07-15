@@ -1,10 +1,12 @@
-"""API 명세서 3-5 참고: /chat 요청/응답 및 route_day, route_multi용 스키마."""
-from typing import Literal, Optional
+"""API 명세서 3-5 참고: /chat 요청/응답 및 루트 응답 스키마."""
+
+from typing import Any, Literal, Optional
+
 from pydantic import BaseModel, Field, model_validator
 
 from schemas.common import Place, ToolResult
 from schemas.frontend_response import FrontendResponse
-from schemas.structured_query import StructuredTravelQuery
+from schemas.structured_query import SourceMode, StructuredTravelQuery, TravelIntent
 
 
 class ChatMessage(BaseModel):
@@ -12,40 +14,46 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class RouteModificationRequest(BaseModel):
+    current_route: dict[str, Any]
+    target_slot_id: str = Field(min_length=1)
+    expected_version: int = Field(ge=0)
+
+
 class ChatRequest(BaseModel):
-    message: str
-    lang: str = "en"  # ko | en | ja
+    message: str = Field(min_length=1)
+    lang: str = "en"
     history: list[ChatMessage] = Field(default_factory=list)
-    lat: Optional[float] = None
-    lng: Optional[float] = None
-    location_name: Optional[str] = None
-    min_rating: Optional[float] = None
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    location_name: str | None = None
+    min_rating: float | None = None
     open_now: bool = False
-    # 상위 LangGraph의 고정 TravelQuery.source_mode를 그대로 전달하면 별도 GPT 라우팅을 생략한다.
-    source_mode: Optional[Literal["rag_only", "rag_mcp", "mcp_only"]] = None
-    # 고정 TravelQuery.intent를 함께 전달하면 기존 규칙 기반 Intent 분류도 생략한다.
-    parsed_intent: Optional[Literal[
-        "multi_day_route",
-        "day_trip_route",
-        "single_place_recommendation",
-        "weather_information",
-        "general_response",
-    ]] = None
-    # 권장 입력: 고정 GPT가 반환한 JSON 전체. 있으면 RAG가 원문을 다시 파싱하지 않는다.
-    parsed_query: Optional[StructuredTravelQuery] = None
+    source_mode: SourceMode | None = None
+    parsed_intent: TravelIntent | None = None
+    parsed_query: StructuredTravelQuery | None = None
+    route_modification: RouteModificationRequest | None = None
 
     @model_validator(mode="after")
     def validate_structured_contract(self):
-        if self.parsed_query is None:
-            return self
-        if self.parsed_intent and self.parsed_intent != self.parsed_query.intent:
-            raise ValueError("parsed_intent와 parsed_query.intent가 일치해야 합니다.")
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("lat과 lng는 함께 제공해야 합니다.")
+        if self.parsed_query is not None:
+            if self.parsed_intent and self.parsed_intent != self.parsed_query.intent:
+                raise ValueError("parsed_intent와 parsed_query.intent가 일치해야 합니다.")
+            if (
+                self.source_mode
+                and self.parsed_query.source_mode
+                and self.source_mode != self.parsed_query.source_mode
+            ):
+                raise ValueError("source_mode와 parsed_query.source_mode가 일치해야 합니다.")
         if (
-            self.source_mode
-            and self.parsed_query.source_mode
-            and self.source_mode != self.parsed_query.source_mode
+            self.route_modification is not None
+            and self.parsed_intent != "modify_route"
         ):
-            raise ValueError("source_mode와 parsed_query.source_mode가 일치해야 합니다.")
+            raise ValueError(
+                "route_modification은 modify_route 요청에서만 사용할 수 있습니다."
+            )
         return self
 
 
@@ -55,7 +63,7 @@ class TimeSlot(BaseModel):
     time: str
     end_date: Optional[str] = None
     end_time: Optional[str] = None
-    category: str  # 관광지 | 식당 | 카페 | 숙박
+    category: str
     place: Place
     alternatives: list[Place] = Field(default_factory=list, max_length=2)
 
@@ -67,31 +75,30 @@ class DayPlan(BaseModel):
 
 
 Intent = Literal[
-    "rag", "mcp", "both", "chitchat", "route_day", "route_multi"
+    "rag",
+    "mcp",
+    "both",
+    "chitchat",
+    "route_day",
+    "route_multi",
 ]
 
 
 class ChatMetaPlaces(BaseModel):
-    """intent: rag | mcp | both | chitchat 일 때의 meta 이벤트 payload."""
-
     type: Literal["meta"] = "meta"
     intent: Intent
     places: list[Place] = Field(default_factory=list)
     tool_results: list[ToolResult] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
     sources: list[str] = Field(default_factory=list)
-    # SSE 프레임(type/intent/debug)과 화면 DTO를 분리한다. 프론트는 result만
-    # 소비하고, places/reasons/sources는 디버깅에 계속 사용할 수 있다.
     result: Optional[FrontendResponse] = None
 
 
 class ChatMetaRoute(BaseModel):
-    """intent: route_day | route_multi 일 때의 meta 이벤트 payload."""
-
     type: Literal["meta"] = "meta"
     intent: Intent
     days: list[DayPlan]
-    tool_results: list[ToolResult] = []
+    tool_results: list[ToolResult] = Field(default_factory=list)
     total_days: int
     total_places: int
     route_id: Optional[str] = None
