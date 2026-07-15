@@ -1,3 +1,5 @@
+import logging
+
 from mcp.server.fastmcp import FastMCP
 
 from core.config import settings
@@ -9,6 +11,14 @@ from services.congestion import (
 from services.kakao_local import KakaoLocalServiceError
 from services.place_resolver import PlaceResolver
 from services.poi_matcher import PoiNotSupportedError
+from services.storage_lockers import (
+    StorageLockerNotFoundError,
+    StorageLockerService,
+    StorageLockerServiceError,
+)
+
+# 공공데이터 인증키가 쿼리스트링에 포함되므로 요청 URL INFO 로그를 막는다.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 mcp = FastMCP(
     name="SeoulMate Location", # MCP Client에 표시되는 서버 이름이다.
@@ -24,6 +34,7 @@ mcp = FastMCP(
 
 congestion_service = CongestionService() # 서비스 객체 생성
 place_resolver = PlaceResolver()
+storage_locker_service = StorageLockerService()
 
 
 @mcp.tool()
@@ -54,6 +65,66 @@ async def resolve_seoul_place(
     except ValueError:
         raise
     except KakaoLocalServiceError as error:
+        raise RuntimeError(str(error)) from None
+
+    return result.model_dump(mode="json")
+
+
+@mcp.tool()
+async def find_nearby_available_storage_lockers(
+    location: str,
+    radius_meters: float = 5_000,
+) -> dict:
+    """
+    서울의 장소명을 입력받아 반경 내에서 현재 사용 가능한 물품보관함을
+    거리순으로 최대 3개 반환한다. 결과의 locker_id는 상세 조회에 사용한다.
+    사용 가능 수는 대형, 중형, 소형 실시간 잔여 수량의 합이다.
+    """
+    try:
+        resolution = await place_resolver.resolve(query=location)
+        if resolution.selected is None:
+            if resolution.candidates:
+                names = ", ".join(
+                    candidate.place_name
+                    for candidate in resolution.candidates[:5]
+                )
+                raise ValueError(
+                    "장소를 하나로 특정할 수 없습니다. 더 구체적으로 "
+                    f"입력해 주세요. 후보: {names}"
+                )
+            raise ValueError(f"서울에서 장소를 찾을 수 없습니다: {location}")
+
+        selected = resolution.selected
+        result = await storage_locker_service.find_nearby_available(
+            query=location,
+            center_name=selected.place_name,
+            latitude=selected.latitude,
+            longitude=selected.longitude,
+            radius_meters=radius_meters,
+        )
+    except ValueError:
+        raise
+    except KakaoLocalServiceError as error:
+        raise RuntimeError(str(error)) from None
+    except StorageLockerServiceError as error:
+        raise RuntimeError(str(error)) from None
+
+    return result.model_dump(mode="json")
+
+
+@mcp.tool()
+async def get_storage_locker_detail(locker_id: str) -> dict:
+    """
+    물품보관함 ID로 위치, 운영시간, 전체·사용 가능·사용 중 수량,
+    크기별 잔여 수량, 요금, 결제수단, 이용방법 등 상세 정보를 반환한다.
+    """
+    try:
+        result = await storage_locker_service.get_detail(locker_id)
+    except ValueError:
+        raise
+    except StorageLockerNotFoundError as error:
+        raise ValueError(str(error)) from None
+    except StorageLockerServiceError as error:
         raise RuntimeError(str(error)) from None
 
     return result.model_dump(mode="json")
