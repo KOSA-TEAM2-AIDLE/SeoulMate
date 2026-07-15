@@ -39,6 +39,14 @@ class Settings(BaseSettings):
         ge=0,
     )
 
+    public_data_service_key: SecretStr | None = None
+    storage_locker_api_base_url: str = (
+        "https://apis.data.go.kr/B551982/psl_v2"
+    )
+    storage_locker_api_timeout_seconds: float = Field(default=10.0, gt=0)
+    storage_locker_api_page_size: int = Field(default=1000, ge=1, le=10000)
+    storage_locker_cache_ttl_seconds: int = Field(default=60, ge=0)
+
     mcp_server_url: str = "http://localhost:8001/mcp"
     mcp_server_host: str = "127.0.0.1"
     mcp_server_port: int = 8001
