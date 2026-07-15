@@ -26,6 +26,7 @@ class TravelQueryGraphState(TypedDict, total=False):
     missing_fields: list[str]
     assistant_message: str | None
     latest_user_answer: str | dict[str, Any] | None
+    conversation_history: list[dict[str, str]]
     structured_query: StructuredTravelQuery | None
     validation_errors: list[str]
     repair_attempts: int
