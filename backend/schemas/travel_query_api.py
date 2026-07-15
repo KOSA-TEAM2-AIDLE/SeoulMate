@@ -4,6 +4,7 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, Field, model_validator
 
 from schemas.hitl import HumanInTheLoopResponse
+from schemas.structured_query import TaskDomain
 
 
 class TravelQueryStartRequest(BaseModel):
@@ -43,5 +44,15 @@ class TravelQueryResumeRequest(BaseModel):
         return self
 
 
+class DomainAgentDispatchResult(BaseModel):
+    domain: TaskDomain
+    status: Literal["placeholder"] = "placeholder"
+    task_ids: list[str] = Field(default_factory=list)
+    assistant_message: str
+
+
 class TravelQueryApiResponse(HumanInTheLoopResponse):
     thread_id: str = Field(min_length=1)
+    agent_dispatches: list[DomainAgentDispatchResult] = Field(
+        default_factory=list
+    )

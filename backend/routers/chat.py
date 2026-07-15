@@ -842,8 +842,8 @@ async def _restaurant_stream(
 def _with_resolved_message(body: ChatRequest) -> ChatRequest:
     if body.parsed_query is None:
         return body
-    # The frontend may still send the last HITL answer as `message`.
-    # Downstream models must receive the self-contained resolved query.
+    # 프론트엔드가 마지막 HITL 답변을 message로 보내더라도 다음 모델에는
+    # 전체 맥락이 반영된 최종 질문을 전달한다.
     return body.model_copy(
         update={"message": body.parsed_query.normalized_question}
     )

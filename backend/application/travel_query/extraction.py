@@ -99,9 +99,8 @@ missing_fields: {missing_fields}
 conversation_history: {conversation_history}
 latest_user_answer: {latest_user_answer}
 
-normalized_question must be a self-contained request that includes the original
-question and every confirmed clarification. A downstream model will receive
-normalized_question without this conversation history.""",
+normalized_question은 최초 질문과 확정된 추가 답변을 모두 포함한 독립적인 요청이어야 한다.
+다음 모델에는 대화 기록 없이 normalized_question만 전달될 수 있다.""",
         ),
     ]
 )
@@ -150,8 +149,8 @@ CLARIFICATION_FIELD_KEYS: dict[str, set[str]] = {
     },
 }
 
-# A clarification may contain useful optional preferences in addition to the
-# requested value, for example "3 places, with a nice atmosphere".
+# 추가 답변에는 요청한 누락값 외에도 "3곳, 분위기 좋은"처럼 유용한 선호 조건이
+# 함께 포함될 수 있으므로 아래 필드는 추가로 병합한다.
 ADDITIVE_CLARIFICATION_KEYS = {
     "themes",
     "requested_domains",
