@@ -1,29 +1,26 @@
 """API 명세서 3-5 'Intent 분류 기준', 'MCP 도구 선택 기준' 표 참고.
 
-분류 우선순위: route_edit > route_multi > route_day > mcp/rag/both > LLM 폴백(chitchat)
+분류 우선순위: route_multi > route_day > mcp/rag/both > LLM 폴백(chitchat)
 """
-import json
+import re
 
-# from core.config import ANTHROPIC_API_KEY
-from core.config import settings
+from core.config import OPENAI_API_KEY
 from schemas.chat import ChatMessage, Intent
 
-ROUTE_EDIT_KEYWORDS = [
-    "빼줘", "바꿔줘", "수정", "다른 곳", "변경",
-    "remove", "change", "replace", "edit",
-]
-ROUTE_MULTI_KEYWORDS = ["박", "여행 일정", "3박", "2박", "1박", "travel plan", "night"]
+ROUTE_MULTI_KEYWORDS = ["여행 일정", "travel plan", "multi-day itinerary"]
 ROUTE_DAY_KEYWORDS = [
     "하루", "당일", "코스", "루트", "일정 짜",
     "one day", "day trip", "itinerary", "route",
 ]
 RAG_KEYWORDS = [
     "추천", "조용", "분위기", "인스타", "데이트", "이색", "맛집",
-    "recommend", "quiet", "cozy", "romantic", "cafe",
+    "가기 좋은", "식당", "음식", "먹을", "먹기",
+    "recommend", "quiet", "cozy", "romantic", "cafe", "restaurant", "food", "good place",
 ]
 MCP_KEYWORDS = [
     "혼잡", "붐빔", "날씨", "비", "기온", "지하철", "교통", "행사", "축제", "지금", "오늘",
-    "crowd", "weather", "transit", "event", "now", "today",
+    "내일", "모레", "저녁", "점심",
+    "crowd", "weather", "transit", "event", "now", "today", "tomorrow", "tonight", "lunch", "dinner",
 ]
 
 CONGESTION_KEYWORDS = ["혼잡", "붐빔", "사람 많아", "crowd", "busy"]
@@ -36,24 +33,13 @@ def _contains_any(message: str, keywords: list[str]) -> bool:
     return any(kw.lower() in lowered for kw in keywords)
 
 
-def _history_has_route(history: list[ChatMessage]) -> bool:
-    for msg in history:
-        if msg.role != "assistant":
-            continue
-        try:
-            parsed = json.loads(msg.content)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if isinstance(parsed, dict) and parsed.get("type") == "route":
-            return True
-    return False
-
-
 def classify_intent(message: str, lang: str, history: list[ChatMessage]) -> Intent:
-    """history에 type: route 데이터가 있어야만 route_edit으로 분류됨 (10장 참고)."""
-    if _contains_any(message, ROUTE_EDIT_KEYWORDS) and _history_has_route(history):
-        return "route_edit"
-    if _contains_any(message, ROUTE_MULTI_KEYWORDS):
+    """사용자 문장을 최초 루트 생성·추천·도구·일반 대화로 분류한다."""
+    has_trip_duration = bool(
+        re.search(r"\d+\s*박", message)
+        or re.search(r"\b\d+\s*nights?\b", message.lower())
+    )
+    if has_trip_duration or _contains_any(message, ROUTE_MULTI_KEYWORDS):
         return "route_multi"
     if _contains_any(message, ROUTE_DAY_KEYWORDS):
         return "route_day"
@@ -68,7 +54,7 @@ def classify_intent(message: str, lang: str, history: list[ChatMessage]) -> Inte
         return "rag"
 
     # 키워드 미감지: LLM이 직접 대화(chitchat)로 응답. LLM 키 없으면 rag로 폴백.
-    return "chitchat" if settings.anthropic_api_key else "rag"
+    return "chitchat" if OPENAI_API_KEY else "rag"
 
 
 def pick_mcp_tool(message: str) -> str:

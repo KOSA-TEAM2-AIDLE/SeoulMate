@@ -51,9 +51,22 @@ class Settings(BaseSettings):
     mcp_server_host: str = "127.0.0.1"
     mcp_server_port: int = 8001
 
-    kma_api_key: SecretStr | None = None 
+    kma_api_key: SecretStr | None = None
+    weather_cache_ttl_seconds: int = Field(default=600, ge=0)
+    weather_rerank_weight: float = Field(default=0.10, ge=0, le=1)
+
     anthropic_api_key: SecretStr | None = None
-    llm_mode: str = "anthropic-api"
+    openai_api_key: SecretStr | None = None
+    openai_chat_model: str = "gpt-5-mini"
+    openai_embed_model: str = "text-embedding-3-large"
+    openai_embed_dim: int = Field(default=1536, gt=0)
+    llm_mode: str = "openai-api"
+
+    db_host: str = "localhost"
+    db_port: int = Field(default=5433, ge=1, le=65535)
+    db_name: str = "seoulmate"
+    db_user: str = "seoulmate"
+    db_password: SecretStr = SecretStr("1234")
 
 
     # 환경변수 및 설정값 정의
@@ -94,3 +107,34 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+
+def _secret_value(value: SecretStr | None) -> str | None:
+    return value.get_secret_value() if value is not None else None
+
+
+# 기존 RAG/MCP 모듈의 상수 기반 설정 계약을 유지한다. 새 도메인 서비스는
+# `settings`를 직접 사용하고, 단계적으로 이 호환 계층을 제거할 수 있다.
+ALLOWED_ORIGINS = settings.allowed_origins_list
+SEOUL_API_ENABLED = settings.seoul_api_enabled
+WEATHER_API_ENABLED = settings.kma_api_key is not None
+LLM_MODE = settings.llm_mode
+
+ANTHROPIC_API_KEY = _secret_value(settings.anthropic_api_key)
+OPENAI_API_KEY = _secret_value(settings.openai_api_key)
+OPENAI_CHAT_MODEL = settings.openai_chat_model
+OPENAI_EMBED_MODEL = settings.openai_embed_model
+OPENAI_EMBED_DIM = settings.openai_embed_dim
+
+KAKAO_REST_API_KEY = _secret_value(settings.kakao_rest_api_key)
+KMA_API_KEY = _secret_value(settings.kma_api_key)
+WEATHER_CACHE_TTL_SECONDS = settings.weather_cache_ttl_seconds
+WEATHER_RERANK_WEIGHT = settings.weather_rerank_weight
+
+DB_CONFIG = {
+    "host": settings.db_host,
+    "port": settings.db_port,
+    "dbname": settings.db_name,
+    "user": settings.db_user,
+    "password": settings.db_password.get_secret_value(),
+}

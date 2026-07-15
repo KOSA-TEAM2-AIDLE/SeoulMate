@@ -6,13 +6,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 from api.routers import (
-    places,
-    cafes,
     accommodations,
+    actions,
+    attractions,
+    cafes,
+    chat,
     events,
+    health,
+    places,
+    restaurants,
+    routes,
     storage_lockers,
+    tools,
+    weather,
 )
-from api.routers import actions, tools, health, restaurants, chat
 
 # load_dotenv() # Pydantic Settings 설정으로 인해 제외 -> Settings 가 직접 .env를 읽음
 
@@ -37,6 +44,9 @@ app.include_router(restaurants.router)
 app.include_router(accommodations.router)
 app.include_router(events.router)
 app.include_router(storage_lockers.router)
+app.include_router(attractions.router)
+app.include_router(weather.router)
+app.include_router(routes.router)
 
 
 @app.get("/")
