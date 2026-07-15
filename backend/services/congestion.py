@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -11,6 +12,7 @@ from schemas.congestion import (
     CongestionLevel,
     CongestionSnapshot,
     LocationCongestionResult,
+    NearbyCongestionResult,
     PopulationDemographics,
     SeoulApiForecast,
     SeoulApiPopulation,
@@ -276,6 +278,47 @@ class CongestionService:
         return LocationCongestionResult(
             poi_match=poi_match,
             congestion=congestion,
+        )
+
+    async def get_nearby_congestion(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_meters: float = 3_000,
+        limit: int = 5,
+    ) -> NearbyCongestionResult:
+        poi_matches = self._get_poi_matcher().find_nearby(
+            latitude=latitude,
+            longitude=longitude,
+            radius_meters=radius_meters,
+            limit=limit,
+        )
+        snapshots = await asyncio.gather(
+            *(
+                self.get_congestion(poi_match.area_code)
+                for poi_match in poi_matches
+            )
+        )
+
+        areas: list[LocationCongestionResult] = []
+        for poi_match, snapshot in zip(poi_matches, snapshots, strict=True):
+            if snapshot.area_code != poi_match.area_code:
+                raise SeoulApiResponseError(
+                    "매핑한 POI 코드와 서울시 API 응답 코드가 "
+                    "일치하지 않습니다."
+                )
+            areas.append(
+                LocationCongestionResult(
+                    poi_match=poi_match,
+                    congestion=snapshot,
+                )
+            )
+
+        return NearbyCongestionResult(
+            center_latitude=latitude,
+            center_longitude=longitude,
+            radius_meters=radius_meters,
+            areas=areas,
         )
 
     def _get_poi_matcher(self) -> PoiMatcher:

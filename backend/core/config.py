@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent # backend 폴더 위치 지정
@@ -22,6 +22,22 @@ class Settings(BaseSettings):
     seoul_api_timeout_seconds : float = 5.0
 
     congestion_cache_ttl_seconds: int = 300
+
+    kakao_rest_api_key: SecretStr | None = None
+    kakao_local_api_base_url: str = "https://dapi.kakao.com"
+    kakao_local_api_timeout_seconds: float = Field(
+        default=5.0,
+        gt=0,
+    )
+    kakao_place_result_limit: int = Field(
+        default=5,
+        ge=1,
+        le=15,
+    )
+    kakao_place_cache_ttl_seconds: int = Field(
+        default=86400,
+        ge=0,
+    )
 
     mcp_server_url: str = "http://localhost:8001/mcp"
     mcp_server_host: str = "127.0.0.1"
@@ -44,6 +60,24 @@ class Settings(BaseSettings):
     @property
     def seoul_api_enabled(self) -> bool:
         return self.seoul_open_api_key is not None
+
+    @field_validator("kakao_local_api_base_url")
+    @classmethod
+    def validate_kakao_local_api_base_url(cls, value: str) -> str:
+        normalized = value.strip().rstrip("/")
+        if not normalized:
+            raise ValueError(
+                "Kakao Local API 기본 URL은 비어 있을 수 없습니다."
+            )
+        return normalized
+
+    @property
+    def kakao_local_api_enabled(self) -> bool:
+        if self.kakao_rest_api_key is None:
+            return False
+        return bool(
+            self.kakao_rest_api_key.get_secret_value().strip()
+        )
 
 
 @lru_cache

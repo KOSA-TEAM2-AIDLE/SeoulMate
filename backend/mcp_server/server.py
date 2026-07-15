@@ -6,13 +6,15 @@ from services.congestion import (
     CongestionService,
     CongestionServiceError,
 )
+from services.kakao_local import KakaoLocalServiceError
+from services.place_resolver import PlaceResolver
 from services.poi_matcher import PoiNotSupportedError
 
 mcp = FastMCP(
-    name="SeoulMate Congestion", # MCP Client에 표시되는 서버 이름이다.
+    name="SeoulMate Location", # MCP Client에 표시되는 서버 이름이다.
     instructions=(
-        "서울시 공식 POI의 현재 혼잡도와 예측 인구를 조회한다. "
-        "장소명, POI 코드 또는 위도·경도를 사용할 수 있다."
+        "서울 장소명을 위도·경도로 해석하고, 서울시 공식 POI의 "
+        "현재 혼잡도와 예측 인구를 조회한다."
     ), # Agent에게 서버의 목적을 설명하는 부분
     host=settings.mcp_server_host, 
     port=settings.mcp_server_port, 
@@ -20,7 +22,68 @@ mcp = FastMCP(
     json_response=True, # 도구 결과를 JSON 구조로 반환하다.
 )
 
-congestion_service = CongestionService() # 서비스 객체 생성 
+congestion_service = CongestionService() # 서비스 객체 생성
+place_resolver = PlaceResolver()
+
+
+@mcp.tool()
+async def resolve_seoul_place(
+    query: str,
+    center_latitude: float | None = None,
+    center_longitude: float | None = None,
+) -> dict:
+    """
+    사용자가 언급한 서울 시설명을 Kakao Local API로 해석한다.
+    명칭이 정확히 일치하면 해당 장소를 selected로 반환한다.
+    여러 지점이 있으면 selected는 null이고 requires_disambiguation은 true다.
+    중심 좌표를 알고 있으면 위도와 경도를 함께 제공한다.
+    """
+    has_latitude = center_latitude is not None
+    has_longitude = center_longitude is not None
+    if has_latitude != has_longitude:
+        raise ValueError(
+            "center_latitude와 center_longitude는 함께 입력해야 한다."
+        )
+
+    try:
+        result = await place_resolver.resolve(
+            query=query,
+            center_latitude=center_latitude,
+            center_longitude=center_longitude,
+        )
+    except ValueError:
+        raise
+    except KakaoLocalServiceError as error:
+        raise RuntimeError(str(error)) from None
+
+    return result.model_dump(mode="json")
+
+
+@mcp.tool()
+async def get_nearby_seoul_congestion(
+    latitude: float,
+    longitude: float,
+    radius_meters: float = 3_000,
+    limit: int = 5,
+) -> dict:
+    """
+    기준 좌표의 반경 내에 있는 서울시 공식 POI와 실시간 혼잡도를
+    거리순으로 반환한다. radius_meters는 미터 단위이며,
+    limit은 외부 API 호출량을 제한하기 위해 1~10만 허용한다.
+    """
+    try:
+        result = await congestion_service.get_nearby_congestion(
+            latitude=latitude,
+            longitude=longitude,
+            radius_meters=radius_meters,
+            limit=limit,
+        )
+    except ValueError:
+        raise
+    except CongestionServiceError as error:
+        raise RuntimeError(str(error)) from None
+
+    return result.model_dump(mode="json")
 
 @mcp.tool()
 async def get_seoul_congestion(

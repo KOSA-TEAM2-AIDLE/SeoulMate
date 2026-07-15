@@ -133,9 +133,15 @@ class LocationCongestionResult(BaseModel):
     congestion: CongestionSnapshot
 
 
+class NearbyCongestionResult(BaseModel):
+    center_latitude: float = Field(ge=-90, le=90)
+    center_longitude: float = Field(ge=-180, le=180)
+    radius_meters: float = Field(ge=0)
+    areas: list[LocationCongestionResult] = Field(default_factory=list)
+
+
 # MCP TOOL SERVER 혼잡도
 class CongestionToolResult(BaseModel):
     query_type: Literal["area", "location"] # 장소 조회, 좌표 조회인 지 구분지을 수 있는 Flag
     poi_match: PoiMatch | None = None # 좌표 조회 시 어떤 Poi 로 매핑됐는지 나타낸다.
     congestion: CongestionSnapshot # 최종 혼잡도 제공한다.
-
