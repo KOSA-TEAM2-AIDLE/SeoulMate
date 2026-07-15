@@ -51,7 +51,6 @@ export default function ChatSidebar() {
   const [isStreaming, setIsStreaming] = useState(false);
   const messageEndRef = useRef(null);
 
-  // Zustand Actions & States
   const {
     setTravelPath,
     setRecommendList,
@@ -112,39 +111,35 @@ export default function ChatSidebar() {
     setIsStreaming(true);
 
     try {
-      const response = await streamChat({
+      await streamChat({
         message: trimmedMessage,
         history: toChatHistory(messages),
         lang: lang,
         onToken: (token) => appendAssistantToken(assistantMessage.id, token),
+        onDone: (payload) => {
+          if (payload && payload.data) {
+            const { day: nextDay, allDay: nextAllDay, travelPath, recommendList } = payload.data;
+
+            if (nextDay !== undefined && nextDay !== null) {
+              setDay(nextDay);
+            }
+            if (nextAllDay !== undefined && nextAllDay !== null) {
+              setAllDay(nextAllDay);
+            }
+            if (travelPath) {
+              setTravelPath(travelPath);
+            }
+            if (recommendList) {
+              setRecommendList(recommendList);
+            }
+          }
+        },
         onError: (payload) => {
           throw new Error(
               payload.message ?? t.errStreaming,
           );
         },
       });
-
-      if (response && response.data) {
-        const { day: nextDay, allDay: nextAllDay, travelPath, recommendList } = response.data;
-
-        // 1. 현재 일차 정보 업데이트 (값이 존재할 때만)
-        if (nextDay !== undefined && nextDay !== null) {
-          setDay(nextDay);
-        }
-        if (nextAllDay !== undefined && nextAllDay !== null) {
-          setAllDay(nextAllDay);
-        }
-
-        // 2. 여행 경로 데이터 업데이트
-        if (travelPath) {
-          setTravelPath(travelPath);
-        }
-
-        // 3. 추천 목록 데이터 업데이트
-        if (recommendList) {
-          setRecommendList(recommendList);
-        }
-      }
 
     } catch (error) {
       setMessages((currentMessages) =>
