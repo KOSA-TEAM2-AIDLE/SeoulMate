@@ -1,3 +1,5 @@
+import React, { useRef } from 'react';
+import html2pdf from 'html2pdf.js';
 import useTravelStore from '../../stores/useTravelStore';
 import { useLangStore } from '../../stores/useLangStore';
 import {
@@ -10,24 +12,28 @@ import {
 const UI_TEXT = {
   ko: {
     title: '내 여행 루트',
-    saveBtn: '저장',
-    shareBtn: '공유',
+    saveBtn: '전체 저장',
+    shareBtn: 'PDF 공유',
     noImage: '이미지 없음',
     deleteRoute: '루트 삭제',
-    toastSave: '여행 루트가 정상적으로 저장되었습니다.',
-    toastShare: '공유 링크가 클립보드에 복사되었습니다.',
+    toastSave: '전체 여행 루트 PDF 다운로드가 시작되었습니다.',
+    toastShare: '공유 창을 열고 있습니다...',
+    toastShareSuccess: '공유 창을 열었습니다.',
+    toastShareFallback: '파일 공유가 지원되지 않아 PDF 다운로드로 대체합니다.',
     toastDelete: (name) => `${name}이 루트에서 삭제되었습니다.`,
     noRouteTitle: (day) => `${day}일차는 아직 루트가 없습니다`,
     noRouteDesc: '장소 검색 탭에서 갈 곳들을 추가해보세요!'
   },
   en: {
     title: 'My Travel Route',
-    saveBtn: 'Save',
-    shareBtn: 'Share',
+    saveBtn: 'Save All',
+    shareBtn: 'Share PDF',
     noImage: 'No Image',
     deleteRoute: 'Delete route',
-    toastSave: 'Travel route has been saved successfully.',
-    toastShare: 'Share link has been copied to clipboard.',
+    toastSave: 'Full travel route PDF download has started.',
+    toastShare: 'Opening share menu...',
+    toastShareSuccess: 'Opened share menu.',
+    toastShareFallback: 'File sharing not supported. Falling back to PDF download.',
     toastDelete: (name) => `'${name}' has been deleted from the route.`,
     noRouteTitle: (day) => `No route for Day ${day} yet`,
     noRouteDesc: 'Try adding places from the Search tab!'
@@ -54,9 +60,210 @@ export default function TravelRouteTab({ showToast }) {
 
   const currentRoute = travelPath[currentDay] || [];
 
+  const getBase64ImageFromUrl = async (imageUrl) => {
+    try {
+      const res = await fetch(imageUrl, { method: 'GET', mode: 'cors' });
+      const blob = await res.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      console.warn("CORS 제한으로 이미지를 불러오지 못했습니다. 원본 URL을 사용합니다.", err);
+      return imageUrl;
+    }
+  };
+
+  const generateAllDaysPdfTemplate = async () => {
+    const container = document.createElement('div');
+    container.style.fontFamily = 'Arial, sans-serif';
+    container.style.padding = '20px';
+    container.style.color = '#334155';
+    container.style.backgroundColor = '#ffffff';
+
+    const mainHeader = document.createElement('div');
+    mainHeader.style.borderBottom = '3px double #cbd5e1';
+    mainHeader.style.paddingBottom = '16px';
+    mainHeader.style.marginBottom = '30px';
+    mainHeader.innerHTML = `
+      <h1 style="margin: 0; font-size: 28px; color: #0f172a; font-weight: 800; text-align: center;">🗺️ ${t.title}</h1>
+      <p style="margin: 6px 0 0 0; font-size: 13px; color: #94a3b8; text-align: center; font-weight: 500;">
+        Total Schedule: 1 - ${allDay} Days
+      </p>
+    `;
+    container.appendChild(mainHeader);
+
+    for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
+      const dayNum = days[dayIndex];
+      const dayRoute = travelPath[dayNum] || [];
+
+      const daySection = document.createElement('div');
+      daySection.style.marginBottom = '40px';
+
+      if (dayIndex > 0) {
+        daySection.style.pageBreakBefore = 'always';
+      }
+
+      const dayHeader = document.createElement('div');
+      dayHeader.style.backgroundColor = '#2563eb';
+      dayHeader.style.color = '#ffffff';
+      dayHeader.style.padding = '8px 18px';
+      dayHeader.style.borderRadius = '30px';
+      dayHeader.style.fontSize = '15px';
+      dayHeader.style.fontWeight = 'bold';
+      dayHeader.style.display = 'inline-block';
+      dayHeader.style.marginBottom = '20px';
+      dayHeader.innerText = `Day ${dayNum}`;
+      daySection.appendChild(dayHeader);
+
+      if (dayRoute.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.border = '2px dashed #e2e8f0';
+        emptyMsg.style.borderRadius = '12px';
+        emptyMsg.style.padding = '30px';
+        emptyMsg.style.textAlign = 'center';
+        emptyMsg.style.color = '#94a3b8';
+        emptyMsg.innerHTML = `
+          <p style="margin: 0; font-size: 14px; font-weight: 600;">${t.noRouteTitle(dayNum)}</p>
+          <p style="margin: 4px 0 0 0; font-size: 12px; color: #cbd5e1;">${t.noRouteDesc}</p>
+        `;
+        daySection.appendChild(emptyMsg);
+      } else {
+        for (let index = 0; index < dayRoute.length; index++) {
+          const place = dayRoute[index];
+          const category = getPlaceDisplayCategory(place);
+          const subCategory = getPlaceDisplaySubCategory(place);
+          const rating = getPlaceDisplayRating(place);
+          const originalImage = getPlaceDisplayImage(place);
+
+          let safeImageSrc = null;
+          if (originalImage) {
+            safeImageSrc = await getBase64ImageFromUrl(originalImage);
+          }
+
+          let badgeColor = '#ef4444';
+          let badgeBg = '#fef2f2';
+          if (category === '카페') { badgeColor = '#f97316'; badgeBg = '#fff7ed'; }
+          else if (category === '맛집') { badgeColor = '#22c55e'; badgeBg = '#f0fdf4'; }
+          else if (category === '숙소') { badgeColor = '#a855f7'; badgeBg = '#faf5ff'; }
+          else if (category === '보관소') { badgeColor = '#06b6d4'; badgeBg = '#ecfeff'; }
+
+          const card = document.createElement('div');
+          card.style.border = '1px solid #e2e8f0';
+          card.style.borderRadius = '12px';
+          card.style.padding = '16px';
+          card.style.marginBottom = '14px';
+          card.style.backgroundColor = '#ffffff';
+          card.style.pageBreakInside = 'avoid';
+
+          card.innerHTML = `
+            <div style="display: flex; align-items: flex-start; gap: 16px;">
+              <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
+                <div style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 50%; background-color: #2563eb; color: #ffffff; font-weight: bold; font-size: 14px;">
+                  ${index + 1}
+                </div>
+                <div style="display: flex; width: 64px; height: 64px; flex-shrink: 0; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; border: 1px solid #f1f5f9; background-color: #f8fafc;">
+                  ${safeImageSrc ? `
+                    <img src="${safeImageSrc}" alt="${place.name}" style="height: 100%; width: 100%; object-fit: cover;" />
+                  ` : `
+                    <span style="font-size: 11px; font-weight: 600; color: #94a3b8;">${t.noImage}</span>
+                  `}
+                </div>
+              </div>
+
+              <div style="flex: 1; min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <h3 style="margin: 0; font-size: 16px; font-weight: bold; color: #1e293b;">${place.name}</h3>
+                  <span style="font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; color: ${badgeColor}; background-color: ${badgeBg};">
+                    ${subCategory}
+                  </span>
+                </div>
+                <p style="margin: 0 0 4px 0; font-size: 13px; color: #64748b;">${place.address}</p>
+                <p style="margin: 0; font-size: 13px; color: #f59e0b; font-weight: bold;">★ ${rating}</p>
+              </div>
+            </div>
+            ${place.selectionReason ? `
+              <div style="margin-top: 12px; padding: 10px 14px; background-color: #f8fafc; border: 1px solid #f1f5f9; border-radius: 8px; font-size: 13px; color: #475569; line-height: 1.5;">
+                💡 ${place.selectionReason}
+              </div>
+            ` : ''}
+          `;
+          daySection.appendChild(card);
+        }
+      }
+
+      container.appendChild(daySection);
+    }
+
+    return container;
+  };
+
+  const handleSavePDF = async () => {
+    showToast(t.toastSave);
+    const element = await generateAllDaysPdfTemplate();
+
+    const options = {
+      margin: [20, 15, 20, 15],
+      filename: `Travel_Route_Full_Days.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(options).from(element).save();
+  };
+
+  const handleSharePDF = async () => {
+    showToast(t.toastShare);
+    const element = await generateAllDaysPdfTemplate();
+    const fileName = 'SeoulMate_Travel_Route.pdf';
+
+    const options = {
+      margin: [20, 15, 20, 15],
+      filename: fileName,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+      const pdfWorker = html2pdf().set(options).from(element);
+      const pdfBlob = await pdfWorker.output('blob');
+
+      const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `✈️ SeoulMate - ${t.title}`,
+          text: `제가 생성한 전체 일정(${allDay}일간) 여행 루트 PDF 문서입니다.`,
+        });
+        showToast(t.toastShareSuccess);
+      } else {
+        showToast(t.toastShareFallback);
+        html2pdf().set(options).from(element).save();
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('PDF 공유 중 에러가 발생했습니다:', err);
+        showToast(t.toastShareFallback);
+        html2pdf().set(options).from(element).save();
+      }
+    }
+  };
+
   return (
       <div className="flex-1 flex flex-col min-h-0 p-5 space-y-6">
-        {/* 상단 타이틀 및 버튼 영역 */}
         <div className="flex items-center justify-between shrink-0">
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
             {t.title}
@@ -64,14 +271,14 @@ export default function TravelRouteTab({ showToast }) {
           <div className="flex gap-2">
             <button
                 type="button"
-                onClick={() => showToast(t.toastSave)}
+                onClick={handleSavePDF}
                 className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
             >
               {t.saveBtn}
             </button>
             <button
                 type="button"
-                onClick={() => showToast(t.toastShare)}
+                onClick={handleSharePDF}
                 className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
             >
               {t.shareBtn}
@@ -79,7 +286,6 @@ export default function TravelRouteTab({ showToast }) {
           </div>
         </div>
 
-        {/* Day 선택 Chip 영역 */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {days.map((d) => (
               <button
@@ -97,7 +303,6 @@ export default function TravelRouteTab({ showToast }) {
           ))}
         </div>
 
-        {/* 루트 리스트 영역 */}
         <div className="flex-1 overflow-y-auto space-y-4 min-h-0 pr-1">
           {currentRoute.length > 0 ? (
               currentRoute.map((place, index) => {
@@ -109,33 +314,27 @@ export default function TravelRouteTab({ showToast }) {
                 return (
                     <article
                         key={place.id}
-                        // 변경 포인트: 상하 구조를 나누기 위해 flex-col 구조 사용
                         className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all duration-200 relative"
                     >
-                      {/* [상단 영역] 번호 + 이미지 + 텍스트 정보 */}
                       <div className="flex items-start gap-4">
-                        {/* 왼쪽: 순서 번호와 썸네일 이미지 */}
-                        <div className="flex items-center gap-3 shrink-0 mt-0.5">
-                          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">
-                            {index + 1}
-                          </div>
-
-                          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
-                            {image ? (
-                                <img
-                                    src={image}
-                                    alt={place.name}
-                                    className="h-full w-full object-cover"
-                                />
-                            ) : (
-                                <span className="text-xs font-semibold text-slate-400">
-                                  {t.noImage}
-                                </span>
-                            )}
-                          </div>
+                        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">
+                          {index + 1}
                         </div>
 
-                        {/* 오른쪽: 텍스트 정보 */}
+                        <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
+                          {image ? (
+                              <img
+                                  src={image}
+                                  alt={place.name}
+                                  className="h-full w-full object-cover"
+                              />
+                          ) : (
+                              <span className="text-xs font-semibold text-slate-400">
+                                {t.noImage}
+                              </span>
+                          )}
+                        </div>
+
                         <div className="flex-1 min-w-0 pr-8 space-y-1">
                           <div className="flex items-center gap-2">
                             <h3 className="font-bold text-slate-800 text-lg leading-snug truncate">
@@ -168,13 +367,8 @@ export default function TravelRouteTab({ showToast }) {
                         </div>
                       </div>
 
-                      {/* [하단 전체 영역] 추천 이유 박스 (카드 내 가로폭 전체 확보) */}
                       {place.selectionReason && (
                           <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-100 relative mt-1 mx-1">
-                            {/*
-                                말풍선 꼬리를 L7 명동 텍스트 시작 라인과 매칭되도록
-                                left 오프셋 값을 left-[116px](번호7 + 갭12 + 이미지64 + 갭16 + 꼬리보정17)으로 세밀하게 조정
-                            */}
                             <div
                                 className="absolute top-0 left-[116px] -translate-y-[11px] w-4 h-3 bg-slate-50 border-t border-l border-slate-100"
                                 style={{
@@ -187,7 +381,6 @@ export default function TravelRouteTab({ showToast }) {
                           </div>
                       )}
 
-                      {/* [우측 상단] X자 삭제 버튼 */}
                       <div className="absolute top-4 right-4 z-10">
                         <button
                             type="button"
