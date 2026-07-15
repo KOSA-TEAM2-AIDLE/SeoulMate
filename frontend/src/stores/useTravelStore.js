@@ -12,7 +12,7 @@ const useTravelStore = create((set) => ({
     setDay: (newDay) => set({ day: newDay }),
     setSelectedDay: (newSelectedDay) => set({ selectedDay: newSelectedDay }),
     setAllDay: (newDay) => set({ all_day: newDay }),
-    
+    setTravelPath: (newPath) => set({ travelPath: newPath }),
     setAllPlaces: (places) => set({allPlaces: places}),
 
     selectedPlace: null,
