@@ -117,6 +117,51 @@ class TravelIntentExtractorTests(unittest.TestCase):
 
         self.assertEqual(3, result["collected"]["target_places_per_day"])
 
+    def test_clarification_updates_missing_and_additive_fields_only(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "weather_information",
+                "normalized_question": "3곳 분위기 좋은",
+                "location": "성수",
+                "start_date": "2026-07-20",
+                "target_places_per_day": 3,
+                "pace": "relaxed",
+                "themes": ["분위기 좋은"],
+            }
+        )
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "홍대 좋은 코스 추천해줘",
+                "intent": "day_trip_route",
+                "missing_fields": ["route_request.target_places_per_day"],
+                "latest_user_answer": "3곳, 분위기 좋은",
+                "conversation_history": [
+                    {"role": "assistant", "content": "몇 곳을 방문할까요?"},
+                    {"role": "user", "content": "3곳, 분위기 좋은"},
+                ],
+                "collected": {
+                    "location": "홍대",
+                    "start_date": "2026-07-16",
+                    "end_date": "2026-07-16",
+                    "days": 1,
+                    "nights": 0,
+                },
+            }
+        )
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertEqual("day_trip_route", result["intent"])
+        self.assertEqual("홍대", result["collected"]["location"])
+        self.assertEqual("2026-07-16", result["collected"]["start_date"])
+        self.assertEqual(3, result["collected"]["target_places_per_day"])
+        self.assertEqual(["분위기 좋은"], result["collected"]["themes"])
+        self.assertIn("홍대 좋은 코스 추천해줘", result["normalized_question"])
+        self.assertIn("하루 3곳", result["normalized_question"])
+        self.assertIn("테마 분위기 좋은", result["normalized_question"])
+
 
 class RequiredInformationTests(unittest.TestCase):
     def test_single_recommendation_requires_location(self) -> None:

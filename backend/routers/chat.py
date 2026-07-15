@@ -839,8 +839,19 @@ async def _restaurant_stream(
     yield _sse(ChatDone().model_dump())
 
 
+def _with_resolved_message(body: ChatRequest) -> ChatRequest:
+    if body.parsed_query is None:
+        return body
+    # The frontend may still send the last HITL answer as `message`.
+    # Downstream models must receive the self-contained resolved query.
+    return body.model_copy(
+        update={"message": body.parsed_query.normalized_question}
+    )
+
+
 async def _stream(body: ChatRequest):
     try:
+        body = _with_resolved_message(body)
         if body.parsed_intent == "modify_route" or (
             body.parsed_query is not None
             and body.parsed_query.intent == "modify_route"

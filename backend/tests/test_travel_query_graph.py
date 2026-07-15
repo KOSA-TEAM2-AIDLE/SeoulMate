@@ -103,6 +103,14 @@ class TravelQueryGraphTests(unittest.TestCase):
             "보통",
             resumed["conversation_history"][-1]["content"],
         )
+        self.assertIn(
+            resumed["structured_query"]["original_question"],
+            resumed["structured_query"]["normalized_question"],
+        )
+        self.assertIn(
+            "하루 4곳",
+            resumed["structured_query"]["normalized_question"],
+        )
 
     def test_modify_route_finishes_without_interrupt(self) -> None:
         chain = RunnableLambda(

@@ -95,10 +95,78 @@ EXTRACTION_PROMPT = ChatPromptTemplate.from_messages(
 reference_at: {reference_at}
 current_location: {current_location}
 previously_collected: {collected}
-latest_user_answer: {latest_user_answer}""",
+missing_fields: {missing_fields}
+conversation_history: {conversation_history}
+latest_user_answer: {latest_user_answer}
+
+normalized_question must be a self-contained request that includes the original
+question and every confirmed clarification. A downstream model will receive
+normalized_question without this conversation history.""",
         ),
     ]
 )
+
+
+CLARIFICATION_FIELD_KEYS: dict[str, set[str]] = {
+    "filters.location": {"location", "use_current_location", "radius_km"},
+    "route_request.destination": {
+        "location",
+        "use_current_location",
+        "preferred_areas",
+    },
+    "route_request.period": {
+        "start_date",
+        "end_date",
+        "nights",
+        "days",
+        "relative_date_ambiguous",
+        "arrival_at",
+        "departure_at",
+    },
+    "route_request.target_places_per_day": {
+        "target_places_per_day",
+        "explicit_visit_count",
+        "pace",
+    },
+    "route_request.pace": {"pace", "target_places_per_day"},
+    "weather_request.location_name": {"location", "use_current_location"},
+    "weather_request.target_date": {
+        "start_date",
+        "target_time",
+        "relative_date_ambiguous",
+    },
+    "filters.budget_scope": {"budget_scope", "budget_ambiguous"},
+    "filters.budget_range": {
+        "budget_min_krw",
+        "budget_max_krw",
+        "budget_ambiguous",
+    },
+    "date_confirmation": {
+        "start_date",
+        "end_date",
+        "nights",
+        "days",
+        "relative_date_ambiguous",
+    },
+}
+
+# A clarification may contain useful optional preferences in addition to the
+# requested value, for example "3 places, with a nice atmosphere".
+ADDITIVE_CLARIFICATION_KEYS = {
+    "themes",
+    "requested_domains",
+    "requested_slots",
+    "transportation",
+    "accessibility",
+    "required_features",
+    "excluded_features",
+    "preferred_areas",
+    "must_visit",
+    "avoid_places",
+    "party_size",
+    "adults",
+    "children",
+}
 
 
 def create_intent_extraction_chain(
@@ -119,6 +187,8 @@ class TravelIntentExtractor:
         self,
         state: TravelQueryGraphState,
     ) -> TravelQueryGraphState:
+        latest_answer = state.get("latest_user_answer")
+        missing_fields = state.get("missing_fields", [])
         result = await self._chain.ainvoke(
             {
                 "original_question": state["original_question"],
@@ -129,7 +199,13 @@ class TravelIntentExtractor:
                     ensure_ascii=False,
                     default=str,
                 ),
-                "latest_user_answer": state.get("latest_user_answer") or "none",
+                "missing_fields": json.dumps(missing_fields, ensure_ascii=False),
+                "conversation_history": json.dumps(
+                    state.get("conversation_history", []),
+                    ensure_ascii=False,
+                    default=str,
+                ),
+                "latest_user_answer": latest_answer or "none",
             }
         )
         extraction = (
@@ -139,18 +215,33 @@ class TravelIntentExtractor:
         )
         extracted = extraction.model_dump(mode="json", exclude_none=True)
         language = extracted.pop("language")
-        intent = extracted.pop("intent")
-        normalized_question = extracted.pop("normalized_question")
+        extracted_intent = extracted.pop("intent")
+        llm_normalized_question = extracted.pop("normalized_question")
+        intent = (
+            state["intent"]
+            if latest_answer is not None
+            and missing_fields
+            and state.get("intent") is not None
+            else extracted_intent
+        )
         _apply_deterministic_defaults(intent, extracted)
 
         collected = dict(state.get("collected", {}))
-        collected.update(extracted)
+        if latest_answer is not None and missing_fields:
+            collected.update(_clarification_patch(extracted, missing_fields))
+        else:
+            collected.update(extracted)
         collected.update(
             {
                 "original_question": state["original_question"],
                 "language": language,
                 "intent": intent,
             }
+        )
+        normalized_question = _resolved_question(
+            state,
+            collected,
+            llm_normalized_question,
         )
 
         return {
@@ -160,6 +251,89 @@ class TravelIntentExtractor:
             "collected": collected,
             "latest_user_answer": None,
         }
+
+
+def _clarification_patch(
+    extracted: dict[str, Any],
+    missing_fields: list[str],
+) -> dict[str, Any]:
+    allowed = set(ADDITIVE_CLARIFICATION_KEYS)
+    for field in missing_fields:
+        allowed.update(CLARIFICATION_FIELD_KEYS.get(field, set()))
+    return {key: value for key, value in extracted.items() if key in allowed}
+
+
+def _resolved_question(
+    state: TravelQueryGraphState,
+    collected: dict[str, Any],
+    llm_normalized_question: str,
+) -> str:
+    if not state.get("conversation_history"):
+        return llm_normalized_question
+
+    language = collected.get("language", state.get("language", "ko"))
+    details = _confirmed_details(collected, language)
+    if not details:
+        return llm_normalized_question
+
+    original = state["original_question"].strip()
+    if language == "en":
+        return f"{original} (confirmed conditions: {', '.join(details)})"
+    return f"{original} (추가로 확정된 조건: {', '.join(details)})"
+
+
+def _confirmed_details(
+    collected: dict[str, Any],
+    language: str,
+) -> list[str]:
+    details: list[str] = []
+    location = collected.get("location")
+    start_date = collected.get("start_date")
+    end_date = collected.get("end_date")
+    target = collected.get("target_places_per_day")
+    pace = collected.get("pace")
+    themes = collected.get("themes") or []
+    domains = collected.get("requested_domains") or []
+
+    if language == "en":
+        if location:
+            details.append(f"location {location}")
+        if start_date:
+            date_text = str(start_date)
+            if end_date and end_date != start_date:
+                date_text = f"{start_date} to {end_date}"
+            details.append(f"date {date_text}")
+        if target is not None:
+            details.append(f"{target} places per day")
+        if pace:
+            details.append(f"pace {pace}")
+        if themes:
+            details.append(f"themes {', '.join(map(str, themes))}")
+        if domains:
+            details.append(f"visit types {', '.join(map(str, domains))}")
+        return details
+
+    if location:
+        details.append(f"지역 {location}")
+    if start_date:
+        date_text = str(start_date)
+        if end_date and end_date != start_date:
+            date_text = f"{start_date}~{end_date}"
+        details.append(f"날짜 {date_text}")
+    if target is not None:
+        details.append(f"하루 {target}곳")
+    if pace:
+        pace_label = {
+            "relaxed": "여유롭게",
+            "normal": "보통",
+            "packed": "알차게",
+        }.get(str(pace), str(pace))
+        details.append(f"일정 강도 {pace_label}")
+    if themes:
+        details.append(f"테마 {', '.join(map(str, themes))}")
+    if domains:
+        details.append(f"방문 유형 {', '.join(map(str, domains))}")
+    return details
 
 
 def _apply_deterministic_defaults(

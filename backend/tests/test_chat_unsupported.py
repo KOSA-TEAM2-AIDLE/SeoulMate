@@ -2,6 +2,7 @@ import asyncio
 import unittest
 
 from api.routers.chat import _stream
+from routers.chat import _with_resolved_message
 from schemas.chat import ChatRequest
 
 
@@ -36,6 +37,16 @@ async def _collect_stream(request: ChatRequest) -> list[str]:
 
 
 class UnsupportedRouteModificationTests(unittest.TestCase):
+    def test_structured_query_normalized_question_becomes_chat_message(self) -> None:
+        request = _modify_route_request().model_copy(update={"message": "3곳"})
+
+        resolved = _with_resolved_message(request)
+
+        self.assertEqual(
+            request.parsed_query.normalized_question,
+            resolved.message,
+        )
+
     def test_chat_returns_fixed_message_without_route_data(self) -> None:
         chunks = asyncio.run(_collect_stream(_modify_route_request()))
         response = "".join(chunks)
