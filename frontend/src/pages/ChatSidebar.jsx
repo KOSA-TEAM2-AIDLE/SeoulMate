@@ -51,6 +51,7 @@ export default function ChatSidebar() {
   const [isStreaming, setIsStreaming] = useState(false);
   const messageEndRef = useRef(null);
 
+  // Zustand Actions & States
   const {
     setTravelPath,
     setRecommendList,
@@ -111,10 +112,10 @@ export default function ChatSidebar() {
     setIsStreaming(true);
 
     try {
-      await streamChat({
+      const response = await streamChat({
         message: trimmedMessage,
         history: toChatHistory(messages),
-        lang: lang, // 4. API 호출 시 현재 설정된 언어('ko' 또는 'en')를 동적으로 전달!
+        lang: lang,
         onToken: (token) => appendAssistantToken(assistantMessage.id, token),
         onError: (payload) => {
           throw new Error(
@@ -123,178 +124,27 @@ export default function ChatSidebar() {
         },
       });
 
-      const mockTravelPath = {
-        1: [
-          {
-            id: "REST005",
-            name: "명동교자 본점",
-            category: "맛집",
-            subCategory: "한식/칼국수",
-            address: "서울 중구 명동10길 29",
-            lat: 37.5626,
-            lng: 126.9854,
-            rating: "4.6",
-            reviews: "5,842",
-            time: "13:00 - 14:00",
-            image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=150&q=80"
-          },
-          {
-            id: "CAFE001",
-            name: "블루보틀 삼청 카페",
-            category: "카페",
-            subCategory: "스페셜티 커피",
-            address: "서울 종로구 북촌로5길 76",
-            lat: 37.5791,
-            lng: 126.9814,
-            rating: "4.4",
-            reviews: "1,204",
-            time: "14:30 - 15:30",
-            image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=150&q=80"
-          },
-          {
-            id: "SPOT001",
-            name: "경복궁",
-            category: "관광지",
-            subCategory: "역사/고궁",
-            address: "서울 종로구 사직로 161",
-            lat: 37.5796,
-            lng: 126.9770,
-            rating: "4.7",
-            reviews: "9,150",
-            time: "16:00 - 18:00",
-            image: "https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&w=150&q=80"
-          }
-        ],
-        2: [
-          {
-            id: "SPOT002",
-            name: "N서울타워",
-            category: "관광지",
-            subCategory: "전망대/랜드마크",
-            address: "서울 용산구 남산공원길 105",
-            lat: 37.5511,
-            lng: 126.9882,
-            rating: "4.5",
-            reviews: "8,402",
-            time: "10:30 - 12:30",
-            image: "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=150&q=80"
-          },
-          {
-            id: "REST002",
-            name: "우래옥",
-            category: "맛집",
-            subCategory: "평양냉면",
-            address: "서울 중구 창경궁로 62-29",
-            lat: 37.5684,
-            lng: 126.9995,
-            rating: "4.5",
-            reviews: "4,103",
-            time: "13:00 - 14:00",
-            image: "https://images.unsplash.com/photo-1552611052-33e04de081de?auto=format&fit=crop&w=150&q=80"
-          }
-        ],
-        3: [
-          {
-            id: "SPOT003",
-            name: "롯데월드타워 서울스카이",
-            category: "관광지",
-            subCategory: "전망대",
-            address: "서울 송파구 올림픽로 300",
-            lat: 37.5126,
-            lng: 127.1025,
-            rating: "4.8",
-            reviews: "6,712",
-            time: "15:00 - 17:00",
-            image: "https://images.unsplash.com/photo-1517089531969-5cba861611a1?auto=format&fit=crop&w=150&q=80"
-          },
-          {
-            id: "CAFE002",
-            name: "서울앵무새 성수점",
-            category: "카페",
-            subCategory: "디저트/베이커리",
-            address: "서울 성동구 서울숲9길 3",
-            lat: 37.5471,
-            lng: 127.0427,
-            rating: "4.3",
-            reviews: "2,350",
-            time: "17:30 - 18:30",
-            image: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=150&q=80"
-          }
-        ]
-      };
+      if (response && response.data) {
+        const { day: nextDay, allDay: nextAllDay, travelPath, recommendList } = response.data;
 
-      const nextDayMockList = [
-        {
-          id: "ACCO003",
-          name: "신라호텔 서울",
-          category: "숙소",
-          subCategory: "럭셔리",
-          address: "서울 중구 동호로 249",
-          lat: 37.5559,
-          lng: 127.0051,
-          rating: "4.8",
-          reviews: "2,541",
-          time: "15:00 (체크인)",
-          image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=150&q=80"
-        },
-        {
-          id: "REST005",
-          name: "명동교자 본점",
-          category: "맛집",
-          subCategory: "한식/칼국수",
-          address: "서울 중구 명동10길 29",
-          lat: 37.5626,
-          lng: 126.9854,
-          rating: "4.6",
-          reviews: "5,842",
-          time: "13:00 - 14:00",
-          image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=150&q=80"
-        },
-        {
-          id: "CAFE005",
-          name: "대충유원지 인왕산",
-          category: "카페",
-          subCategory: "뷰 맛집",
-          address: "서울 종로구 필운대로 46",
-          lat: 37.5802,
-          lng: 126.9687,
-          rating: "4.5",
-          reviews: "423",
-          time: "15:30 - 16:30",
-          image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=150&q=80"
-        },
-        {
-          id: "EVT009",
-          name: "N서울타워 전망대",
-          category: "명소",
-          subCategory: "야경/랜드마크",
-          address: "서울 용산구 남산공원길 105",
-          lat: 37.5512,
-          lng: 126.9882,
-          rating: "4.7",
-          reviews: "4,912",
-          time: "19:00 - 21:00",
-          image: "https://images.unsplash.com/photo-1578469550956-0e16b69c6a3d?auto=format&fit=crop&w=150&q=80"
-        },
-        {
-          id: "EVT009",
-          name: "N Seoul Tower Observatory",
-          category: "Attraction",
-          subCategory: "Night View/Landmark",
-          address: "105 Namsangongwon-gil, Yongsan-gu, Seoul",
-          lat: 37.5512,
-          lng: 126.9882,
-          rating: "4.7",
-          reviews: "4,912",
-          time: "19:00 - 21:00",
-          image: "https://images.unsplash.com/photo-1578469550956-0e16b69c6a3d?auto=format&fit=crop&w=150&q=80"
+        // 1. 현재 일차 정보 업데이트 (값이 존재할 때만)
+        if (nextDay !== undefined && nextDay !== null) {
+          setDay(nextDay);
         }
-      ];
+        if (nextAllDay !== undefined && nextAllDay !== null) {
+          setAllDay(nextAllDay);
+        }
 
-      setDay(1);
-      setAllDay(3);
-      setRecommendList(nextDayMockList);
-      setTravelPath(mockTravelPath)
+        // 2. 여행 경로 데이터 업데이트
+        if (travelPath) {
+          setTravelPath(travelPath);
+        }
+
+        // 3. 추천 목록 데이터 업데이트
+        if (recommendList) {
+          setRecommendList(recommendList);
+        }
+      }
 
     } catch (error) {
       setMessages((currentMessages) =>
