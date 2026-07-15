@@ -20,6 +20,10 @@ from application.travel_query.required_info import (
     check_required_information,
 )
 from application.travel_query.state import TravelQueryGraphState
+from application.travel_query.validation import (
+    classify_build_failure,
+    repair_confirmed_values,
+)
 from schemas.hitl import HumanInTheLoopResponse
 
 
@@ -71,6 +75,24 @@ def _route_after_required_check(
     return "finish"
 
 
+def _route_after_build(
+    state: TravelQueryGraphState,
+) -> Literal["handle_failure", "finish"]:
+    if state.get("status") == "failed":
+        return "handle_failure"
+    return "finish"
+
+
+def _route_after_failure(
+    state: TravelQueryGraphState,
+) -> Literal["repair_query", "ask_user", "finish"]:
+    if state.get("status") == "repairing":
+        return "repair_query"
+    if state.get("status") == "collecting":
+        return "ask_user"
+    return "finish"
+
+
 def build_travel_query_graph(
     extraction_chain: Runnable[
         dict[str, Any],
@@ -84,6 +106,8 @@ def build_travel_query_graph(
     builder.add_node("ask_user", ask_user)
     builder.add_node("merge_answer", merge_user_answer)
     builder.add_node("build_query", build_structured_query)
+    builder.add_node("handle_failure", classify_build_failure)
+    builder.add_node("repair_query", repair_confirmed_values)
 
     builder.add_edge(START, "extract")
     builder.add_edge("extract", "check_required")
@@ -97,7 +121,24 @@ def build_travel_query_graph(
         },
     )
     builder.add_edge("merge_answer", "extract")
-    builder.add_edge("build_query", END)
+    builder.add_conditional_edges(
+        "build_query",
+        _route_after_build,
+        {
+            "handle_failure": "handle_failure",
+            "finish": END,
+        },
+    )
+    builder.add_conditional_edges(
+        "handle_failure",
+        _route_after_failure,
+        {
+            "repair_query": "repair_query",
+            "ask_user": "ask_user",
+            "finish": END,
+        },
+    )
+    builder.add_edge("repair_query", "build_query")
 
     return builder.compile(
         checkpointer=checkpointer or create_development_checkpointer(),

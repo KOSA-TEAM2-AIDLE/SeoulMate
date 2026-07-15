@@ -24,6 +24,9 @@ QUESTION_FACTORIES: dict[str, QuestionFactory] = {
     "filters.budget_scope": lambda _: (
         "말씀하신 예산은 1인 기준인가요, 전체 인원 기준인가요?"
     ),
+    "filters.budget_range": lambda _: (
+        "최소 예산과 최대 예산의 범위를 다시 알려주세요."
+    ),
     "date_confirmation": lambda _: "말씀하신 날짜를 정확한 날짜로 알려주세요.",
 }
 
@@ -39,6 +42,17 @@ MISSING_FIELD_PRIORITY = [
     "route_request.pace",
     "filters.budget_scope",
 ]
+
+
+def questions_for_missing_fields(
+    missing_fields: list[str],
+    collected: dict[str, Any],
+) -> str:
+    questions = [
+        QUESTION_FACTORIES[field](collected)
+        for field in missing_fields[:2]
+    ]
+    return " ".join(questions)
 
 
 def _has_location(
@@ -128,12 +142,11 @@ def check_required_information(
         }
 
     collected = state.get("collected", {})
-    questions = [
-        QUESTION_FACTORIES[field](collected)
-        for field in missing_fields[:2]
-    ]
     return {
         "status": "collecting",
         "missing_fields": missing_fields,
-        "assistant_message": " ".join(questions),
+        "assistant_message": questions_for_missing_fields(
+            missing_fields,
+            collected,
+        ),
     }

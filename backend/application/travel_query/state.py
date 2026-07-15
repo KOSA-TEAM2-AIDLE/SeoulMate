@@ -10,6 +10,7 @@ class TravelQueryGraphState(TypedDict, total=False):
     status: Literal[
         "collecting",
         "building",
+        "repairing",
         "unsupported",
         "ready",
         "failed",

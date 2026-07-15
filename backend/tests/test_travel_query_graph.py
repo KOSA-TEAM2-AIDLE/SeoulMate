@@ -49,6 +49,38 @@ async def _run_hitl_scenario() -> tuple[dict, dict]:
 
 
 class TravelQueryGraphTests(unittest.TestCase):
+    def test_invalid_route_date_returns_to_hitl_question(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "day_trip_route",
+                "normalized_question": "2026-07-16 홍대 저녁 식사",
+                "location": "홍대",
+                "start_date": "2026-07-16",
+                "target_places_per_day": 1,
+                "requested_slots": [
+                    {
+                        "domain": "restaurant",
+                        "day_number": 1,
+                        "visit_date": "2026-07-17",
+                    }
+                ],
+            }
+        )
+        graph = build_travel_query_graph(chain)
+
+        result = asyncio.run(
+            graph.ainvoke(
+                build_initial_state("내일 홍대 저녁 코스", REFERENCE_AT),
+                config={"configurable": {"thread_id": "invalid-route-date"}},
+            )
+        )
+
+        self.assertIn("__interrupt__", result)
+        payload = result["__interrupt__"][0].value
+        self.assertEqual("collecting", payload["status"])
+        self.assertEqual(["route_request.period"], payload["missing_fields"])
+
     def test_interrupt_and_command_resume_continue_same_thread(self) -> None:
         interrupted, resumed = asyncio.run(_run_hitl_scenario())
 
