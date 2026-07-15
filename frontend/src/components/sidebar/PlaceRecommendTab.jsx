@@ -1,8 +1,7 @@
 import useTravelStore from '../../stores/useTravelStore';
-import { useLangStore } from '../../stores/useLangStore'; // 1. 언어 스토어 임포트
+import { useLangStore } from '../../stores/useLangStore';
 import { getPlaceDisplaySubCategory, getPlaceDisplayRating, getPlaceDisplayImage } from '../../services/map/placeDisplayAdapter';
 
-// 2. 다국어 사전 정의 (필터 번역 맵핑 및 텍스트 팩)
 const FILTER_TRANSLATIONS = {
     ko: {
         '전체': '전체',
@@ -29,7 +28,8 @@ const UI_TEXT = {
         noImage: '이미지 없음',
         noResult: '해당 카테고리의 결과가 존재하지 않습니다.',
         toastAdded: (day, name) => `${day}일차 루트에 '${name}'이(가) 추가되었습니다.`,
-        toastDuplicate: (name) => `'${name}'은(는) 이미 해당 일차 루트에 존재합니다.`
+        toastDuplicate: (name) => `'${name}'은(는) 이미 해당 일차 루트에 존재합니다.`,
+        aiReason: '추천 이유'
     },
     en: {
         searchResult: 'Search Results',
@@ -37,7 +37,8 @@ const UI_TEXT = {
         noImage: 'No Image',
         noResult: 'No results found for this category.',
         toastAdded: (day, name) => `'${name}' has been added to Day ${day} path.`,
-        toastDuplicate: (name) => `'${name}' is already in this day's path.`
+        toastDuplicate: (name) => `'${name}' is already in this day's path.`,
+        aiReason: 'Why we recommend'
     }
 };
 
@@ -47,13 +48,11 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
     const currentSelectedDay = useTravelStore((state) => state.day);
     const addPathItem = useTravelStore((state) => state.addPathItem);
 
-    // 3. Zustand 언어 상태 가져오기
     const lang = useLangStore((state) => state.lang);
-    const t = UI_TEXT[lang]; // 현재 언어에 맞는 텍스트 객체 선택
+    const t = UI_TEXT[lang];
 
     return (
         <div className="flex-1 flex flex-col min-h-0">
-            {/* 고정 필터 바 영역 */}
             <div className="pt-5 pb-3 space-y-4 shrink-0 border-b border-slate-50">
                 <div className="flex gap-2 overflow-x-auto pb-1 px-5 scrollbar-hide">
                     {PLACE_FILTERS.map((filter) => (
@@ -67,7 +66,6 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                                     : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'
                             }`}
                         >
-                            {/* 삼항 연산자(또는 사전 매핑)를 통한 필터 텍스트 변환 */}
                             {FILTER_TRANSLATIONS[lang][filter]}
                         </button>
                     ))}
@@ -83,7 +81,6 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                 </div>
             </div>
 
-            {/* 검색결과 리스트 영역 */}
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0 bg-slate-50/40">
                 {filteredPlaces.length > 0 ? (
                     filteredPlaces.map((place) => {
@@ -115,8 +112,8 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                                             />
                                         ) : (
                                             <span className="text-xs font-semibold text-slate-400">
-                                  {t.noImage}
-                                </span>
+                                                {t.noImage}
+                                            </span>
                                         )}
                                     </div>
 
@@ -132,8 +129,8 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                                                         place.category === '숙소' ? 'text-purple-500 bg-purple-50' :
                                                             place.category === '보관소' ? 'text-cyan-500 bg-cyan-50' : 'text-red-500 bg-red-50'
                                             }`}>
-                                {subCategory}
-                              </span>
+                                                {subCategory}
+                                            </span>
                                         </div>
 
                                         <p className="mt-1 text-sm text-slate-400 truncate">
@@ -145,6 +142,17 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                                         </p>
                                     </div>
                                 </div>
+
+                                {place.selectionReason && (
+                                    <div className="mt-3.5 rounded-lg bg-slate-50 p-3 border border-slate-100 group-hover:bg-slate-100/50 transition-colors">
+                                        <div className="flex gap-1.5 items-center text-[11px] font-bold text-blue-600 mb-1">
+                                            💡 {t.aiReason}
+                                        </div>
+                                        <p className="text-xs leading-relaxed text-slate-600">
+                                            {place.selectionReason}
+                                        </p>
+                                    </div>
+                                )}
                             </article>
                         );
                     })
