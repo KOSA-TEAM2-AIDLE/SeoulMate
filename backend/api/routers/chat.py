@@ -55,7 +55,7 @@ MOCK_TRAVEL_DATA = {
         "rating": "4.7",
         "reviews": "9,150",
         "time": "13:30 - 15:30",
-        "image": "https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?auto=format&fit=crop&w=150&q=80",
+        "image": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=150&q=80",
         "selectionReason": "서울을 대표하는 가장 웅장하고 아름다운 법궁으로, 고즈넉한 고궁 산책과 함께 한국의 역사적 정취를 느끼기 좋습니다."
       },
       {
