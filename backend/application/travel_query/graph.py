@@ -11,6 +11,7 @@ from langgraph.types import Command, interrupt
 from application.travel_query.checkpoint import (
     create_development_checkpointer,
 )
+from application.travel_query.builder import build_structured_query
 from application.travel_query.extraction import (
     IntentExtraction,
     TravelIntentExtractor,
@@ -62,9 +63,11 @@ def merge_user_answer(
 
 def _route_after_required_check(
     state: TravelQueryGraphState,
-) -> Literal["ask_user", "finish"]:
+) -> Literal["ask_user", "build_query", "finish"]:
     if state.get("status") == "collecting":
         return "ask_user"
+    if state.get("status") == "building":
+        return "build_query"
     return "finish"
 
 
@@ -80,6 +83,7 @@ def build_travel_query_graph(
     builder.add_node("check_required", check_required_information)
     builder.add_node("ask_user", ask_user)
     builder.add_node("merge_answer", merge_user_answer)
+    builder.add_node("build_query", build_structured_query)
 
     builder.add_edge(START, "extract")
     builder.add_edge("extract", "check_required")
@@ -88,10 +92,12 @@ def build_travel_query_graph(
         _route_after_required_check,
         {
             "ask_user": "ask_user",
+            "build_query": "build_query",
             "finish": END,
         },
     )
     builder.add_edge("merge_answer", "extract")
+    builder.add_edge("build_query", END)
 
     return builder.compile(
         checkpointer=checkpointer or create_development_checkpointer(),

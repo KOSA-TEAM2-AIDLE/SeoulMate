@@ -31,6 +31,30 @@ def _base_state() -> dict:
 
 
 class TravelIntentExtractorTests(unittest.TestCase):
+    def test_explicit_slots_become_domains_and_visit_count(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "day_trip_route",
+                "normalized_question": "2026-07-16 홍대 저녁 식사 후 카페 방문",
+                "location": "홍대",
+                "start_date": "2026-07-16",
+                "requested_slots": [
+                    {"domain": "restaurant", "start_time": "19:00"},
+                    {"domain": "cafe", "start_time": "21:00"},
+                ],
+            }
+        )
+
+        result = asyncio.run(TravelIntentExtractor(chain)(_base_state()))
+
+        self.assertEqual(2, result["collected"]["explicit_visit_count"])
+        self.assertEqual(2, result["collected"]["target_places_per_day"])
+        self.assertEqual(
+            ["restaurant", "cafe"],
+            result["collected"]["requested_domains"],
+        )
+
     def test_explicit_day_slots_fill_deterministic_defaults(self) -> None:
         chain = RunnableLambda(
             lambda _: {

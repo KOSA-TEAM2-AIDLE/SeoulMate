@@ -8,8 +8,24 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.travel_query.state import TravelQueryGraphState
-from schemas.route_planner import RoutePace
+from schemas.route_planner import HHMMTime, RoutePace
 from schemas.structured_query import TaskDomain, TravelIntent
+
+
+class RequestedVisitSlot(BaseModel):
+    """A visit purpose explicitly stated by the user, not a recommended place."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    domain: TaskDomain
+    search_query: str | None = None
+    themes: list[str] | None = None
+    notes: str | None = None
+    day_number: int | None = Field(default=None, ge=1)
+    visit_date: date | None = None
+    start_time: HHMMTime | None = None
+    end_date: date | None = None
+    end_time: HHMMTime | None = None
 
 
 class IntentExtraction(BaseModel):
@@ -31,13 +47,23 @@ class IntentExtraction(BaseModel):
     target_places_per_day: int | None = Field(default=None, ge=1, le=5)
     pace: RoutePace | None = None
     requested_domains: list[TaskDomain] | None = None
+    requested_slots: list[RequestedVisitSlot] | None = None
     themes: list[str] | None = None
     party_size: int | None = Field(default=None, ge=1)
     adults: int | None = Field(default=None, ge=1)
     children: int | None = Field(default=None, ge=0)
     transportation: list[str] | None = None
+    accessibility: list[str] | None = None
     required_features: list[str] | None = None
     excluded_features: list[str] | None = None
+    arrival_at: HHMMTime | None = None
+    arrival_location: str | None = None
+    departure_at: HHMMTime | None = None
+    departure_location: str | None = None
+    preferred_areas: list[str] | None = None
+    must_visit: list[str] | None = None
+    avoid_places: list[str] | None = None
+    target_time: HHMMTime | None = None
     budget_min_krw: int | None = Field(default=None, ge=0)
     budget_max_krw: int | None = Field(default=None, ge=0)
     budget_scope: Literal["per_person", "total"] | None = None
@@ -143,6 +169,11 @@ def _apply_deterministic_defaults(
     """사용자 결정이 필요 없는 날짜·장소 수 기본값만 채운다."""
     start_date_value = extracted.get("start_date")
     end_date_value = extracted.get("end_date")
+    requested_slots = extracted.get("requested_slots") or []
+    if requested_slots and extracted.get("explicit_visit_count") is None:
+        extracted["explicit_visit_count"] = len(requested_slots)
+    if requested_slots and not extracted.get("requested_domains"):
+        extracted["requested_domains"] = [slot["domain"] for slot in requested_slots]
 
     if intent == "day_trip_route" and start_date_value:
         extracted["end_date"] = start_date_value

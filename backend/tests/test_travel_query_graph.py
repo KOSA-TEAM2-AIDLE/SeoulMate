@@ -60,9 +60,12 @@ class TravelQueryGraphTests(unittest.TestCase):
             interrupt_payload["missing_fields"],
         )
 
-        self.assertEqual("building", resumed["status"])
-        self.assertEqual(4, resumed["collected"]["target_places_per_day"])
-        self.assertEqual("normal", resumed["collected"]["pace"])
+        self.assertEqual("ready", resumed["status"])
+        self.assertEqual(
+            4,
+            resumed["structured_query"].route_request.target_places_per_day,
+        )
+        self.assertEqual(4, len(resumed["structured_query"].tasks))
         self.assertEqual(2, len(resumed["conversation_history"]))
         self.assertEqual(
             "보통",
