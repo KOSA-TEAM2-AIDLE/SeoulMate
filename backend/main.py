@@ -5,18 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 # from core.config import ALLOWED_ORIGINS
 
 from core.config import settings
-from routers import (
-    health,
-    tools,
+from api.routers import (
     places,
-    actions,
-    chat,
     cafes,
-    restaurants,
     accommodations,
     events,
     storage_lockers,
 )
+from api.routers import actions, tools, health, restaurants, chat
 
 # load_dotenv() # Pydantic Settings 설정으로 인해 제외 -> Settings 가 직접 .env를 읽음
 
