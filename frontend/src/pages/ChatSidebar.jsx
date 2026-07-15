@@ -1,67 +1,201 @@
-const CHAT_MESSAGES = [
-  { id: 1, sender: 'ai', text: '서울 여행 루트를 추천해드릴게요.' },
-  { id: 2, sender: 'user', text: '사람이 너무 많지 않은 곳이면 좋겠어.' },
-];
+import { useEffect, useRef, useState } from "react";
+import { streamChat } from "../api/chat";
+import AssistantMessage from "../components/chat/AssistantMessage";
+import ChatInputBox from "../components/chat/ChatInputBox";
+import UserMessage from "../components/chat/UserMessage";
+import useTravelStore from "../stores/useTravelStore";
+import { useLangStore } from "../stores/useLangStore";
 
-const QUESTION_OPTIONS = ['조용한 분위기와 감성적인 사진', '맛집과 카페 탐방'];
+const UI_TEXT = {
+  ko: {
+    welcome: "궁금한 점은 물어봐주세요!",
+    headerTitle: "SeoulMate 챗봇",
+    headerDesc: (day, allDay) => `외국인을 위한 서울 여행 가이드 챗봇 (현재: ${day} / ${allDay}일차)`,
+    preparing: "답변을 준비하고 있어요...",
+    errStreaming: "채팅 응답 중 오류가 발생했습니다.",
+    errFallback: "채팅 응답을 불러오지 못했습니다."
+  },
+  en: {
+    welcome: "Feel free to ask me anything!",
+    headerTitle: "SeoulMate Chatbot",
+    headerDesc: (day, allDay) => `Seoul travel guide chatbot for foreigners (Current: Day ${day} / ${allDay})`,
+    preparing: "Preparing an answer...",
+    errStreaming: "An error occurred while receiving the chat response.",
+    errFallback: "Failed to load chat response."
+  }
+};
+
+function toChatHistory(messages) {
+  return messages
+      .filter(
+          (message) => message.role === "user" || message.role === "assistant",
+      )
+      .map((message) => ({
+        role: message.role,
+        content: message.content,
+      }));
+}
 
 export default function ChatSidebar() {
+  const lang = useLangStore((state) => state.lang);
+  const t = UI_TEXT[lang];
+
+  const [messages, setMessages] = useState([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: UI_TEXT[lang].welcome,
+    }
+  ]);
+  const [inputValue, setInputValue] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const messageEndRef = useRef(null);
+
+  const {
+    setTravelPath,
+    setRecommendList,
+    setDay,
+    setAllDay,
+    day,
+    all_day
+  } = useTravelStore();
+
+  useEffect(() => {
+    setMessages((currentMessages) =>
+        currentMessages.map((msg) =>
+            msg.id === "welcome"
+                ? { ...msg, content: UI_TEXT[lang].welcome }
+                : msg
+        )
+    );
+  }, [lang]);
+
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isStreaming]);
+
+  const appendAssistantToken = (assistantId, token) => {
+    setMessages((currentMessages) =>
+        currentMessages.map((message) =>
+            message.id === assistantId
+                ? { ...message, content: `${message.content}${token}` }
+                : message,
+        ),
+    );
+  };
+
+  const handleSendMessage = async (messageText = inputValue) => {
+    const trimmedMessage = messageText.trim();
+
+    if (!trimmedMessage || isStreaming) {
+      return;
+    }
+
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: trimmedMessage,
+    };
+    const assistantMessage = {
+      id: `assistant-${Date.now()}`,
+      role: "assistant",
+      content: "",
+    };
+
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      userMessage,
+      assistantMessage,
+    ]);
+    setInputValue("");
+    setIsStreaming(true);
+
+    try {
+      await streamChat({
+        message: trimmedMessage,
+        history: toChatHistory(messages),
+        lang: lang,
+        onToken: (token) => appendAssistantToken(assistantMessage.id, token),
+        onDone: (payload) => {
+          if (payload && payload.data) {
+            const { day: nextDay, allDay: nextAllDay, travelPath, recommendList } = payload.data;
+
+            if (nextDay !== undefined && nextDay !== null) {
+              setDay(nextDay);
+            }
+            if (nextAllDay !== undefined && nextAllDay !== null) {
+              setAllDay(nextAllDay);
+            }
+            if (travelPath) {
+              setTravelPath(travelPath);
+            }
+            if (recommendList) {
+              setRecommendList(recommendList);
+            }
+          }
+        },
+        onError: (payload) => {
+          throw new Error(
+              payload.message ?? t.errStreaming,
+          );
+        },
+      });
+
+    } catch (error) {
+      setMessages((currentMessages) =>
+          currentMessages.map((message) =>
+              message.id === assistantMessage.id
+                  ? {
+                    ...message,
+                    content:
+                        error instanceof Error
+                            ? error.message
+                            : t.errFallback,
+                  }
+                  : message,
+          ),
+      );
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
   return (
-    <aside className="flex min-h-[360px] flex-col border-l border-slate-200 bg-white">
-      <div className="flex items-center gap-3 border-b border-slate-200 p-5">
-        <div className="flex size-11 items-center justify-center rounded-xl bg-blue-100 text-xl font-bold text-blue-700">
-          AI
-        </div>
-        <div>
-          <h2 className="font-bold text-blue-600">SeoulMate 챗봇</h2>
-          <p className="text-sm text-slate-500">여행 추천 대화 영역</p>
-        </div>
-      </div>
-
-      <div className="flex-1 space-y-4 overflow-y-auto p-5">
-        {CHAT_MESSAGES.map((message) => (
-          <div
-            key={message.id}
-            className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
-              message.sender === 'user'
-                ? 'ml-auto bg-blue-600 text-white'
-                : 'border border-slate-200 bg-slate-50 text-slate-700'
-            }`}
-          >
-            {message.text}
+      <aside className="flex min-h-[360px] flex-col border-l border-slate-200 bg-white">
+        <div className="flex items-center gap-3 border-b border-slate-200 p-5">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-blue-50 text-2xl shadow-sm">
+            🤖
           </div>
-        ))}
-
-        <div className="rounded-xl border border-slate-200 p-4">
-          <p className="text-sm font-bold">추천 질문 카드 영역</p>
-          <div className="mt-3 space-y-2">
-            {QUESTION_OPTIONS.map((option, index) => (
-              <button
-                key={option}
-                type="button"
-                className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
-                  index === 0
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-slate-200 text-slate-600'
-                }`}
-              >
-                {option}
-              </button>
-            ))}
+          <div>
+            <h2 className="font-bold text-blue-600">{t.headerTitle}</h2>
+            <p className="text-[14px] font-normal text-slate-500">
+              {t.headerDesc(day, all_day)}
+            </p>
           </div>
         </div>
-      </div>
 
-      <form className="flex gap-2 border-t border-slate-200 p-4">
-        <input
-          type="text"
-          placeholder="메시지를 입력하세요..."
-          className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none"
-        />
-        <button type="button" className="rounded-xl bg-blue-600 px-4 py-3 font-bold text-white">
-          전송
-        </button>
-      </form>
-    </aside>
+        <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
+          {messages.map((message) =>
+              message.role === "user" ? (
+                  <UserMessage key={message.id}>{message.content}</UserMessage>
+              ) : (
+                  <AssistantMessage key={message.id}>
+                    {message.content ||
+                        (isStreaming ? t.preparing : "")}
+                  </AssistantMessage>
+              ),
+          )}
+          <div ref={messageEndRef} />
+        </div>
+
+        <div className="border-t border-slate-200 p-3">
+          <ChatInputBox
+              value={inputValue}
+              onChange={(event) => setInputValue(event.target.value)}
+              onSubmit={() => handleSendMessage()}
+              disabled={isStreaming}
+          />
+        </div>
+      </aside>
   );
 }

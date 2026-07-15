@@ -1,6 +1,8 @@
 # 파이썬 가상환경 (Virtual Environment)
 venv/
 .venv/
+.test-venv/
+.uv-cache/
 env/
 ENV/
 
