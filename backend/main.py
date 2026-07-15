@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from core.config import ALLOWED_ORIGINS
-from routers import (
+from api.routers import (
     health,
     tools,
     places,
@@ -12,8 +12,10 @@ from routers import (
     cafes,
     restaurants,
     accommodations,
-    events,
+    attractions,
     storage_lockers,
+    weather,
+    routes,
 )
 
 load_dotenv()
@@ -37,8 +39,10 @@ app.include_router(chat.router)
 app.include_router(cafes.router)
 app.include_router(restaurants.router)
 app.include_router(accommodations.router)
-app.include_router(events.router)
+app.include_router(attractions.router)
 app.include_router(storage_lockers.router)
+app.include_router(weather.router)
+app.include_router(routes.router)
 
 
 @app.get("/")
