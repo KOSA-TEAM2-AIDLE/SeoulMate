@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import html2pdf from 'html2pdf.js';
 import useTravelStore from '../../stores/useTravelStore';
 import { useLangStore } from '../../stores/useLangStore';
@@ -385,8 +385,7 @@ export default function TravelRouteTab({ showToast }) {
                         <button
                             type="button"
                             onClick={() => {
-                              const targetDay = Number(currentDay);
-                              removePathItem(targetDay, place.id);
+                              removePathItem(place.id);
                               showToast(t.toastDelete(place.name));
                             }}
                             className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:bg-slate-200 transition-colors"

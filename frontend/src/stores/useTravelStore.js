@@ -3,13 +3,11 @@ import { create } from 'zustand';
 const useTravelStore = create((set) => ({
     recommendList: [],
     travelPath: {},
-    day: 1,
     selectedDay: 1,
     all_day: 1,
     allPlaces : [],
 
     setRecommendList: (newList) => set({ recommendList: newList }),
-    setDay: (newDay) => set({ day: newDay }),
     setSelectedDay: (newSelectedDay) => set({ selectedDay: newSelectedDay }),
     setAllDay: (newDay) => set({ all_day: newDay }),
     setTravelPath: (newPath) => set({ travelPath: newPath }),
@@ -19,12 +17,12 @@ const useTravelStore = create((set) => ({
     setSelectedPlace: (place) => set({ selectedPlace: place }),
     clearSelectedPlace: () => set({ selectedPlace: null }),
 
-    addPathItem: (day, item) => {
+    addPathItem: (item) => {
         let isAdded = false;
 
         set((state) => {
-            const currentDayPath = state.travelPath[day] || [];
-
+            const currentDay = state.selectedDay;
+            const currentDayPath = state.travelPath[currentDay] || [];
             const alreadyExists = currentDayPath.some((p) => p.id === item.id);
 
             if (alreadyExists) {
@@ -36,7 +34,7 @@ const useTravelStore = create((set) => ({
             return {
                 travelPath: {
                     ...state.travelPath,
-                    [day]: [...currentDayPath, item]
+                    [currentDay]: [...currentDayPath, item]
                 }
             };
         });
@@ -44,13 +42,16 @@ const useTravelStore = create((set) => ({
         return isAdded;
     },
 
-    removePathItem: (day, itemId) =>
-        set((state) => ({
-            travelPath: {
-                ...state.travelPath,
-                [day]: (state.travelPath[day] || []).filter((item) => item.id !== itemId)
-            }
-        })),
+    removePathItem: (itemId) =>
+        set((state) => {
+            const currentDay = state.selectedDay;
+            return {
+                travelPath: {
+                    ...state.travelPath,
+                    [currentDay]: (state.travelPath[currentDay] || []).filter((item) => item.id !== itemId)
+                }
+            };
+        }),
 
     clearTravelPath: () => set({ travelPath: {} }),
 }));
