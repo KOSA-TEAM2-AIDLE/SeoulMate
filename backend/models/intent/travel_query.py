@@ -1,3 +1,5 @@
+"""여행 질문의 인텐트와 구조화 조건을 추출하는 모델."""
+
 import json
 from datetime import date, timedelta
 from typing import Any, Literal

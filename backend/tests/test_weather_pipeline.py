@@ -11,7 +11,7 @@ from services.llm import (
     _validate_recommendation_result,
     generate_recommendation_result,
 )
-from services.intent import classify_intent
+from models.intent.classifier import classify_intent
 from services.weather import (
     KST,
     _vilage_base_datetime,
