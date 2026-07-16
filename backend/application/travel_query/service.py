@@ -135,6 +135,9 @@ def _to_api_response(
             thread_id=thread_id,
             status="ready",
             structured_query=result.get("structured_query"),
+            current_latitude=result.get("current_latitude"),
+            current_longitude=result.get("current_longitude"),
+            current_location_name=result.get("current_location_name"),
         )
     if status == "unsupported":
         return TravelQueryApiResponse(
