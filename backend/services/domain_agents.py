@@ -8,7 +8,6 @@ from schemas.structured_query import StructuredQueryTask
 
 MOCK_DOMAIN_LABELS = {
     "cafe": ("임시 카페 후보", "카페"),
-    "accommodation": ("임시 숙박 후보", "숙박"),
     "attraction": ("임시 문화시설 후보", "문화시설"),
     "etc": ("임시 기타 장소 후보", "기타"),
 }
