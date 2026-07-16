@@ -12,9 +12,13 @@ class AccommodationSearchService:
         # 필요 시 감쌀 수 있습니다. 현재 구조상 직접 호출합니다. (또는 필요 시 to_thread 적용)
         import asyncio
         
-        # search_accommodations_structured 반환값 형식: {"candidates": [...]}
-        # candidates의 각 항목: "accommodation_id", "name", "category", "lat", "lng", "score", "reason", "features", "address", 등
-        result_dict = await asyncio.to_thread(search_accommodations_structured, request)
+        if getattr(request, 'language', 'ko') == 'en':
+            from domains.accommodation.agent_en import search_accommodations_structured_en
+            result_dict = await asyncio.to_thread(search_accommodations_structured_en, request)
+        else:
+            # search_accommodations_structured 반환값 형식: {"candidates": [...]}
+            # candidates의 각 항목: "accommodation_id", "name", "category", "lat", "lng", "score", "reason", "features", "address", 등
+            result_dict = await asyncio.to_thread(search_accommodations_structured, request)
         
         raw_candidates = result_dict.get("candidates", [])
         
