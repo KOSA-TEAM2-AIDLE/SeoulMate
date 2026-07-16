@@ -41,6 +41,8 @@ class AttractionSearchService:
             attributes={
                 "address": metadata.get("road_address") or _content_value(hit.content, "Address"),
                 "kind": metadata.get("kind"),
+                "description": _content_value(hit.content, "Description")
+                or _content_value(hit.content, "Summary"),
                 "start_date": metadata.get("start_date"),
                 "end_date": metadata.get("end_date"),
                 "homepage_url": metadata.get("homepage_url"),

@@ -61,6 +61,19 @@ class Settings(BaseSettings):
     openai_embed_dim: int = Field(default=1536, gt=0)
     llm_mode: str = "openai-api"
 
+    # Attraction 도메인에서 사용하기 위한 DSPy 운영 설정
+    # MIPROv2 최적화는 오프라인에서 수행하고 서버는 artifact만 로드한다.
+    attraction_dspy_model: str = "openai/gpt-4o-mini"
+    attraction_dspy_temperature: float = Field(default=0.0, ge=0, le=2)
+    attraction_dspy_max_tokens: int = Field(default=900, ge=1)
+    attraction_dspy_artifact_path: Path = (
+        BASE_DIR
+        / "domains"
+        / "attraction"
+        / "artifacts"
+        / "optimized_program.json"
+    )
+
     db_host: str = "localhost"
     db_port: int = Field(default=5433, ge=1, le=65535)
     db_name: str = "seoulmate"

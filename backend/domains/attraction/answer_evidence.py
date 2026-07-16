@@ -1,0 +1,130 @@
+"""SearchCandidate를 DSPy에 노출하고 관광 도메인 답변 근거로 변환한다."""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Any
+
+from domains.attraction.answer_models import (
+    AttractionAnswerInput,
+    AttractionEvidenceCandidate,
+)
+from domains.common.models import SearchCandidate
+
+
+MAX_ANSWER_CANDIDATES = 10
+MAX_REVIEW_EVIDENCE = 5
+
+
+def build_attraction_answer_input(
+    *,
+    question: str,
+    language: str,
+    location: str | None,
+    themes: list[str],
+    candidates: list[SearchCandidate],
+    today: date | None = None,
+) -> AttractionAnswerInput:
+    """재랭킹 순서를 유지하며 최대 10개의 검증 근거만 구성한다."""
+
+    as_of = today or date.today()
+    evidence_candidates = [
+        _to_evidence(candidate, rank=rank, as_of=as_of)
+        for rank, candidate in enumerate(
+            candidates[:MAX_ANSWER_CANDIDATES],
+            start=1,
+        )
+    ]
+    return AttractionAnswerInput(
+        question=question,
+        language=language,
+        location=location,
+        themes=themes,
+        candidates=evidence_candidates,
+    )
+
+
+def _to_evidence(
+    candidate: SearchCandidate,
+    *,
+    rank: int,
+    as_of: date,
+) -> AttractionEvidenceCandidate:
+    if candidate.domain != "attraction":
+        raise ValueError(f"관광 후보만 변환할 수 있습니다: {candidate.domain}")
+
+    attributes = candidate.attributes
+    kind = str(attributes.get("kind") or "")
+    start_date = _optional_date(attributes.get("start_date"), field="start_date")
+    end_date = _optional_date(attributes.get("end_date"), field="end_date")
+    if kind == "event" and end_date is not None and end_date < as_of:
+        raise ValueError(
+            f"종료된 행사는 DSPy 후보로 전달할 수 없습니다: {candidate.place_id}"
+        )
+
+    return AttractionEvidenceCandidate(
+        place_id=candidate.place_id,
+        rank=rank,
+        name=candidate.name,
+        category=candidate.category,
+        distance_m=_distance_m(attributes.get("distance_km")),
+        description=_optional_text(
+            attributes.get("description") or attributes.get("description_text")
+        ),
+        reviews=[
+            review.strip()
+            for review in candidate.evidence
+            if isinstance(review, str) and review.strip()
+        ][:MAX_REVIEW_EVIDENCE],
+        event_start_date=start_date if kind == "event" else None,
+        event_end_date=end_date if kind == "event" else None,
+        congestion=_congestion_evidence(candidate.signals),
+    )
+
+
+def _optional_date(value: Any, *, field: str) -> date | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError as error:
+        raise ValueError(f"올바르지 않은 {field} 형식입니다: {value}") from error
+
+
+def _distance_m(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        distance_km = float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"올바르지 않은 distance_km입니다: {value}") from error
+    if distance_km < 0:
+        raise ValueError("distance_km는 음수일 수 없습니다.")
+    return round(distance_km * 1000, 1)
+
+
+def _optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _congestion_evidence(signals: dict[str, Any]) -> str | None:
+    if signals.get("congestion_available") is not True:
+        return None
+    parts = []
+    for label, key in (
+        ("level", "congestion_level"),
+        ("score", "congestion_score"),
+        ("observed_at", "congestion_observed_at"),
+    ):
+        value = signals.get(key)
+        if value not in (None, ""):
+            parts.append(f"{label}={value}")
+    return "; ".join(parts) or None
+
+
+__all__ = ["build_attraction_answer_input"]

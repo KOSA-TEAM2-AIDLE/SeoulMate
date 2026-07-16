@@ -32,6 +32,8 @@ class VectorSearchHit:
 
 class AttractionVectorSearch:
     DEFAULT_RADIUS_KM = 5.0
+    REVIEW_LIMIT_PER_PLACE = 5
+
     def __init__(
         self,
         *,
@@ -90,7 +92,7 @@ class AttractionVectorSearch:
             vectors[0],
             language=request.language,
             place_keys=place_keys,
-            limit_per_place=3,
+            limit_per_place=self.REVIEW_LIMIT_PER_PLACE,
         )
         reviews_by_place: dict[str, list[ReviewEvidence]] = {place_key: [] for place_key in place_keys}
         for row in reviews:
