@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     weather_rerank_weight: float = Field(default=0.10, ge=0, le=1)
 
     openai_api_key: SecretStr | None = None
-    openai_chat_model: str = "gpt-5-mini"
+    openai_chat_model: str = "gpt-4o-mini"
     openai_embed_model: str = "text-embedding-3-large"
     openai_embed_dim: int = Field(default=1536, gt=0)
     llm_mode: str = "openai-api"
