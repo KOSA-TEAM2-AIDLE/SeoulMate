@@ -486,6 +486,7 @@ class AccommodationAgent:
                     request = DomainSearchRequest(
                         task_id=task.task_id,
                         domain=task.domain,
+                        language=getattr(query, 'language', 'ko'),
                         search_query=query.normalized_question,
                         themes=task.themes,
                         location=query.filters.location if query.filters else "서울",
@@ -501,21 +502,35 @@ class AccommodationAgent:
                     
                     try:
                         candidates = await service.search(request)
-                        print(f"\n✅ [AccommodationAgent] '{query.normalized_question}' 검색 결과 콘솔 출력:")
-                        for idx, c in enumerate(candidates, 1):
-                            print(f"[{idx}] {c.name}")
-                            print(f"   - 추천 융합 점수: {c.final_score:.2f}")
-                            print(f"   - 카테고리: {c.category}")
-                            print(f"   - 주소: {c.attributes.get('address')}")
-                            print(f"   - 평점: {c.attributes.get('rating')} (리뷰 {c.attributes.get('review_count')}개)")
-                            print(f"   - 가격: {c.attributes.get('price')}")
-                            print(f"   - 편의시설: {c.attributes.get('features')}")
-                            print(f"   - 링크: {c.attributes.get('url')}")
-                            print(f"   - 선정 이유: {c.attributes.get('reason')}")
-                            print("-" * 60)
+                        if getattr(query, 'language', 'ko') == 'en':
+                            print(f"\n✅ [AccommodationAgent] '{query.normalized_question}' Search Results:")
+                            for idx, c in enumerate(candidates, 1):
+                                print(f"[{idx}] {c.name}")
+                                print(f"   - Recommended Fusion Score: {c.final_score:.2f}")
+                                print(f"   - Category: {c.category}")
+                                print(f"   - Address: {c.attributes.get('address')}")
+                                print(f"   - Rating: {c.attributes.get('rating')} (Reviews: {c.attributes.get('review_count')})")
+                                print(f"   - Price: {c.attributes.get('price')}")
+                                print(f"   - Amenities: {c.attributes.get('features')}")
+                                print(f"   - Link: {c.attributes.get('url')}")
+                                print(f"   - Reason: {c.attributes.get('reason')}")
+                                print("-" * 60)
+                        else:
+                            print(f"\n✅ [AccommodationAgent] '{query.normalized_question}' 검색 결과 콘솔 출력:")
+                            for idx, c in enumerate(candidates, 1):
+                                print(f"[{idx}] {c.name}")
+                                print(f"   - 추천 융합 점수: {c.final_score:.2f}")
+                                print(f"   - 카테고리: {c.category}")
+                                print(f"   - 주소: {c.attributes.get('address')}")
+                                print(f"   - 평점: {c.attributes.get('rating')} (리뷰 {c.attributes.get('review_count')}개)")
+                                print(f"   - 가격: {c.attributes.get('price')}")
+                                print(f"   - 편의시설: {c.attributes.get('features')}")
+                                print(f"   - 링크: {c.attributes.get('url')}")
+                                print(f"   - 선정 이유: {c.attributes.get('reason')}")
+                                print("-" * 60)
                         print("=" * 60)
                     except Exception as e:
-                        print(f"[AccommodationAgent] 검색 실패: {e}")
+                        print(f"[AccommodationAgent] 검색 실패 (Search failed): {e}")
         
         return DomainAgentDispatchResult(
             domain=self.domain,
