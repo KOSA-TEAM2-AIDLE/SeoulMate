@@ -1,4 +1,3 @@
-import React from 'react';
 import html2pdf from 'html2pdf.js';
 import useTravelStore from '../../stores/useTravelStore';
 import { useLangStore } from '../../stores/useLangStore';
@@ -22,7 +21,8 @@ const UI_TEXT = {
     toastShareFallback: '파일 공유가 지원되지 않아 PDF 다운로드로 대체합니다.',
     toastDelete: (name) => `${name}이 루트에서 삭제되었습니다.`,
     noRouteTitle: (day) => `${day}일차는 아직 루트가 없습니다`,
-    noRouteDesc: '장소 검색 탭에서 갈 곳들을 추가해보세요!'
+    noRouteDesc: '장소 검색 탭에서 갈 곳들을 추가해보세요!',
+    moreInfo: '바로가기' // 링크 다국어 추가
   },
   en: {
     title: 'My Travel Route',
@@ -36,7 +36,8 @@ const UI_TEXT = {
     toastShareFallback: 'File sharing not supported. Falling back to PDF download.',
     toastDelete: (name) => `'${name}' has been deleted from the route.`,
     noRouteTitle: (day) => `No route for Day ${day} yet`,
-    noRouteDesc: 'Try adding places from the Search tab!'
+    noRouteDesc: 'Try adding places from the Search tab!',
+    moreInfo: 'Link' // 링크 다국어 추가
   }
 };
 
@@ -138,6 +139,9 @@ export default function TravelRouteTab({ showToast }) {
           const rating = getPlaceDisplayRating(place);
           const originalImage = getPlaceDisplayImage(place);
 
+          // 링크 데이터가 존재하는지 검증
+          const hasLink = !!place.link;
+
           let safeImageSrc = null;
           if (originalImage) {
             safeImageSrc = await getBase64ImageFromUrl(originalImage);
@@ -181,7 +185,14 @@ export default function TravelRouteTab({ showToast }) {
                   </span>
                 </div>
                 <p style="margin: 0 0 4px 0; font-size: 13px; color: #64748b;">${place.address}</p>
-                <p style="margin: 0; font-size: 13px; color: #f59e0b; font-weight: bold;">★ ${rating}</p>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <p style="margin: 0; font-size: 13px; color: #f59e0b; font-weight: bold;">★ ${rating}</p>
+                  ${hasLink ? `
+                    <a href="${place.link}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; text-decoration: none; font-weight: bold; padding: 2px 8px; border-radius: 4px; color: #475569; background-color: #f1f5f9; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; gap: 4px;">
+                      🔗 ${t.moreInfo}
+                    </a>
+                  ` : ''}
+                </div>
               </div>
             </div>
             ${place.selectionReason ? `
@@ -311,6 +322,9 @@ export default function TravelRouteTab({ showToast }) {
                 const rating = getPlaceDisplayRating(place);
                 const image = getPlaceDisplayImage(place);
 
+                // 리스트 아이템에 실제로 link 프로퍼티가 존재하는지 체크
+                const hasLink = !!place.link;
+
                 return (
                     <article
                         key={place.id}
@@ -361,9 +375,28 @@ export default function TravelRouteTab({ showToast }) {
                             {place.address}
                           </p>
 
-                          <p className="text-sm text-amber-500 font-semibold flex items-center gap-1 mt-0.5">
-                            ★ {rating}
-                          </p>
+                          {/* 별점 라인과 링크 버튼 정렬 */}
+                          <div className="flex items-center justify-between mt-1 min-h-[24px]">
+                            <p className="text-sm text-amber-500 font-semibold flex items-center gap-1">
+                              ★ {rating}
+                            </p>
+
+                            {/* 화면에 표시되는 🔗 바로가기 버튼 */}
+                            {hasLink && (
+                                <a
+                                    href={place.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => {
+                                      // 카드 삭제 이벤트 등이 클릭 인터셉트하지 않도록 버블링 방지
+                                      e.stopPropagation();
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 border border-slate-200 transition-colors"
+                                >
+                                  🔗 {t.moreInfo}
+                                </a>
+                            )}
+                          </div>
                         </div>
                       </div>
 

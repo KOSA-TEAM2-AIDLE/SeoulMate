@@ -2,6 +2,7 @@ import Header from "./layout/Header";
 import ChatSidebar from "./pages/ChatSidebar";
 import MapWorkspace from "./pages/MapWorkspace";
 import PlaceSidebar from "./pages/PlaceSidebar";
+import ChatSidebarMock from "./pages/ChatSidebarMock.jsx";
 
 
 export default function MainPage() {
@@ -12,6 +13,7 @@ export default function MainPage() {
                 <PlaceSidebar/>
                 <MapWorkspace/>
                 <ChatSidebar/>
+                {/*<ChatSidebarMock/>*/}
             </main>
         </div>
     );

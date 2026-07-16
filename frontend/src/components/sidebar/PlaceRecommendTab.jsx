@@ -1,4 +1,3 @@
-import React from 'react';
 import useTravelStore from '../../stores/useTravelStore';
 import { useLangStore } from '../../stores/useLangStore';
 import { getPlaceDisplaySubCategory, getPlaceDisplayRating, getPlaceDisplayImage } from '../../services/map/placeDisplayAdapter';
@@ -30,7 +29,8 @@ const UI_TEXT = {
         noResult: '해당 카테고리의 결과가 존재하지 않습니다.',
         toastAdded: (day, name) => `${day}일차 루트에 '${name}'이(가) 추가되었습니다.`,
         toastDuplicate: (name) => `'${name}'은(는) 이미 해당 일차 루트에 존재합니다.`,
-        aiReason: '추천 이유'
+        aiReason: '추천 이유',
+        moreInfo: '바로가기' // 링크 이동용 텍스트 추가
     },
     en: {
         searchResult: 'Search Results',
@@ -39,7 +39,8 @@ const UI_TEXT = {
         noResult: 'No results found for this category.',
         toastAdded: (day, name) => `'${name}' has been added to Day ${day} path.`,
         toastDuplicate: (name) => `'${name}' is already in this day's path.`,
-        aiReason: 'Why we recommend'
+        aiReason: 'Why we recommend',
+        moreInfo: 'Link' // 링크 이동용 텍스트 추가
     }
 };
 
@@ -89,6 +90,9 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                         const rating = getPlaceDisplayRating(place);
                         const image = getPlaceDisplayImage(place);
 
+                        // 💡 핵심: 데이터 객체에 link 프로퍼티가 실제로 존재하는지 체크합니다.
+                        const hasLink = !!place.link;
+
                         return (
                             <article
                                 key={place.id}
@@ -101,7 +105,7 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                                         showToast(t.toastDuplicate(place.name));
                                     }
                                 }}
-                                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all cursor-pointer group"
+                                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all cursor-pointer group relative"
                             >
                                 <div className="flex gap-3">
                                     <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
@@ -138,9 +142,28 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                                             {place.address}
                                         </p>
 
-                                        <p className="mt-1.5 text-sm text-amber-500 font-semibold">
-                                            ★ {rating}
-                                        </p>
+                                        {/* 별점 라인과 링크 버튼을 나란히 배치 */}
+                                        <div className="flex items-center justify-between mt-1.5 min-h-[24px]">
+                                            <p className="text-sm text-amber-500 font-semibold">
+                                                ★ {rating}
+                                            </p>
+
+                                            {/* 💡 링크가 존재하는 아이템에만 '바로가기' 버튼 노출 */}
+                                            {hasLink && (
+                                                <a
+                                                    href={place.link}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={(e) => {
+                                                        // 부모 카드의 onClick(경로 추가)이 트리거되지 않도록 버블링 방지
+                                                        e.stopPropagation();
+                                                    }}
+                                                    className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 border border-slate-200 transition-colors"
+                                                >
+                                                    🔗 {t.moreInfo}
+                                                </a>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
