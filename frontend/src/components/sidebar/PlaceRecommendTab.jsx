@@ -1,3 +1,4 @@
+import React from 'react';
 import useTravelStore from '../../stores/useTravelStore';
 import { useLangStore } from '../../stores/useLangStore';
 import { getPlaceDisplaySubCategory, getPlaceDisplayRating, getPlaceDisplayImage } from '../../services/map/placeDisplayAdapter';
@@ -45,7 +46,7 @@ const UI_TEXT = {
 const PLACE_FILTERS = ['전체', '명소', '맛집', '카페', '숙소', '보관소'];
 
 export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filteredPlaces, showToast }) {
-    const currentSelectedDay = useTravelStore((state) => state.day);
+    const selectedDay = useTravelStore((state) => state.selectedDay);
     const addPathItem = useTravelStore((state) => state.addPathItem);
 
     const lang = useLangStore((state) => state.lang);
@@ -92,10 +93,10 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                             <article
                                 key={place.id}
                                 onClick={() => {
-                                    const isAdded = addPathItem(currentSelectedDay, place);
+                                    const isAdded = addPathItem(place);
 
                                     if (isAdded) {
-                                        showToast(t.toastAdded(currentSelectedDay, place.name));
+                                        showToast(t.toastAdded(selectedDay, place.name));
                                     } else {
                                         showToast(t.toastDuplicate(place.name));
                                     }
