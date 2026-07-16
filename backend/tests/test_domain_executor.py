@@ -1,9 +1,11 @@
 import inspect
 import json
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 from application.recommendation.domain_executor import execute_domain_search
+from application.tool_policy import requested_contexts
 from domains.cafe.search_service import CafeSearchService
 from domains.common.mapper import search_candidate_to_place
 from domains.common.models import DomainSearchRequest, SearchCandidate
@@ -12,6 +14,7 @@ from routers import chat
 from routers.chat import _stream
 from schemas.chat import ChatRequest
 from schemas.structured_query import StructuredTravelQuery
+from integrations.mcp.base_client import ContextResult
 
 
 def cafe_query() -> StructuredTravelQuery:
@@ -36,6 +39,7 @@ class LiveCafeService:
     implemented = True
 
     async def search(self, request: DomainSearchRequest) -> list[SearchCandidate]:
+        self.last_request = request
         return [SearchCandidate(
             domain="cafe",
             place_id="CAFE-REAL-101",
@@ -64,7 +68,88 @@ class BrokenCafeService:
         raise RuntimeError("cafe database unavailable")
 
 
+class LiveAttractionService:
+    domain = "attraction"
+    implemented = True
+
+    async def search(self, request: DomainSearchRequest) -> list[SearchCandidate]:
+        return [SearchCandidate(
+            domain="attraction",
+            place_id="ATTRACTION-101",
+            task_id=request.task_id,
+            name="한적한 문화시설",
+            category="문화시설",
+            latitude=37.5796,
+            longitude=126.9770,
+            base_score=0.70,
+            final_score=0.70,
+            evidence=["경복궁 인근 문화시설"],
+        )]
+
+
 class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_attraction_congestion_is_candidate_specific_not_generic_weather(self):
+        self.assertEqual(requested_contexts("rag_mcp", "attraction"), ())
+
+    async def test_chat_low_congestion_attraction_reranks_static_candidates(self):
+        registry = DomainSearchRegistry()
+        registry.register(LiveAttractionService())
+        parsed = StructuredTravelQuery.model_validate({
+            "language": "ko",
+            "intent": "single_place_recommendation",
+            "original_question": "경복궁 근처 한적한 문화시설 추천",
+            "normalized_question": "경복궁 한적한 문화시설",
+            "tasks": [{
+                "task_id": "attraction-1",
+                "domain": "attraction",
+                "search_query": "경복궁 한적한 문화시설",
+                "themes": ["한적한", "문화시설"],
+                "desired_count": 3,
+            }],
+            "filters": {"location": "경복궁"},
+        })
+        body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
+        captured = {}
+
+        def choose_first(*args, **kwargs):
+            group = args[2][0]
+            captured["candidate"] = group["candidates"][0]["raw_candidate"]
+            return {
+                "answer": "한적한 문화시설 추천",
+                "task_results": [{
+                    "task_id": group["task_id"],
+                    "domain": group["domain"],
+                    "selections": [{
+                        "candidate": group["candidates"][0],
+                        "selection_reason": "혼잡도가 낮습니다.",
+                    }],
+                }],
+            }
+
+        congestion = ContextResult(
+            provider="congestion",
+            available=True,
+            data={"congestion": {
+                "congestion_score": 20,
+                "congestion_level": "원활",
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        with (
+            patch("routers.chat.domain_registry", registry),
+            patch("routers.chat.generate_grouped_recommendation_result", choose_first),
+            patch(
+                "integrations.mcp.congestion_client.CongestionMCPProvider.get_context",
+                return_value=congestion,
+            ) as get_context,
+        ):
+            events = [event async for event in _stream(body)]
+
+        self.assertTrue(events)
+        get_context.assert_awaited_once()
+        self.assertGreater(captured["candidate"].final_score, 0.70)
+        self.assertEqual(captured["candidate"].signals["congestion_level"], "원활")
+
     async def test_live_service_preserves_real_domain_id_and_verified_fields(self):
         registry = DomainSearchRegistry()
         registry.register(LiveCafeService())
@@ -88,6 +173,8 @@ class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(place.address, "서울 성동구 테스트로 1")
         self.assertEqual(place.rating, 4.7)
         self.assertEqual(place.review_count, 321)
+        self.assertEqual((37.5, 127.0), (registry.get("cafe").last_request.latitude, registry.get("cafe").last_request.longitude))
+        self.assertEqual("성수", registry.get("cafe").last_request.location)
 
     async def test_unimplemented_service_uses_explicit_mock(self):
         registry = DomainSearchRegistry()

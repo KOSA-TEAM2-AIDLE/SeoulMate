@@ -31,6 +31,59 @@ def _base_state() -> dict:
 
 
 class TravelIntentExtractorTests(unittest.TestCase):
+    def test_high_confidence_fallback_extracts_attraction_location_and_theme(self) -> None:
+        chain = RunnableLambda(lambda _: {
+            "language": "ko", "intent": "single_place_recommendation",
+            "normalized_question": "경복궁 근처 문화시설 추천",
+        })
+        state = _base_state()
+        state["original_question"] = "경복궁 근처 문화시설 추천해줘"
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertEqual("경복궁", result["collected"]["location"])
+        self.assertEqual(["attraction"], result["collected"]["requested_domains"])
+        self.assertIn("문화시설", result["collected"]["themes"])
+
+    def test_current_location_and_compound_domains_are_preserved(self) -> None:
+        chain = RunnableLambda(lambda _: {
+            "language": "ko", "intent": "single_place_recommendation",
+            "normalized_question": "내 근처 카페와 전시회 추천",
+        })
+        state = _base_state()
+        state["original_question"] = "내 근처 카페와 전시회 추천해줘"
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertTrue(result["collected"]["use_current_location"])
+        self.assertEqual(["cafe", "attraction"], result["collected"]["requested_domains"])
+
+    def test_fallback_never_overwrites_explicit_model_domain(self) -> None:
+        chain = RunnableLambda(lambda _: {
+            "language": "ko", "intent": "single_place_recommendation",
+            "normalized_question": "호텔 전시 공간",
+            "requested_domains": ["accommodation"],
+        })
+        state = _base_state()
+        state["original_question"] = "호텔 전시 공간 추천"
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertEqual(["accommodation"], result["collected"]["requested_domains"])
+
+    def test_explicit_attraction_domain_keeps_missing_cultural_theme(self) -> None:
+        chain = RunnableLambda(lambda _: {
+            "language": "ko", "intent": "single_place_recommendation",
+            "normalized_question": "경복궁 근처 문화시설 추천",
+            "location": "경복궁", "requested_domains": ["attraction"],
+        })
+        state = _base_state()
+        state["original_question"] = "경복궁 근처 문화시설 추천해줘"
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertIn("문화시설", result["collected"]["themes"])
+
     def test_explicit_slots_become_domains_and_visit_count(self) -> None:
         chain = RunnableLambda(
             lambda _: {

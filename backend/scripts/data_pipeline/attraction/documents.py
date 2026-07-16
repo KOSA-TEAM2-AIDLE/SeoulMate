@@ -3,6 +3,7 @@ import hashlib
 from typing import Iterable
 
 from scripts.data_pipeline.attraction.models import ProcessedPlace, RAGDocument
+from domains.attraction.taxonomy import category_metadata
 
 
 def build_documents(places: Iterable[ProcessedPlace], *, generated_on: date) -> list[RAGDocument]:
@@ -24,5 +25,6 @@ def build_documents(places: Iterable[ProcessedPlace], *, generated_on: date) -> 
             "end_date": str(place.end_date or ""), "homepage_url": place.homepage_url,
             "generated_on": generated_on.isoformat(),
         }
+        metadata.update(category_metadata(place.category, place.kind))
         documents.append(RAGDocument(document_id, content, metadata, hashlib.sha256(content.encode()).hexdigest()))
     return documents

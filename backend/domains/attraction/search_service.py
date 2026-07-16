@@ -46,8 +46,13 @@ class AttractionSearchService:
                 "homepage_url": metadata.get("homepage_url"),
                 "language": metadata.get("lang"),
                 "review_count": len(hit.reviews),
+                "distance_km": metadata.get("distance_km"),
             },
-            signals={"source_kind": "vector_db", "vector_similarity": hit.similarity},
+            signals={
+                "source_kind": "vector_db",
+                "vector_similarity": hit.similarity,
+                "distance_km": metadata.get("distance_km"),
+            },
         )
 
 

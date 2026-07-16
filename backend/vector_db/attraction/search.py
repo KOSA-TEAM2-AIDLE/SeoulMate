@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import math
 from typing import Any, Callable
 
 from domains.common.models import DomainSearchRequest
+from domains.attraction.search_plan import build_attraction_search_plan
+from domains.attraction.taxonomy import normalize_metadata_category
 from vector_db.attraction.embedder import embed_texts
 from vector_db.attraction.repository import AttractionVectorRepository
 
@@ -28,6 +31,7 @@ class VectorSearchHit:
 
 
 class AttractionVectorSearch:
+    DEFAULT_RADIUS_KM = 5.0
     def __init__(
         self,
         *,
@@ -53,6 +57,7 @@ class AttractionVectorSearch:
         return " | ".join(parts)
 
     def search(self, request: DomainSearchRequest) -> list[VectorSearchHit]:
+        plan = build_attraction_search_plan(request)
         query = self.build_query_text(request)
         vectors = self._embedder([query])
         if len(vectors) != 1:
@@ -63,9 +68,23 @@ class AttractionVectorSearch:
             vectors[0],
             language=request.language,
             as_of=as_of,
-            limit=request.candidate_count * 3,
+            limit=request.candidate_count * 10,
         )
-        selected = [row for row in profiles if self._is_active(row["metadata"], as_of)][:request.candidate_count]
+        selected = []
+        for row in profiles:
+            if not self._matches_plan(row["metadata"], plan) or not self._is_active(row["metadata"], as_of):
+                continue
+            metadata = row["metadata"] = dict(row["metadata"])
+            if plan.latitude is not None and plan.longitude is not None:
+                distance_km = self._distance_km(metadata, plan.latitude, plan.longitude)
+                if distance_km is None or distance_km > (plan.radius_km or self.DEFAULT_RADIUS_KM):
+                    continue
+                metadata["distance_km"] = round(distance_km, 3)
+            selected.append(row)
+        for row in selected:
+            metadata = row["metadata"]
+            metadata["category_match"] = bool(plan.primary_categories or plan.secondary_categories)
+        selected = selected[:request.candidate_count]
         place_keys = [row["metadata"]["place_key"] for row in selected]
         reviews = self._repository.search_reviews(
             vectors[0],
@@ -109,3 +128,33 @@ class AttractionVectorSearch:
             return date.fromisoformat(end_date) >= as_of
         except ValueError:
             return False
+
+    @staticmethod
+    def _matches_plan(metadata: dict[str, Any], plan) -> bool:
+        if plan.event_only and metadata.get("kind") != "event":
+            return False
+        if not plan.primary_categories and not plan.secondary_categories:
+            return True
+        primary = metadata.get("category_primary")
+        secondary = metadata.get("category_secondary")
+        if not primary and not secondary:
+            primary, secondary = normalize_metadata_category(str(metadata.get("category") or ""))
+        if plan.secondary_categories:
+            return secondary in plan.secondary_categories
+        return primary in plan.primary_categories
+
+    @staticmethod
+    def _distance_km(metadata: dict[str, Any], latitude: float, longitude: float) -> float | None:
+        try:
+            target_latitude = float(metadata["latitude"])
+            target_longitude = float(metadata["longitude"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        lat1, lat2 = math.radians(latitude), math.radians(target_latitude)
+        delta_lat = math.radians(target_latitude - latitude)
+        delta_lng = math.radians(target_longitude - longitude)
+        value = (
+            math.sin(delta_lat / 2) ** 2
+            + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lng / 2) ** 2
+        )
+        return 6371.0088 * 2 * math.atan2(math.sqrt(value), math.sqrt(1 - value))

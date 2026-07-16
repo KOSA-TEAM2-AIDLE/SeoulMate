@@ -26,6 +26,15 @@ def _state(intent: str, **collected: object) -> dict:
 
 
 class StructuredTravelQueryBuilderTests(unittest.TestCase):
+    def test_recommendation_without_domain_fails_instead_of_dispatching_etc(self) -> None:
+        result = build_structured_query(_state(
+            "single_place_recommendation", location="경복궁",
+        ))
+
+        self.assertEqual("failed", result["status"])
+        self.assertIsNone(result["structured_query"])
+        self.assertIn("검색 도메인", " ".join(result["validation_errors"]))
+
     def test_single_recommendation_builds_three_choice_task(self) -> None:
         result = build_structured_query(
             _state(

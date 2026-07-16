@@ -9,6 +9,7 @@ from application.tool_policy import requested_contexts
 from domains.common.models import SearchCandidate
 from domains.common.registry import DomainSearchRegistry, build_default_domain_registry
 from domains.restaurant.weather_policy import RestaurantWeatherReranker
+from domains.attraction.congestion_reranker import AttractionCongestionReranker
 from integrations.kakao.geocoding_client import geocode_kakao
 from integrations.mcp.base_client import ContextRequest
 from integrations.mcp.registry import ContextProviderRegistry, build_default_context_registry
@@ -34,6 +35,9 @@ class RecommendationOrchestrator:
         self.domains = domain_registry or build_default_domain_registry()
         self.contexts = context_registry or build_default_context_registry()
         self.restaurant_weather = RestaurantWeatherReranker()
+        self.attraction_congestion = AttractionCongestionReranker(
+            self.contexts.get("congestion")
+        )
 
     async def execute(
         self,
@@ -88,6 +92,12 @@ class RecommendationOrchestrator:
                     context_data["weather"],
                     parsed.original_question,
                 )
+            if task.domain == "attraction" and mode == "rag_mcp":
+                candidates = await self.attraction_congestion.rerank(
+                    candidates,
+                    parsed.original_question,
+                    language=parsed.language,
+                )
             results.append(TaskExecutionResult(
                 task_id=task.task_id,
                 domain=task.domain,
@@ -100,4 +110,3 @@ class RecommendationOrchestrator:
 
 
 __all__ = ["RecommendationOrchestrator", "TaskExecutionResult"]
-
