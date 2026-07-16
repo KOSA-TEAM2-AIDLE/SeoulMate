@@ -9,11 +9,15 @@ from datetime import date, timedelta
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
+from api.dependencies import domain_registry
+from application.recommendation.domain_executor import execute_domain_search
 from application.response.frontend_response_mapper import (
     empty_frontend_response,
     recommendation_frontend_response,
     route_frontend_response,
 )
+from domains.common.mapper import search_candidate_to_place
+from domains.restaurant.mapper import to_legacy_candidate
 from application.travel_query.required_info import (
     ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE,
 )
@@ -48,8 +52,6 @@ from services.llm import (
 )
 from services.location import SEOUL_CENTER, geocode_kakao
 from services.rag import search_restaurants
-from domains.restaurant.vector_search import search_restaurants_structured
-from services.domain_agents import mock_places_for_task
 from services.query_policy import (
     deduplicate_recommendation_tasks,
     derive_source_mode,
@@ -135,6 +137,27 @@ def _place(
     )
 
 
+async def _search_structured_task(
+    body: ChatRequest,
+    task,
+    *,
+    candidate_count: int,
+):
+    parsed = body.parsed_query
+    if parsed is None:
+        raise ValueError("도메인 검색에는 parsed_query가 필요합니다.")
+    return await execute_domain_search(
+        domain_registry,
+        parsed,
+        task,
+        latitude=body.lat,
+        longitude=body.lng,
+        current_location_name=body.location_name,
+        candidate_count=candidate_count,
+        min_rating=body.min_rating,
+    )
+
+
 async def _structured_weather(body: ChatRequest, source_mode: str):
     if normalize_source_mode(source_mode) not in {"rag_mcp", "mcp_only"}:
         return None, [], []
@@ -211,18 +234,19 @@ async def _execute_structured_tasks(body: ChatRequest, source_mode: str):
     has_mock = False
 
     for task in parsed.tasks:
+        candidate_count = 30 if task.domain == "restaurant" else max(
+            min(max(task.desired_count, 1), 3),
+            3,
+        )
+        batch = await _search_structured_task(
+            body,
+            task,
+            candidate_count=candidate_count,
+        )
+        sources.extend(batch.sources)
+        has_mock = has_mock or batch.used_mock
         if task.domain == "restaurant":
-            rag_result = await asyncio.to_thread(
-                search_restaurants_structured,
-                parsed,
-                task,
-                current_lat=body.lat,
-                current_lng=body.lng,
-                current_location_name=body.location_name,
-                min_rating=body.min_rating,
-                top_n=30,
-            )
-            candidates = rag_result["candidates"]
+            candidates = [to_legacy_candidate(item) for item in batch.candidates]
             if normalize_source_mode(source_mode) == "rag_mcp" and weather is not None:
                 candidates = rerank_with_weather(
                     candidates,
@@ -234,16 +258,12 @@ async def _execute_structured_tasks(body: ChatRequest, source_mode: str):
                 candidates = prepare_rag_only_candidates(candidates)
             count = min(max(task.desired_count, 1), 3)
             places.extend(_place(candidate) for candidate in candidates[:count])
-            suffix = "en" if effective_query_language(parsed) == "en" else "ko"
-            sources.extend([
-                f"restaurant_{suffix}",
-                f"restaurant_review_{suffix}",
-                f"restaurant_menu_{suffix}",
-            ])
         else:
-            has_mock = True
-            places.extend(mock_places_for_task(task, lat=body.lat, lng=body.lng))
-            sources.append(f"mock-{task.domain}-agent")
+            count = min(max(task.desired_count, 1), 3)
+            places.extend(
+                search_candidate_to_place(candidate)
+                for candidate in batch.candidates[:count]
+            )
 
     return (
         places,
@@ -351,6 +371,12 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         if visit_date != expected_date:
             raise ValueError(f"{task.task_id}의 visit_date와 day_number가 일치하지 않습니다.")
         candidates: list[RouteCandidate] = []
+        batch = await _search_structured_task(
+            body,
+            task,
+            candidate_count=30 if task.domain == "restaurant" else 5,
+        )
+        has_mock = has_mock or batch.used_mock
         if task.domain == "restaurant":
             slot_time = task.start_time or DOMAIN_DEFAULT_TIMES.get(task.domain, "16:00")
             weather = None
@@ -377,17 +403,7 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                         source="live" if weather.get("available") else "mock",
                         error=weather.get("error"),
                     ))
-            rag_result = await asyncio.to_thread(
-                search_restaurants_structured,
-                parsed,
-                task,
-                current_lat=body.lat,
-                current_lng=body.lng,
-                current_location_name=body.location_name,
-                min_rating=body.min_rating,
-                top_n=30,
-            )
-            ranked = rag_result["candidates"]
+            ranked = [to_legacy_candidate(item) for item in batch.candidates]
             ranked = (
                 rerank_with_weather(ranked, weather, parsed.original_question, source_mode="rag_mcp")
                 if include_weather and weather is not None
@@ -412,18 +428,22 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     payload=wrapped["payload"],
                 ))
         else:
-            has_mock = True
-            for place in mock_places_for_task(task, lat=body.lat, lng=body.lng, candidate_count=5):
+            for candidate in batch.candidates[:5]:
+                place = search_candidate_to_place(candidate)
                 candidate_id = (
-                    f"{task.slot_id or task.task_id}:{task.domain}:{place.source_id}"
+                    f"{task.slot_id or task.task_id}:{task.domain}:{candidate.place_id}"
                 )
                 place_lookup[candidate_id] = place
                 candidates.append(RouteCandidate(
                     candidate_id=candidate_id,
                     domain=task.domain,
-                    place_id=place.source_id,
-                    name=place.name,
-                    payload={"category": place.category, "fallback_reason": place.reason},
+                    place_id=candidate.place_id,
+                    name=candidate.name,
+                    payload={
+                        "category": candidate.category,
+                        "evidence": candidate.evidence[:3],
+                        "fallback_reason": place.reason,
+                    },
                 ))
         if not candidates:
             raise ValueError(f"{task.task_id} 슬롯의 후보를 찾지 못했습니다.")
@@ -555,18 +575,15 @@ async def _multi_task_recommendation_stream(
 
     for task in parsed.tasks:
         group_candidates: list[dict] = []
+        batch = await _search_structured_task(
+            body,
+            task,
+            candidate_count=30 if task.domain == "restaurant" else LLM_CANDIDATE_COUNT,
+        )
+        sources.extend(batch.sources)
+        has_mock = has_mock or batch.used_mock
         if task.domain == "restaurant":
-            rag_result = await asyncio.to_thread(
-                search_restaurants_structured,
-                parsed,
-                task,
-                current_lat=body.lat,
-                current_lng=body.lng,
-                current_location_name=body.location_name,
-                min_rating=body.min_rating,
-                top_n=30,
-            )
-            candidates = rag_result["candidates"]
+            candidates = [to_legacy_candidate(item) for item in batch.candidates]
             if include_weather and weather is not None:
                 candidates = rerank_with_weather(
                     candidates,
@@ -580,34 +597,23 @@ async def _multi_task_recommendation_stream(
                 _restaurant_group_candidate(candidate, include_weather)
                 for candidate in candidates[:LLM_CANDIDATE_COUNT]
             ]
-            suffix = "en" if effective_query_language(parsed) == "en" else "ko"
-            sources.extend([
-                f"restaurant_{suffix}",
-                f"restaurant_review_{suffix}",
-                f"restaurant_menu_{suffix}",
-            ])
         else:
-            has_mock = True
-            mock_places = mock_places_for_task(
-                task,
-                lat=body.lat,
-                lng=body.lng,
-                candidate_count=LLM_CANDIDATE_COUNT,
-            )
             group_candidates = [
                 {
-                    "place_id": place.source_id,
-                    "name": place.name,
+                    "place_id": candidate.place_id,
+                    "name": candidate.name,
                     "payload": {
-                        "category": place.category,
-                        "reason": place.reason,
+                        "category": candidate.category,
+                        "evidence": candidate.evidence[:3],
                     },
-                    "fallback_reason": place.reason,
-                    "raw_place": place,
+                    "fallback_reason": (
+                        str(candidate.attributes.get("reason") or "").strip()
+                        or (candidate.evidence[0] if candidate.evidence else "검색 조건 관련도")
+                    ),
+                    "raw_candidate": candidate,
                 }
-                for place in mock_places
+                for candidate in batch.candidates[:LLM_CANDIDATE_COUNT]
             ]
-            sources.append(f"mock-{task.domain}-agent")
         task_groups.append({
             "task_id": task.task_id,
             "domain": task.domain,
@@ -653,12 +659,11 @@ async def _multi_task_recommendation_stream(
                 ))
                 selected_weather_reasons.extend(raw.get("weather_reasons", []))
             else:
-                place = wrapped["raw_place"].model_copy(deep=True)
-                place.task_id = task_id
-                place.rank = rank
-                place.reason = reason
-                place.selection_reason = reason
-                places.append(place)
+                places.append(search_candidate_to_place(
+                    wrapped["raw_candidate"],
+                    rank=rank,
+                    selection_reason=reason,
+                ))
 
     reasons = [routing_reason, *selected_weather_reasons]
     if has_mock:
@@ -702,16 +707,11 @@ async def _restaurant_stream(
         else body.location_name or "서울"
     )
     if body.parsed_query is not None and structured_task is not None:
-        rag_result = await asyncio.to_thread(
-            search_restaurants_structured,
-            body.parsed_query,
-            structured_task,
-            current_lat=body.lat,
-            current_lng=body.lng,
-            current_location_name=body.location_name,
-            min_rating=body.min_rating,
-            top_n=30,
-        )
+        batch = await _search_structured_task(body, structured_task, candidate_count=30)
+        rag_result = {
+            "candidates": [to_legacy_candidate(item) for item in batch.candidates],
+        }
+        sources = list(batch.sources)
     else:
         rag_result = await asyncio.to_thread(
             search_restaurants,
@@ -722,17 +722,17 @@ async def _restaurant_stream(
             2.0,
             30,
         )
+        suffix = "en" if str(effective_lang).lower().startswith("en") else "ko"
+        sources = [
+            f"restaurant_{suffix}",
+            f"restaurant_review_{suffix}",
+            f"restaurant_menu_{suffix}",
+        ]
     candidates = rag_result["candidates"]
     weather_lat = rag_result.get("origin_lat") or body.lat or SEOUL_CENTER[0]
     weather_lng = rag_result.get("origin_lng") or body.lng or SEOUL_CENTER[1]
     weather: dict | None = None
     tool_results: list[ToolResult] = []
-    suffix = "en" if str(effective_lang).lower().startswith("en") else "ko"
-    sources = [
-        f"restaurant_{suffix}",
-        f"restaurant_review_{suffix}",
-        f"restaurant_menu_{suffix}",
-    ]
     if apply_weather_reranking:
         weather_request = (
             body.parsed_query.weather_request

@@ -13,6 +13,7 @@ def build_domain_search_request(
     longitude: float | None = None,
     current_location_name: str | None = None,
     candidate_count: int = 10,
+    min_rating: float | None = None,
 ) -> DomainSearchRequest:
     filters = effective_task_filters(parsed, task)
     required = list(dict.fromkeys([
@@ -37,6 +38,7 @@ def build_domain_search_request(
         party_size=filters.party_size,
         budget_min_krw=filters.budget_min_krw,
         budget_max_krw=filters.budget_max_krw,
+        min_rating=min_rating,
         required_features=required,
         excluded_features=filters.excluded_features,
         candidate_count=max(candidate_count, task.desired_count),

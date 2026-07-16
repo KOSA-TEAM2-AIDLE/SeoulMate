@@ -29,6 +29,7 @@ class DomainSearchRequest(BaseModel):
     party_size: int | None = None
     budget_min_krw: int | None = None
     budget_max_krw: int | None = None
+    min_rating: float | None = Field(default=None, ge=0, le=5)
     required_features: list[str] = Field(default_factory=list)
     excluded_features: list[str] = Field(default_factory=list)
     candidate_count: int = Field(default=10, ge=1, le=100)

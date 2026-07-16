@@ -210,7 +210,7 @@ class RestaurantSourceModeTests(unittest.IsolatedAsyncioTestCase):
         body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
         with (
             patch(
-                "routers.chat.search_restaurants_structured",
+                "domains.restaurant.search_service.search_restaurants_structured",
                 return_value={"candidates": candidates},
             ),
             patch("routers.chat.generate_recommendation_result", new=capture_result),

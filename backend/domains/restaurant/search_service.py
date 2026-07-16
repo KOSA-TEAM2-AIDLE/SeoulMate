@@ -30,6 +30,7 @@ class RestaurantSearchService:
             current_lat=request.latitude,
             current_lng=request.longitude,
             current_location_name=request.current_location_name,
+            min_rating=request.min_rating,
             top_n=request.candidate_count,
         )
         return [
