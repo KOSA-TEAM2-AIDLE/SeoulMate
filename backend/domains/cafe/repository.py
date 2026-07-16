@@ -67,6 +67,7 @@ class CafeRetrievalResult:
     cafe_hits: tuple[CafeVectorHit, ...]
     review_hits_by_cafe: dict[int, tuple[ReviewVectorHit, ...]]
     cafes: dict[int, CafeRecord]
+    query_vector: tuple[float, ...] = ()
 
 
 class OpenAIQueryEmbedder:
@@ -382,6 +383,7 @@ class CafeRepository:
             cafe_hits=cafe_hits,
             review_hits_by_cafe=review_hits,
             cafes=self.fetch_cafes(candidate_ids, language=normalized_language),
+            query_vector=tuple(vector),
         )
 
 

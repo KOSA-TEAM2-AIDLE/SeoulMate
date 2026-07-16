@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+from domains.cafe.repository import ReviewVectorHit
 from domains.cafe.reranker import RankedCafeCandidate
 from domains.common.models import SearchCandidate
 
@@ -9,11 +12,18 @@ from domains.common.models import SearchCandidate
 def to_search_candidate(
     ranked: RankedCafeCandidate,
     task_id: str,
+    *,
+    supporting_reviews: Sequence[ReviewVectorHit] | None = None,
 ) -> SearchCandidate:
     cafe = ranked.cafe
+    evidence_hits = (
+        tuple(supporting_reviews)
+        if supporting_reviews is not None
+        else ranked.review_hits
+    )
     evidence = [
         hit.content
-        for hit in ranked.review_hits
+        for hit in evidence_hits
         if hit.content
     ]
     if not evidence and cafe.description:
@@ -54,6 +64,9 @@ def to_search_candidate(
             ],
             "review_vector_similarities": [
                 hit.similarity for hit in ranked.review_hits
+            ],
+            "supporting_review_ids": [
+                hit.review_id for hit in evidence_hits
             ],
             "cafe_rrf_score": ranked.cafe_rrf_score,
             "review_rrf_score": ranked.review_rrf_score,

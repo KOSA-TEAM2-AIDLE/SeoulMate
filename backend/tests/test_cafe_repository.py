@@ -96,6 +96,7 @@ class CafeRepositoryTests(unittest.TestCase):
 
         self.assertEqual(["조용한 작업 카페"], embedder.queries)
         self.assertEqual("ko", result.language)
+        self.assertEqual((0.1, 0.2), result.query_vector)
         self.assertEqual([10, 20], [hit.cafe_id for hit in result.cafe_hits])
         self.assertEqual([1, 2], [hit.rank for hit in result.cafe_hits])
         self.assertEqual(3, len(result.review_hits_by_cafe[20]))
