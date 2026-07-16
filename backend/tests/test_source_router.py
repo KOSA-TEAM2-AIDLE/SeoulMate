@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 from routers.chat import _empty_restaurant_message, _restaurant_stream, _stream
 from schemas.chat import ChatRequest
 from schemas.structured_query import StructuredTravelQuery
-from services.intent import classify_intent
+from models.intent.classifier import classify_intent
 from services.source_router import SourceDecision, mode_to_intent, normalize_source_mode
 from services.weather_mcp_client import get_weather_via_mcp
 

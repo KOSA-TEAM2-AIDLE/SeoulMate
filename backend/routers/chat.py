@@ -36,7 +36,7 @@ from schemas.route_planner import (
     RouteSlotCandidates,
     TripPeriod,
 )
-from services.intent import classify_intent
+from models.intent.classifier import classify_intent
 from services.llm import (
     FINAL_RECOMMENDATION_COUNT,
     GROUP_SELECTION_COUNT,

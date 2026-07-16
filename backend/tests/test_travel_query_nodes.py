@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from langchain_core.runnables import RunnableLambda
 
-from application.travel_query.extraction import TravelIntentExtractor
+from models.intent.travel_query import TravelIntentExtractor
 from application.travel_query.required_info import (
     ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE,
     check_required_information,

@@ -12,7 +12,7 @@ from application.travel_query.checkpoint import (
     create_development_checkpointer,
 )
 from application.travel_query.builder import build_structured_query
-from application.travel_query.extraction import (
+from models.intent.travel_query import (
     IntentExtraction,
     TravelIntentExtractor,
 )

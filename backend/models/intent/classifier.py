@@ -2,6 +2,8 @@
 
 분류 우선순위: route_multi > route_day > mcp/rag/both > LLM 폴백(chitchat)
 """
+from __future__ import annotations
+
 import re
 
 from core.config import OPENAI_API_KEY

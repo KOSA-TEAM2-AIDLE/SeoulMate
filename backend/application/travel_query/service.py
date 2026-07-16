@@ -13,7 +13,7 @@ from langgraph.types import Command
 from application.recommendation.domain_dispatcher import (
     ReadyDomainAgentDispatcher,
 )
-from application.travel_query.extraction import create_intent_extraction_chain
+from models.intent.travel_query import create_intent_extraction_chain
 from application.travel_query.graph import (
     build_initial_state,
     build_travel_query_graph,

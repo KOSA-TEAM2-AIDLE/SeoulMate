@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from core.config import OPENAI_API_KEY, OPENAI_CHAT_MODEL
 from schemas.chat import ChatMessage
-from services.intent import classify_intent
+from models.intent.classifier import classify_intent
 
 
 SourceMode = Literal["RAG_ONLY", "RAG_MCP", "MCP_ONLY", "CHITCHAT"]
