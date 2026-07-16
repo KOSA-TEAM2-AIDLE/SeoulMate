@@ -920,9 +920,8 @@ async def _stream(body: ChatRequest):
                 intent = PARSED_INTENT_TO_API_INTENT[parsed_intent]
             else:
                 intent = mode_to_intent(canonical_mode)
-            restaurant_tasks = [task for task in parsed.tasks if task.domain == "restaurant"]
-            if parsed_intent == "single_place_recommendation" and restaurant_tasks:
-                structured_task = restaurant_tasks[0]
+            if parsed_intent == "single_place_recommendation" and parsed.tasks:
+                structured_task = parsed.tasks[0]
             decision = None
         elif body.parsed_intent:
             if body.parsed_intent in PARSED_INTENT_TO_API_INTENT:
@@ -975,7 +974,9 @@ async def _stream(body: ChatRequest):
                 else body.source_mode or decision.mode
             )
             if body.parsed_query is not None and (
-                structured_task is None or len(body.parsed_query.tasks) > 1
+                structured_task is None
+                or len(body.parsed_query.tasks) > 1
+                or structured_task.domain != "restaurant"
             ):
                 async for event in _multi_task_recommendation_stream(
                     body,

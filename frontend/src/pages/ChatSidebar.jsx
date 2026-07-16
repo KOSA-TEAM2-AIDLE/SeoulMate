@@ -55,9 +55,8 @@ export default function ChatSidebar() {
   const {
     setTravelPath,
     setRecommendList,
-    setDay,
     setAllDay,
-    day,
+    selectedDay,
     all_day
   } = useTravelStore();
 
@@ -123,11 +122,8 @@ export default function ChatSidebar() {
         onToken: (token) => appendAssistantToken(assistantMessage.id, token),
         onDone: (payload) => {
           if (payload && payload.data) {
-            const { day: nextDay, allDay: nextAllDay, travelPath, recommendList } = payload.data;
+            const { allDay: nextAllDay, travelPath, recommendList } = payload.data;
 
-            if (nextDay !== undefined && nextDay !== null) {
-              setDay(nextDay);
-            }
             if (nextAllDay !== undefined && nextAllDay !== null) {
               setAllDay(nextAllDay);
             }
@@ -174,7 +170,7 @@ export default function ChatSidebar() {
           <div>
             <h2 className="font-bold text-blue-600">{t.headerTitle}</h2>
             <p className="text-[14px] font-normal text-slate-500">
-              {t.headerDesc(day, all_day)}
+              {t.headerDesc(selectedDay, all_day)}
             </p>
           </div>
         </div>

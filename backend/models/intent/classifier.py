@@ -16,8 +16,9 @@ ROUTE_DAY_KEYWORDS = [
 ]
 RAG_KEYWORDS = [
     "추천", "조용", "분위기", "인스타", "데이트", "이색", "맛집",
-    "가기 좋은", "식당", "음식", "먹을", "먹기",
+    "가기 좋은", "식당", "음식", "먹을", "먹기", "숙소", "호텔", "숙박",
     "recommend", "quiet", "cozy", "romantic", "cafe", "restaurant", "food", "good place",
+    "hotel", "accommodation", "stay",
 ]
 MCP_KEYWORDS = [
     "혼잡", "붐빔", "날씨", "비", "기온", "지하철", "교통", "행사", "축제", "지금", "오늘",
