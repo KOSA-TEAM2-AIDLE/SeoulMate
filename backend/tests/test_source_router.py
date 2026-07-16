@@ -116,6 +116,7 @@ class RestaurantSourceModeTests(unittest.IsolatedAsyncioTestCase):
             parsed_intent="single_place_recommendation",
         )
         with (
+            patch("routers.chat.resolve_travel_query", new_callable=AsyncMock, return_value=(body, None)),
             patch("routers.chat.classify_intent") as legacy_intent,
             patch("routers.chat.decide_source_mode", new_callable=AsyncMock) as router_gpt,
             patch("routers.chat._restaurant_stream", _fake_restaurant_stream),

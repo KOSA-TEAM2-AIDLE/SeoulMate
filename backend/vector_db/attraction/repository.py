@@ -1,4 +1,6 @@
 import json
+from datetime import date
+from typing import Any
 
 import psycopg2
 
@@ -44,3 +46,88 @@ class AttractionVectorRepository:
                 """,
                 rows,
             )
+
+    def search_profiles(
+        self,
+        vector: list[float],
+        *,
+        language: str,
+        as_of: date,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if limit <= 0:
+            raise ValueError("limit은 양수여야 합니다.")
+        sql = """
+            WITH active_profiles AS (
+                SELECT document_id, content, metadata, embedding
+                FROM attraction_vector_documents
+                WHERE metadata->>'lang' = %s
+                  AND metadata->>'kind' IN ('attraction', 'event')
+                  AND (
+                        metadata->>'kind' = 'attraction'
+                        OR metadata->>'end_date' = ''
+                        OR metadata->>'end_date' >= %s
+                      )
+            )
+            SELECT document_id, content, metadata, embedding <=> %s::vector AS distance
+            FROM active_profiles
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+        """
+        vector_json = json.dumps(vector)
+        with self._connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(sql, (language, as_of.isoformat(), vector_json, vector_json, limit))
+            return [self._search_row(row) for row in cursor.fetchall()]
+
+    def search_reviews(
+        self,
+        vector: list[float],
+        *,
+        language: str,
+        place_keys: list[str],
+        limit_per_place: int,
+    ) -> list[dict[str, Any]]:
+        if not place_keys:
+            return []
+        if limit_per_place <= 0:
+            raise ValueError("limit_per_place는 양수여야 합니다.")
+        sql = """
+            WITH selected_reviews AS (
+                SELECT document_id, content, metadata, embedding
+                FROM attraction_vector_documents
+                WHERE metadata->>'lang' = %s
+                  AND metadata->>'kind' = 'review'
+                  AND metadata->>'place_key' = ANY(%s)
+            ), ranked_reviews AS (
+                SELECT
+                    document_id,
+                    content,
+                    metadata,
+                    embedding <=> %s::vector AS distance,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY metadata->>'place_key'
+                        ORDER BY embedding <=> %s::vector
+                    ) AS place_rank
+                FROM selected_reviews
+            )
+            SELECT document_id, content, metadata, distance
+            FROM ranked_reviews
+            WHERE place_rank <= %s
+            ORDER BY distance
+        """
+        vector_json = json.dumps(vector)
+        with self._connection_factory() as connection, connection.cursor() as cursor:
+            cursor.execute(sql, (language, place_keys, vector_json, vector_json, limit_per_place))
+            return [self._search_row(row) for row in cursor.fetchall()]
+
+    @staticmethod
+    def _search_row(row: tuple[Any, Any, Any, Any]) -> dict[str, Any]:
+        document_id, content, metadata, distance = row
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        return {
+            "document_id": document_id,
+            "content": content,
+            "metadata": metadata,
+            "distance": float(distance),
+        }

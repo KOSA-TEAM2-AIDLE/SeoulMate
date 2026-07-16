@@ -28,7 +28,7 @@ class TargetArchitectureTests(unittest.IsolatedAsyncioTestCase):
             build_default_domain_registry().status(),
             {
                 "accommodation": False,
-                "attraction": False,
+                "attraction": True,
                 "cafe": False,
                 "restaurant": True,
                 "storage_locker": False,

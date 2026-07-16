@@ -49,6 +49,7 @@ export default function ChatSidebar() {
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [travelQueryThreadId, setTravelQueryThreadId] = useState(null);
   const messageEndRef = useRef(null);
 
   const {
@@ -115,6 +116,10 @@ export default function ChatSidebar() {
         message: trimmedMessage,
         history: toChatHistory(messages),
         lang: lang,
+        travelQueryThreadId,
+        onMeta: (payload) => {
+          setTravelQueryThreadId(payload.continuation?.thread_id ?? null);
+        },
         onToken: (token) => appendAssistantToken(assistantMessage.id, token),
         onDone: (payload) => {
           if (payload && payload.data) {

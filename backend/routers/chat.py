@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from api.dependencies import domain_registry
 from application.recommendation.domain_executor import execute_domain_search
+from application.travel_query.service import TravelQueryService, get_travel_query_service
 from application.response.frontend_response_mapper import (
     empty_frontend_response,
     recommendation_frontend_response,
@@ -32,6 +33,7 @@ from schemas.chat import (
     DayPlan,
     TimeSlot,
 )
+from schemas.travel_query_api import TravelQueryStartRequest
 from schemas.common import Place, ToolResult
 from schemas.route_planner import (
     RouteCandidate,
@@ -849,8 +851,48 @@ def _with_resolved_message(body: ChatRequest) -> ChatRequest:
     )
 
 
+async def resolve_travel_query(
+    body: ChatRequest,
+    *,
+    service: TravelQueryService | None = None,
+):
+    """원문 채팅을 StructuredTravelQuery로 변환하거나 HITL thread를 재개한다."""
+    if body.parsed_query is not None:
+        return body, None
+    service = service or get_travel_query_service()
+    if body.travel_query_thread_id:
+        response = await service.resume(body.travel_query_thread_id, body.message)
+    else:
+        language = "en" if body.lang.lower().startswith("en") else "ko"
+        response = await service.start(TravelQueryStartRequest(
+            message=body.message,
+            language=language,
+            lat=body.lat,
+            lng=body.lng,
+            location_name=body.location_name,
+        ))
+    if response.status == "ready":
+        return body.model_copy(update={"parsed_query": response.structured_query}), None
+    return None, response
+
+
 async def _stream(body: ChatRequest):
     try:
+        body, travel_response = await resolve_travel_query(body)
+        if travel_response is not None:
+            continuation = {
+                "thread_id": travel_response.thread_id,
+                "missing_fields": travel_response.missing_fields,
+            } if travel_response.status == "collecting" else None
+            yield _sse(ChatMetaPlaces(
+                intent="chitchat",
+                sources=["travel-query"],
+                continuation=continuation,
+                result=empty_frontend_response("general"),
+            ).model_dump())
+            yield _sse(ChatToken(text=travel_response.assistant_message or "요청을 처리할 수 없습니다.").model_dump())
+            yield _sse(ChatDone().model_dump())
+            return
         body = _with_resolved_message(body)
         if body.parsed_intent == "modify_route" or (
             body.parsed_query is not None
