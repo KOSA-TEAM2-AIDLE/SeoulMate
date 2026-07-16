@@ -128,7 +128,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         parsed = query_with_tasks(tasks=[cafe_task()])
         body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
         with (
-            patch("routers.chat.search_restaurants_structured") as restaurant_search,
+            patch("domains.restaurant.search_service.search_restaurants_structured") as restaurant_search,
             patch("routers.chat.generate_grouped_recommendation_result", fake_grouped_result),
         ):
             events = [event async for event in _stream(body)]
@@ -144,7 +144,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         parsed = query_with_tasks(tasks=[restaurant_task()])
         body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
         with (
-            patch("routers.chat.search_restaurants_structured", return_value=restaurant_result()),
+            patch("domains.restaurant.search_service.search_restaurants_structured", return_value=restaurant_result()),
             patch(
                 "routers.chat.get_weather_via_mcp",
                 new_callable=AsyncMock,
@@ -172,7 +172,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         )
         weather = {"available": True, "condition": "clear", "temperature_c": 24.0}
         with (
-            patch("routers.chat.search_restaurants_structured", return_value=restaurant_result()),
+            patch("domains.restaurant.search_service.search_restaurants_structured", return_value=restaurant_result()),
             patch("routers.chat.get_weather_via_mcp", new_callable=AsyncMock, return_value=weather) as mcp,
             patch("routers.chat.generate_grouped_recommendation_result", fake_grouped_result),
         ):
@@ -202,7 +202,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         )
         weather = {"available": True, "condition": "clear", "temperature_c": 24.0}
         with (
-            patch("routers.chat.search_restaurants_structured", return_value=restaurant_result()),
+            patch("domains.restaurant.search_service.search_restaurants_structured", return_value=restaurant_result()),
             patch(
                 "routers.chat.geocode_kakao",
                 return_value=(37.5569, 126.9238, "홍대입구역"),
@@ -241,7 +241,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
         with (
             patch(
-                "routers.chat.search_restaurants_structured",
+                "domains.restaurant.search_service.search_restaurants_structured",
                 return_value={"candidates": restaurants},
             ),
             patch("routers.chat.generate_grouped_recommendation_result", capture),
@@ -321,7 +321,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
             location_name="홍대",
         )
         with (
-            patch("routers.chat.search_restaurants_structured", return_value=restaurant_result()),
+            patch("domains.restaurant.search_service.search_restaurants_structured", return_value=restaurant_result()),
             patch(
                 "routers.chat.get_weather_via_mcp",
                 new_callable=AsyncMock,
@@ -406,7 +406,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         })
         body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
         with (
-            patch("routers.chat.search_restaurants_structured", return_value=restaurant_result()),
+            patch("domains.restaurant.search_service.search_restaurants_structured", return_value=restaurant_result()),
             patch("routers.chat.generate_route_plan", side_effect=fake_route_plan),
             patch(
                 "routers.chat.get_weather_via_mcp",

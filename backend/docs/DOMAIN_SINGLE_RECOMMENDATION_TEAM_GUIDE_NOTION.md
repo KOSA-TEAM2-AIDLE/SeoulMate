@@ -353,19 +353,35 @@ GPT가 생성해도 되는 값은 원칙적으로 `selectionReason`과 답변 �
 
 ## 10. 현재 백엔드 연결 시 반드시 확인할 점
 
-현재 `/chat`의 비식당 도메인은 `mock_places_for_task()`를 사용하는 과도기 코드가 남아 있다. 팀 검색기 파일만 구현하면 자동으로 실제 응답으로 바뀌지 않는다.
+`/chat`의 단일 추천·복합 추천·당일/다일 루트는 모두 Domain Registry를 통해 검색한다. 채팅 라우터가 `mock_places_for_task()`나 식당 Structured RAG를 직접 호출하지 않는다.
 
-백엔드 통합 담당자는 다음 작업을 함께 해야 한다.
+팀 검색기가 준비되면 다음 작업만 확인한다.
 
 1. 팀 검색기의 `implemented=True` 확인
-2. `build_default_domain_registry()`에서 해당 서비스 등록 확인
-3. `/chat`의 비식당 `mock_places_for_task()` 호출을 `RecommendationOrchestrator` 또는 Registry 검색 호출로 교체
-4. `SearchCandidate`를 내부 `Place`로 변환하는 공통 매퍼 연결
-5. Task별 후보 10개와 최종 3개가 섞이지 않는지 확인
-6. `task_id`, `domain`, `place_id`가 끝까지 유지되는지 확인
-7. 프론트 `recommendList[].id`가 상세 API에서 실제 조회되는지 확인
+2. `build_default_domain_registry()`에 실제 서비스 객체 등록
+3. `SearchCandidate.place_id`에 프론트 상세 API가 조회할 실제 도메인 ID 입력
+4. Task별 후보 10개와 최종 3개가 섞이지 않는지 확인
+5. `task_id`, `domain`, `place_id`가 끝까지 유지되는지 확인
+6. 프론트 `recommendList[].id`가 상세 API에서 실제 조회되는지 확인
 
-Mock 제거 전에는 실제 팀 검색기와 임시 후보가 동시에 노출되지 않도록 한다.
+공통 실행기는 `DomainNotImplementedError`가 발생한 미구현 스켈레톤에만 명시적 mock 후보를 사용한다. 실제 검색기가 빈 목록을 반환하면 빈 검색 결과로 처리하고, DB/API 장애 예외는 mock으로 숨기지 않는다. 따라서 실제 서비스로 교체하면 별도의 채팅 라우터 수정 없이 자동으로 실제 후보가 사용된다.
+
+```python
+# domains/common/registry.py의 build_default_domain_registry()
+registry.register(CafeSearchService())
+```
+
+실행 경로는 다음과 같다.
+
+```text
+Structured Query Task
+→ DomainSearchRequest 생성
+→ Domain Registry에서 서비스 선택
+→ SearchCandidate 반환
+→ 공통 Place 매퍼
+→ GPT 최종 3개 선택 또는 Route Planner
+→ recommendList / travelPath
+```
 
 ---
 
@@ -445,7 +461,7 @@ return []
 5. 모든 후보에 실제 `place_id`, `task_id`, domain이 있다.
 6. 근거 없는 상세 정보와 후보를 생성하지 않는다.
 7. Registry와 `/chat` 실행 경로에 연결됐다.
-8. Mock 후보가 제거됐다.
+8. 해당 도메인 응답에서 `source_kind=live`이며 mock 출처가 없다.
 9. 최종 `recommendList`가 최대 3개다.
 10. 프론트가 `id`로 상세 API를 정상 호출할 수 있다.
 

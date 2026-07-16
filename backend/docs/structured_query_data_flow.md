@@ -52,7 +52,7 @@ flowchart TD
 | `source_mode` | 있으면 그대로 실행 모드로 사용 | MCP 호출 여부 결정 | 날씨 payload 포함 여부 결정 | 없으면 날짜·날씨 신호·Task 유무로 코드가 파생한다. |
 | `original_question` | 반경·시간·예산·평점·현재 영업의 명시 여부 확인 | `weather_request`가 없을 때 MCP query | `user_query`로 전달 | GPT가 만든 숫자 필터를 무조건 신뢰하지 않기 위한 원문 근거이기도 하다. |
 | `normalized_question` | source mode 파생의 보조 텍스트 | 직접 사용하지 않음 | `structured_request`에 전달 | 최종 GPT가 정규화된 요청 목적을 함께 볼 수 있다. |
-| `tasks` | 도메인별 검색 실행 | RAG+MCP 여부에 간접 영향 | 선택한 Task를 전달 | 식당은 실제 RAG, 나머지는 현재 mock agent다. |
+| `tasks` | Domain Registry를 통한 도메인별 검색 실행 | RAG+MCP 여부에 간접 영향 | 선택한 Task를 전달 | 식당은 실제 RAG, 나머지는 등록된 팀 검색기를 사용하며 미구현 스켈레톤만 명시적 mock을 사용한다. |
 | `filters` | 위치·시간·가격·시설 하드 필터 | 목적지의 1순위 위치 | 전체 필터를 `structured_request.filters`로 전달 | 아래 필드별 설명 참고. |
 | `weather_request` | 날씨 메뉴 feature 로딩 여부에 간접 영향 | query·location fallback·target date/time 사용 | 정규화된 `weather` 결과로 전달 | 구조화 날짜·시간은 자연어 query보다 우선한다. |
 | `general_response_instruction` | 미사용 | 미사용 | 일반 답변 GPT의 보조 입력 | 시스템 지시가 아니라 상위 파서가 만든 응답 목적 힌트로만 취급한다. |
@@ -171,7 +171,7 @@ RAG_ONLY에서는 MCP를 호출하지 않고, 전체 메뉴 날씨 feature도 �
 
 - 루트 편집: 백엔드를 다시 호출하지 않고 프론트 Zustand에서 삭제하고, 단일 추천 장소를 사용자가 선택한 Day와 위치에 삽입한다.
 - `party_size`: 단체석 데이터가 충분하지 않아 하드 필터로 사용하지 않는다.
-- multi-day route: `day_number`, `visit_date`, `start_time` 기준으로 날짜별 배치한다. 비식당 도메인은 아직 mock이다.
+- multi-day route: `day_number`, `visit_date`, `start_time` 기준으로 날짜별 배치한다. 모든 도메인은 동일한 Registry 실행 경로를 사용한다.
 - 카페·숙박·문화시설·기타: 팀 Agent가 연결되기 전까지 고정 후보다.
 - 복합 Task 최종 문장: mock 도메인이 포함된 동안은 사실을 만들지 않기 위해 일반 GPT 추천문 대신 명시적 임시 안내를 반환한다.
 - 지원되지 않는 `required_features/accessibility/transportation` 문자열은 DB 필드로 추측 매핑하지 않는다.
