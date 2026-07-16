@@ -31,6 +31,44 @@ def _base_state() -> dict:
 
 
 class TravelIntentExtractorTests(unittest.TestCase):
+    def test_previous_query_and_history_reach_extraction_chain(self) -> None:
+        captured: dict = {}
+
+        def followup_extraction(inputs: dict) -> dict:
+            captured.update(inputs)
+            return {
+                "language": "ko",
+                "intent": "single_place_recommendation",
+                "normalized_question": "강남에서 주차 가능한 식당 추천",
+                "location": "강남",
+                "requested_domains": ["restaurant"],
+                "required_features": ["주차"],
+            }
+
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "그중 주차되는 곳만 보여줘",
+                "conversation_history": [
+                    {"role": "user", "content": "강남 식당 추천해줘"},
+                    {"role": "assistant", "content": "세 곳을 추천했습니다."},
+                ],
+                "previous_structured_query": {
+                    "intent": "single_place_recommendation",
+                    "filters": {"location": "강남"},
+                },
+            }
+        )
+
+        result = asyncio.run(
+            TravelIntentExtractor(RunnableLambda(followup_extraction))(state)
+        )
+
+        self.assertIn("강남 식당 추천해줘", captured["conversation_history"])
+        self.assertIn("\"location\": \"강남\"", captured["previous_structured_query"])
+        self.assertEqual("강남", result["collected"]["location"])
+        self.assertEqual(["주차"], result["collected"]["required_features"])
+
     def test_explicit_slots_become_domains_and_visit_count(self) -> None:
         chain = RunnableLambda(
             lambda _: {

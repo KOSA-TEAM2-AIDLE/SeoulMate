@@ -147,6 +147,26 @@ class TravelQueryGraphTests(unittest.TestCase):
                 datetime(2026, 7, 15, 12, 0),
             )
 
+    def test_initial_state_keeps_previous_recommendation_context(self) -> None:
+        previous_query = {
+            "intent": "single_place_recommendation",
+            "filters": {"location": "강남"},
+        }
+        history = [
+            {"role": "user", "content": "강남 식당 추천해줘"},
+            {"role": "assistant", "content": "식당 세 곳을 추천했습니다."},
+        ]
+
+        state = build_initial_state(
+            "그중 주차되는 곳만 보여줘",
+            REFERENCE_AT,
+            conversation_history=history,
+            previous_structured_query=previous_query,
+        )
+
+        self.assertEqual(history, state["conversation_history"])
+        self.assertEqual(previous_query, state["previous_structured_query"])
+
 
 if __name__ == "__main__":
     unittest.main()
