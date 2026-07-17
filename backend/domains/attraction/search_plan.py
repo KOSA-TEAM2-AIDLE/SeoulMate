@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from domains.attraction.taxonomy import categories_for_text
 from domains.common.models import DomainSearchRequest
@@ -19,9 +20,17 @@ class AttractionSearchPlan:
 
 
 def build_attraction_search_plan(request: DomainSearchRequest) -> AttractionSearchPlan:
-    primary, secondary = categories_for_text([request.search_query, *request.themes])
+    target_query = request.search_query
+    if request.location:
+        target_query = re.sub(
+            re.escape(request.location),
+            " ",
+            target_query,
+            flags=re.IGNORECASE,
+        )
+    primary, secondary = categories_for_text([target_query, *request.themes])
     return AttractionSearchPlan(
-        query_text=request.search_query,
+        query_text=target_query,
         language=request.language,
         primary_categories=primary,
         secondary_categories=secondary,

@@ -7,6 +7,7 @@ from typing import Any
 
 from domains.attraction.answer_models import (
     AttractionAnswerInput,
+    AttractionConstraintEvidence,
     AttractionEvidenceCandidate,
 )
 from domains.attraction.value_normalization import (
@@ -89,6 +90,8 @@ def _to_evidence(
         event_start_date=start_date if kind == "event" else None,
         event_end_date=end_date if kind == "event" else None,
         congestion=_congestion_evidence(candidate.signals),
+        weather=_weather_evidence(candidate.signals),
+        constraints=_constraint_evidence(candidate.signals),
     )
 
 
@@ -127,6 +130,40 @@ def _congestion_evidence(signals: dict[str, Any]) -> str | None:
         value = optional_text(signals.get(key))
         if value is not None:
             parts.append(f"{label}={value}")
+    return "; ".join(parts) or None
+
+
+def _constraint_evidence(
+    signals: dict[str, Any],
+) -> list[AttractionConstraintEvidence]:
+    raw_items = signals.get("constraint_assessments")
+    if not isinstance(raw_items, list):
+        return []
+    constraints: list[AttractionConstraintEvidence] = []
+    for raw in raw_items:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            constraints.append(AttractionConstraintEvidence.model_validate(raw))
+        except ValueError:
+            continue
+    return constraints
+
+
+def _weather_evidence(signals: dict[str, Any]) -> str | None:
+    if signals.get("weather_available") is not True:
+        return None
+    parts = []
+    for label, key in (
+        ("condition", "weather_condition"),
+        ("temperature_c", "weather_temperature_c"),
+    ):
+        value = optional_text(signals.get(key))
+        if value is not None:
+            parts.append(f"{label}={value}")
+    reasons = signals.get("weather_reasons")
+    if isinstance(reasons, list):
+        parts.extend(str(reason) for reason in reasons if optional_text(reason))
     return "; ".join(parts) or None
 
 

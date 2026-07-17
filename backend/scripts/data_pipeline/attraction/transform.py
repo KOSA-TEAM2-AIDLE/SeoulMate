@@ -17,8 +17,9 @@ def _parse_date(value: object) -> date | None:
     text = _text(value)
     if not text:
         return None
+    normalized = text[:10].replace(".", "-").replace("/", "-")
     try:
-        return date.fromisoformat(text[:10])
+        return date.fromisoformat(normalized)
     except ValueError:
         return None
 
@@ -78,6 +79,7 @@ def classify_and_filter_rows(rows: Iterable[dict[str, object]], *, as_of: date) 
             latitude=_number(raw.get("latitude")), longitude=_number(raw.get("longitude")),
             hours=_text(raw.get("use_time")), fee=_text(raw.get("usage_fee")),
             tags=_text(raw.get("tags")), homepage_url=_text(raw.get("homepage_url")),
+            image_url=_text(raw.get("main_image_url")),
             start_date=start_date, end_date=end_date,
         )
         (events if kind == "event" else attractions).append(place)

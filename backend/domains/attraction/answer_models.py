@@ -7,6 +7,18 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from core.config import settings
 
 
+class AttractionConstraintEvidence(BaseModel):
+    """구조화된 조건과 후보 문서의 일치 근거."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_text: str = Field(min_length=1)
+    normalized_text: str = Field(min_length=1)
+    kind: str = Field(pattern="^(required|excluded)$")
+    status: str = Field(pattern="^(match|conflict|unknown)$")
+    evidence: list[str] = Field(default_factory=list)
+
+
 class AttractionEvidenceCandidate(BaseModel):
     """DSPy에 노출해도 되는 검증된 후보 근거."""
 
@@ -22,6 +34,8 @@ class AttractionEvidenceCandidate(BaseModel):
     event_start_date: date | None = None
     event_end_date: date | None = None
     congestion: str | None = None
+    weather: str | None = None
+    constraints: list[AttractionConstraintEvidence] = Field(default_factory=list)
 
 
 class AttractionAnswerInput(BaseModel):
@@ -82,6 +96,7 @@ class AttractionAnswerResult(BaseModel):
 __all__ = [
     "AttractionAnswerInput",
     "AttractionAnswerResult",
+    "AttractionConstraintEvidence",
     "AttractionEvidenceCandidate",
     "AttractionSelection",
 ]

@@ -7,6 +7,7 @@ from domains.attraction.congestion_reranker import AttractionCongestionReranker
 from domains.attraction.recommendation_pipeline import (
     AttractionRecommendationPipeline,
 )
+from domains.attraction.weather_reranker import AttractionWeatherReranker
 from schemas.travel_query_api import (
     DomainAgentDispatchResult,
     TravelQueryApiResponse,
@@ -71,6 +72,10 @@ class AttractionAgent:
             results.append(await self._pipeline.recommend(
                 request,
                 use_congestion=use_congestion,
+                use_weather=AttractionWeatherReranker.should_use_weather(
+                    query.original_question,
+                    has_visit_date=(task.visit_date or filters.start_date) is not None,
+                ),
             ))
         return DomainAgentDispatchResult(
             domain=self.domain,

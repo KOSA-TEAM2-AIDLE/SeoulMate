@@ -155,21 +155,24 @@ def _custom_task_result(
         if len(selections) == wanted:
             break
 
-    for candidate in pool:
-        if len(selections) == wanted:
-            break
-        place_id = str(candidate["place_id"])
-        if place_id in seen:
-            continue
-        repaired = True
-        selections.append({
-            "candidate": candidate,
-            "selection_reason": (
-                optional_text(candidate.get("fallback_reason"))
-                or "요청 조건과 검색 순위를 종합해 선정했습니다."
-            ),
-        })
-        seen.add(place_id)
+    # 관광 전용 Selector는 0..limit를 정상 결과로 반환한다.
+    # 의도적으로 빈 선택을 검색 상위 후보로 다시 채우지 않는다.
+    if str(group["domain"]) != "attraction":
+        for candidate in pool:
+            if len(selections) == wanted:
+                break
+            place_id = str(candidate["place_id"])
+            if place_id in seen:
+                continue
+            repaired = True
+            selections.append({
+                "candidate": candidate,
+                "selection_reason": (
+                    optional_text(candidate.get("fallback_reason"))
+                    or "요청 조건과 검색 순위를 종합해 선정했습니다."
+                ),
+            })
+            seen.add(place_id)
 
     return ({
         "task_id": str(group["task_id"]),

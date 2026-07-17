@@ -38,9 +38,10 @@ class AttractionSelectionService:
             key=lambda candidate: candidate.final_score,
             reverse=True,
         )[:10]
+        question = _original_question(request)
         try:
             answer = await self._answer_generator.generate(
-                question=request.search_query,
+                question=question,
                 language=request.language,
                 location=request.location or request.current_location_name,
                 themes=request.themes,
@@ -64,7 +65,7 @@ class AttractionSelectionService:
         selected_ids = [selection.place_id for selection in answer.selections]
         allowed_ids = {candidate.place_id for candidate in candidates}
         return (
-            len(selected_ids) == expected_count
+            len(selected_ids) <= expected_count
             and len(selected_ids) == len(set(selected_ids))
             and all(place_id in allowed_ids for place_id in selected_ids)
         )
@@ -75,7 +76,7 @@ class AttractionSelectionService:
         candidates: list[SearchCandidate],
     ) -> AttractionAnswerResult:
         answer_input = build_attraction_answer_input(
-            question=request.search_query,
+            question=_original_question(request),
             language=request.language,
             location=request.location or request.current_location_name,
             themes=request.themes,
@@ -141,6 +142,19 @@ class AttractionSelectionService:
             ],
             used_fallback=True,
         )
+
+
+def _original_question(request: DomainSearchRequest) -> str:
+    parsed_query = request.context.get("parsed_query")
+    return (
+        getattr(parsed_query, "original_question", None)
+        or (
+            parsed_query.get("original_question")
+            if isinstance(parsed_query, dict)
+            else None
+        )
+        or request.search_query
+    )
 
 
 __all__ = ["AttractionSelectionService"]

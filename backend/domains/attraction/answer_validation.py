@@ -44,8 +44,8 @@ def validate_attraction_prediction(
             settings.attraction_recommendation_limit,
             len(answer_input.candidates),
         )
-        if len(selected_ids) != expected_count:
-            raise ValueError("선택 개수가 올바르지 않습니다.")
+        if len(selected_ids) > expected_count:
+            raise ValueError("선택 개수가 최대치를 넘었습니다.")
         if len(selected_ids) != len(set(selected_ids)):
             raise ValueError("선택 ID가 중복됩니다.")
 
