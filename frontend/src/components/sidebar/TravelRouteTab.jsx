@@ -24,14 +24,14 @@ export default function TravelRouteTab({ showToast }) {
             <button
                 type="button"
                 onClick={handleSavePDF}
-                className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+                className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
             >
               {t.saveBtn}
             </button>
             <button
                 type="button"
                 onClick={handleSharePDF}
-                className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+                className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
             >
               {t.shareBtn}
             </button>
