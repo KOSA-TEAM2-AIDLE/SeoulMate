@@ -101,7 +101,11 @@ conversation_history와 previous_structured_query는 이전 추천 문맥이다.
 당일 루트에서 방문 종류를 명시했다면 explicit_visit_count에 실제 슬롯 수를 넣는다.
 당일 루트의 강도 선택은 relaxed=3곳, normal=4곳, packed=5곳으로 매핑한다.
 다일 루트의 target_places_per_day는 정확한 전체 검증값으로 만들지 않는다.
-날씨를 requested_domains에 넣지 않는다.""",
+날씨를 requested_domains에 넣지 않는다.
+술집·바·펍·포차·호프·이자카야·와인바·요리주점 등 음주와 식사를 함께 하는
+업종은 restaurant 도메인으로 분류한다(etc가 아니다).
+requested_domains/requested_slots의 domain은 restaurant·cafe·accommodation·
+attraction 중 하나를 우선 쓰고, etc는 이 네 가지에 도저히 해당하지 않을 때만 쓴다.""",
         ),
         (
             "human",
