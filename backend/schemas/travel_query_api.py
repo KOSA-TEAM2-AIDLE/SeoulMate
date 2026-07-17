@@ -67,6 +67,20 @@ class DomainAgentDispatchResult(BaseModel):
     assistant_message: str
 
 
+class TravelQueryExecutionContext(BaseModel):
+    """도메인 실행에만 쓰고 API JSON에는 노출하지 않는 요청 문맥."""
+
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    location_name: str | None = None
+
+    @model_validator(mode="after")
+    def validate_coordinates(self) -> Self:
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("실행 컨텍스트의 위도와 경도는 함께 필요합니다.")
+        return self
+
+
 class TravelQueryApiResponse(HumanInTheLoopResponse):
     thread_id: str = Field(min_length=1)
     current_latitude: float | None = Field(default=None, ge=-90, le=90)

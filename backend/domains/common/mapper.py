@@ -40,6 +40,9 @@ def search_candidate_to_place(
         name=candidate.name,
         category=candidate.category,
         score=float(candidate.final_score),
+        # 관광 Context Enricher가 MCP 결과를 signals에 보관한다. 공통 Place에도
+        # 전달해야 프론트가 다른 도메인과 동일하게 혼잡도 상태를 표시할 수 있다.
+        congestion=candidate.signals.get("congestion_level"),
         reason=reason,
         rank=rank,
         selection_reason=selection_reason,

@@ -1,0 +1,20 @@
+{
+  "train_cases": 30,
+  "dev_cases": 10,
+  "test_cases": 10,
+  "blind_cases": 20,
+  "num_candidates": 4,
+  "num_trials": 3,
+  "auto": null,
+  "minibatch": false,
+  "max_bootstrapped_demos": 0,
+  "max_labeled_demos": 0,
+  "num_threads": 1,
+  "seed": 42,
+  "dataset_fingerprint": "4091c80f1174f2069e0dd51fb0a36fc507fc02e9a0a9a73c193da781d84d11bb",
+  "dspy_version": "3.2.1",
+  "model": "openai/gpt-4o-mini",
+  "temperature": 0.0,
+  "max_tokens": 900,
+  "elapsed_seconds": 140.3510848339647
+}

@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     seoul_api_timeout_seconds : float = 5.0
 
     congestion_cache_ttl_seconds: int = 300
+    congestion_mcp_host: str = "127.0.0.1"
+    congestion_mcp_port: int = Field(default=8002, ge=1, le=65535)
+    congestion_mcp_url: str = "http://127.0.0.1:8002/mcp"
+    congestion_mcp_bearer_token: SecretStr | None = None
+    congestion_mcp_timeout_seconds: float = Field(default=20.0, gt=0)
+    congestion_mcp_log_level: str = "info"
 
     kakao_rest_api_key: SecretStr | None = None
     kakao_local_api_base_url: str = "https://dapi.kakao.com"
@@ -47,19 +53,29 @@ class Settings(BaseSettings):
     storage_locker_api_page_size: int = Field(default=1000, ge=1, le=10000)
     storage_locker_cache_ttl_seconds: int = Field(default=60, ge=0)
 
-    mcp_server_url: str = "http://localhost:8001/mcp"
-    mcp_server_host: str = "127.0.0.1"
-    mcp_server_port: int = 8001
-
     kma_api_key: SecretStr | None = None
     weather_cache_ttl_seconds: int = Field(default=600, ge=0)
     weather_rerank_weight: float = Field(default=0.10, ge=0, le=1)
 
     openai_api_key: SecretStr | None = None
-    openai_chat_model: str = "gpt-5-mini"
+    openai_chat_model: str = "gpt-4o-mini"
     openai_embed_model: str = "text-embedding-3-large"
     openai_embed_dim: int = Field(default=1536, gt=0)
     llm_mode: str = "openai-api"
+
+    # Attraction 도메인에서 사용하기 위한 DSPy 운영 설정
+    # MIPROv2 최적화는 오프라인에서 수행하고 서버는 artifact만 로드한다.
+    attraction_dspy_model: str = "openai/gpt-4o-mini"
+    attraction_dspy_temperature: float = Field(default=0.0, ge=0, le=2)
+    attraction_dspy_max_tokens: int = Field(default=900, ge=1)
+    attraction_recommendation_limit: int = Field(default=3, ge=1, le=10)
+    attraction_dspy_artifact_path: Path = (
+        BASE_DIR
+        / "domains"
+        / "attraction"
+        / "artifacts"
+        / "optimized_program.json"
+    )
 
     db_host: str = "localhost"
     db_port: int = Field(default=5433, ge=1, le=65535)

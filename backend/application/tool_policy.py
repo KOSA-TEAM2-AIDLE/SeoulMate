@@ -7,12 +7,11 @@ def requested_contexts(source_mode: str, domain: str) -> tuple[str, ...]:
     mode = normalize_source_mode(source_mode)
     if mode != "rag_mcp":
         return ()
-    # Weather는 현재 구현됨. Congestion은 Registry에 스켈레톤으로 존재하되
-    # 구현 완료 후 이 정책에 추가한다.
-    if domain in {"restaurant", "cafe", "accommodation", "attraction"}:
+    # Attraction 혼잡도는 검색 중심지가 아니라 정적 후보별 좌표로
+    # 조회해야 하므로 AttractionCongestionReranker에서 따로 처리한다.
+    if domain in {"restaurant", "cafe", "accommodation"}:
         return ("weather",)
     return ()
 
 
 __all__ = ["requested_contexts"]
-

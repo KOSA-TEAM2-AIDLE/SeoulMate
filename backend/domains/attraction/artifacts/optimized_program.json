@@ -1,0 +1,56 @@
+{
+  "generate": {
+    "traces": [],
+    "train": [],
+    "demos": [],
+    "signature": {
+      "instructions": "주어진 관광지·행사 후보 안에서만 질문에 가장 잘 맞는 장소를 선택하고 답변한다.\n\n답변과 선정 이유는 사용자의 언어와 일치해야 한다. 후보에 제공된 근거만 사용하고,\n요금·운영시간·거리·행사 기간·리뷰를 추측하지 말아야 한다. 혼잡도는 공식 POI 구역의 관측값이며\n시설 내부 인파로 확정하지 말아야 한다. 혼잡도 근거가 없으면 한적함을 추론하거나 선정 근거로 사용하지 말아야 한다.\nselected_place_ids에는 정확히 selection_count개의 고유한 후보 ID를 순서대로 반환한다.\nselection_reasons_json은 선택한 ID를 key, 근거 기반 선정 이유를 value로 갖는 JSON object 문자열이어야 한다.",
+      "fields": [
+        {
+          "prefix": "Language:",
+          "description": "Answer language such as ko or en"
+        },
+        {
+          "prefix": "Question:",
+          "description": "Original user question"
+        },
+        {
+          "prefix": "Location:",
+          "description": "Resolved location or an empty string"
+        },
+        {
+          "prefix": "Themes Json:",
+          "description": "Requested themes as a JSON array"
+        },
+        {
+          "prefix": "Selection Count:",
+          "description": "Exact number of candidates to select"
+        },
+        {
+          "prefix": "Candidates Json:",
+          "description": "Only verified candidate evidence allowed"
+        },
+        {
+          "prefix": "Selected Place Ids:",
+          "description": "Unique selected candidate IDs in recommendation order"
+        },
+        {
+          "prefix": "Selection Reasons Json:",
+          "description": "JSON object mapping every selected ID to its grounded reason"
+        },
+        {
+          "prefix": "Answer:",
+          "description": "Concise final answer grounded in candidates and written in language"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.12",
+      "dspy": "3.2.1",
+      "cloudpickle": "3.1"
+    }
+  }
+}
