@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from langchain_core.runnables import RunnableLambda
 
 from models.intent.travel_query import TravelIntentExtractor
+from services.location import CITYWIDE_LOCATION_NAME
 from application.travel_query.required_info import (
     ROUTE_MODIFICATION_UNSUPPORTED_MESSAGE,
     check_required_information,
@@ -31,6 +32,55 @@ def _base_state() -> dict:
 
 
 class TravelIntentExtractorTests(unittest.TestCase):
+    def test_route_place_count_is_not_treated_as_ambiguous_budget(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "day_trip_route",
+                "normalized_question": "내일 홍대 당일 루트 3곳",
+                "location": "홍대",
+                "start_date": "2026-07-16",
+                "end_date": "2026-07-16",
+                "days": 1,
+                "nights": 0,
+                "explicit_visit_count": 3,
+                "budget_ambiguous": True,
+                "requested_domains": ["restaurant", "attraction", "cafe"],
+            }
+        )
+        state = _base_state()
+        state["original_question"] = "내일 홍대에서 총 3곳 당일 루트 짜줘"
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertFalse(result["collected"]["budget_ambiguous"])
+        self.assertNotIn(
+            "filters.budget_scope",
+            find_missing_fields({**state, **result}),
+        )
+
+    def test_location_clarification_accepts_anywhere_without_llm_location(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "single_place_recommendation",
+                "normalized_question": "식당 추천",
+                "requested_domains": ["restaurant"],
+            }
+        )
+        state = _base_state()
+        state.update({
+            "original_question": "맛있는 식당 추천해줘",
+            "intent": "single_place_recommendation",
+            "missing_fields": ["filters.location"],
+            "latest_user_answer": "장소는 딱히 상관없어요",
+        })
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertEqual(CITYWIDE_LOCATION_NAME, result["collected"]["location"])
+        self.assertEqual([], find_missing_fields({**state, **result}))
+
     def test_input_language_overrides_ui_language(self) -> None:
         chain = RunnableLambda(
             lambda _: {

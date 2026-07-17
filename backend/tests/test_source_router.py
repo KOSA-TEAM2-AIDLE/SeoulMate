@@ -12,6 +12,15 @@ from services.weather_mcp_client import get_weather_via_mcp
 
 
 class SourceRouterTests(unittest.TestCase):
+    def test_location_resolution_failure_does_not_look_like_no_restaurant_result(self):
+        message = _empty_restaurant_message({
+            "location_resolution_failed": True,
+            "location_name": "없는동",
+        }, "ko")
+        self.assertIn("없는동", message)
+        self.assertIn("지역을 정확히 확인하지 못했습니다", message)
+        self.assertNotIn("조건에 맞는 식당", message)
+
     def test_specific_menu_empty_result_explains_verified_menu_gap(self):
         message = _empty_restaurant_message({
             "menu_no_match": True,
@@ -234,6 +243,38 @@ class RestaurantSourceModeTests(unittest.IsolatedAsyncioTestCase):
             meta["result"]["recommendList"][0]["selectionReason"],
             "테스트 선정 이유",
         )
+
+    async def test_structured_unresolved_location_reaches_user_message(self):
+        parsed = StructuredTravelQuery.model_validate({
+            "language": "ko",
+            "intent": "single_place_recommendation",
+            "original_question": "없는동에서 중식당 추천",
+            "normalized_question": "없는동 중식당 추천",
+            "tasks": [{
+                "task_id": "1", "domain": "restaurant",
+                "search_query": "없는동 중식당", "desired_count": 3,
+            }],
+            "filters": {"location": "없는동"},
+        })
+        body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
+        with (
+            patch(
+                "domains.restaurant.search_service.search_restaurants_structured",
+                return_value={
+                    "candidates": [],
+                    "location_name": "없는동",
+                    "location_resolution_failed": True,
+                },
+            ),
+            patch("routers.chat.geocode_kakao", return_value=None),
+        ):
+            events = [event async for event in _restaurant_stream(
+                body, "rag_only", "structured", structured_task=parsed.tasks[0]
+            )]
+
+        token = json.loads(events[1].removeprefix("data: "))
+        self.assertIn("없는동", token["text"])
+        self.assertIn("지역을 정확히 확인하지 못했습니다", token["text"])
 
     async def test_general_response_uses_structured_language_and_instruction(self):
         parsed = StructuredTravelQuery.model_validate({

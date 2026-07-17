@@ -15,7 +15,16 @@ from openai import OpenAI
 from core.config import DB_CONFIG, OPENAI_API_KEY, OPENAI_EMBED_DIM, OPENAI_EMBED_MODEL
 from schemas.common import Place
 from schemas.structured_query import StructuredQueryTask, StructuredTravelQuery
-from services.location import extract_location, geocode_kakao, haversine_km
+from services.location import (
+    CITYWIDE_LOCATION_NAME,
+    address_matches_search_area,
+    extract_location,
+    geocode_kakao,
+    haversine_km,
+    is_citywide_location,
+    location_candidates,
+    wants_citywide_search,
+)
 from services.query_policy import (
     StructuredRestaurantSearchPlan,
     build_menu_query,
@@ -667,14 +676,20 @@ def build_restaurant_search_plan(
     source_mode = derive_source_mode(parsed_query)
     location_name = task_filters.location
     origin_lat, origin_lng = current_lat, current_lng
+    citywide_search = is_citywide_location(location_name)
     same_as_current = bool(
         location_name
         and current_location_name
+        and current_lat is not None
+        and current_lng is not None
         and location_name.strip().lower() == current_location_name.strip().lower()
     )
     # 타깃 위치가 있는데 현재 좌표의 지명과 같다는 근거가 없으면 반드시 타깃을
     # 지오코딩한다. location_name=None인 사용자 좌표를 홍대/강남 좌표로 오인하지 않는다.
-    if location_name and not same_as_current:
+    if citywide_search:
+        location_name = CITYWIDE_LOCATION_NAME
+        origin_lat, origin_lng = None, None
+    elif location_name and not same_as_current:
         geocoded = geocode_kakao(location_name)
         if geocoded:
             origin_lat, origin_lng, location_name = geocoded
@@ -694,7 +709,8 @@ def build_restaurant_search_plan(
         location_name=location_name,
         origin_lat=origin_lat,
         origin_lng=origin_lng,
-        radius_km=trusted_radius_km(task_query),
+        radius_km=None if citywide_search else trusted_radius_km(task_query),
+        citywide_search=citywide_search,
         open_now=should_filter_open_now(task_query, task_filters),
         include_weather_features=source_mode == "rag_mcp",
         min_rating=extract_min_rating(task_query),
@@ -735,6 +751,28 @@ def search_restaurants_structured(
         current_location_name=current_location_name,
         top_n=top_n,
     )
+    # 명시된 지역을 좌표로 바꾸지 못했다면 서울 전체 검색으로 폴백하지 않는다.
+    # 빈 결과와 원인을 반환해 상위 계층이 지역 재입력을 요청할 수 있게 한다.
+    if (
+        plan.location_name
+        and not plan.citywide_search
+        and (plan.origin_lat is None or plan.origin_lng is None)
+    ):
+        return {
+            "candidates": [],
+            "location_name": plan.location_name,
+            "origin_lat": None,
+            "origin_lng": None,
+            "extracted_category": plan.requested_category,
+            "cleaned_query": plan.retrieval_query,
+            "category_no_match": False,
+            "menu_no_match": False,
+            "required_menu_terms": list(plan.required_menu_terms),
+            "location_resolution_failed": True,
+            "task_id": task.task_id,
+            "source_mode": derive_source_mode(parsed_query),
+            "structured_input": True,
+        }
     result = search_restaurants(
         plan.retrieval_query,
         lang=effective_query_language(parsed_query),
@@ -747,6 +785,8 @@ def search_restaurants_structured(
     result["task_id"] = task.task_id
     result["source_mode"] = derive_source_mode(parsed_query)
     result["structured_input"] = True
+    result["citywide_search"] = plan.citywide_search
+    result.setdefault("location_resolution_failed", False)
     return result
 
 
@@ -755,7 +795,7 @@ def search_restaurants(
     lang: str = "ko",
     min_rating: float | None = None,
     open_now: bool = False,
-    radius_km: float = 2.0,
+    radius_km: float | None = 2.0,
     top_n: int = 30,
     *,
     _structured_plan: StructuredRestaurantSearchPlan | None = None,
@@ -781,8 +821,29 @@ def search_restaurants(
             menu_vector = _embedding(menu_query)
     else:
         category, cleaned_query = extract_category(query) if suffix == "ko" else (None, query)
-        location_name, origin_lat, origin_lng, cleaned_query = extract_location(cleaned_query)
+        legacy_citywide = wants_citywide_search(cleaned_query)
+        requested_location_candidates = location_candidates(cleaned_query)
+        if legacy_citywide:
+            location_name = CITYWIDE_LOCATION_NAME
+            origin_lat, origin_lng = None, None
+        else:
+            location_name, origin_lat, origin_lng, cleaned_query = extract_location(cleaned_query)
         semantic_query = cleaned_query or query
+        # 레거시 원문 검색도 '지역처럼 보이는 표현은 있었지만 지오코딩 실패' 시
+        # 서울 전체 결과를 반환하지 않는다.
+        if requested_location_candidates and origin_lat is None and not legacy_citywide:
+            return {
+                "candidates": [],
+                "location_name": requested_location_candidates[0],
+                "origin_lat": None,
+                "origin_lng": None,
+                "extracted_category": category,
+                "cleaned_query": semantic_query,
+                "category_no_match": False,
+                "menu_no_match": False,
+                "required_menu_terms": [],
+                "location_resolution_failed": True,
+            }
         original_vector = _embedding(query)
         review_vector = _embedding(semantic_query) if semantic_query != query else original_vector
         menu_vector = original_vector
@@ -790,7 +851,11 @@ def search_restaurants(
     with _connection() as connection:
         with connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
             restaurant_ids = None
-            if origin_lat is not None and origin_lng is not None:
+            if (
+                origin_lat is not None
+                and origin_lng is not None
+                and radius_km is not None
+            ):
                 restaurant_ids = _ids_within_radius(
                     cursor, origin_lat, origin_lng, radius_km, f"restaurant_{suffix}"
                 )
@@ -847,34 +912,13 @@ def search_restaurants(
         meta = metadata.get(restaurant_id)
         if not meta:
             continue
-        if min_rating is not None and (meta["rating"] is None or meta["rating"] < min_rating):
-            continue
-        if _structured_plan and any(
-            meta.get(field) is not True for field in _structured_plan.required_feature_fields
-        ):
-            continue
-        if _structured_plan and any(
-            meta.get(field) is True for field in _structured_plan.excluded_feature_fields
-        ):
-            continue
-        if _structured_plan and _structured_plan.budget_min_krw is not None:
-            if meta.get("menu_price_median") is None or meta["menu_price_median"] < _structured_plan.budget_min_krw:
-                continue
-        if _structured_plan and _structured_plan.budget_max_krw is not None:
-            if meta.get("menu_price_median") is None or meta["menu_price_median"] > _structured_plan.budget_max_krw:
-                continue
-        target_visit_at = _structured_plan.target_visit_at if _structured_plan else None
-        open_status = is_open_at(meta["hours"], target_visit_at) if target_visit_at else is_open_now(meta["hours"])
-        open_status_basis = (
-            "requested_time" if target_visit_at
-            else "now" if open_now
-            else None
+        passes_filters, open_status, open_status_basis = _passes_candidate_filters(
+            meta,
+            _structured_plan,
+            min_rating=min_rating,
+            open_now=open_now,
         )
-        # '현재 영업 중'은 명시적 필터이므로 영업시간 미확인(None)도 통과시키지 않는다.
-        if open_now and open_status is not True:
-            continue
-        # 특정 방문 시각에는 확실히 닫힌 후보만 제거하고, 시간 정보가 없는 후보는 fallback으로 둔다.
-        if target_visit_at and open_status is False:
+        if not passes_filters:
             continue
 
         rest_score = REST_WEIGHT / (RRF_K + rest_hits[restaurant_id]["rank"]) if restaurant_id in rest_hits else 0.0
@@ -977,7 +1021,57 @@ def search_restaurants(
         "required_menu_terms": list(
             _structured_plan.required_menu_terms if _structured_plan else ()
         ),
+        "location_resolution_failed": False,
     }
+
+
+def _passes_candidate_filters(
+    meta: dict,
+    plan: StructuredRestaurantSearchPlan | None,
+    *,
+    min_rating: float | None,
+    open_now: bool,
+) -> tuple[bool, bool | None, str | None]:
+    """구조화 하드 필터를 한 후보에 적용하고 영업 판정 근거를 함께 반환한다."""
+    if plan and not address_matches_search_area(plan.location_name, meta.get("address")):
+        return False, None, None
+    if min_rating is not None and (
+        meta.get("rating") is None or meta["rating"] < min_rating
+    ):
+        return False, None, None
+    if plan and any(
+        meta.get(field) is not True for field in plan.required_feature_fields
+    ):
+        return False, None, None
+    if plan and any(
+        meta.get(field) is True for field in plan.excluded_feature_fields
+    ):
+        return False, None, None
+    if plan and plan.budget_min_krw is not None:
+        price = meta.get("menu_price_median")
+        if price is None or price < plan.budget_min_krw:
+            return False, None, None
+    if plan and plan.budget_max_krw is not None:
+        price = meta.get("menu_price_median")
+        if price is None or price > plan.budget_max_krw:
+            return False, None, None
+
+    target_visit_at = plan.target_visit_at if plan else None
+    open_status = (
+        is_open_at(meta.get("hours"), target_visit_at)
+        if target_visit_at
+        else is_open_now(meta.get("hours"))
+    )
+    open_status_basis = (
+        "requested_time" if target_visit_at else "now" if open_now else None
+    )
+    # '현재 영업 중'은 명시적 필터이므로 영업시간 미확인(None)도 통과시키지 않는다.
+    if open_now and open_status is not True:
+        return False, open_status, open_status_basis
+    # 미래 방문 시각에는 확실히 닫힌 후보만 제거하고 미확인 후보는 fallback으로 둔다.
+    if target_visit_at and open_status is False:
+        return False, open_status, open_status_basis
+    return True, open_status, open_status_basis
 
 
 def search_places(query: str, lang: str = "ko") -> list[Place]:

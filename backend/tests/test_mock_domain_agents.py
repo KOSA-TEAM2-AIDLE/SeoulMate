@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from routers.chat import _stream
+from routers.chat import _route_slot_start_time, _route_slot_start_times, _stream
 from schemas.chat import ChatRequest
 from schemas.structured_query import StructuredTravelQuery
 from services.domain_agents import mock_places_for_task
@@ -102,6 +102,27 @@ def fake_route_plan(planner_input):
 
 
 class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
+    def test_restaurant_route_time_uses_meal_keyword_when_start_time_missing(self):
+        parsed = query_with_tasks(tasks=[{
+            "task_id": "lunch",
+            "domain": "restaurant",
+            "search_query": "홍대 점심 식당",
+            "themes": ["점심"],
+            "desired_count": 1,
+        }])
+
+        self.assertEqual("12:00", _route_slot_start_time(parsed.tasks[0]))
+
+    def test_cafe_default_time_follows_lunch_or_dinner_context(self):
+        lunch_route = query_with_tasks(tasks=[
+            restaurant_task() | {"search_query": "홍대 점심 식당", "themes": ["점심"]},
+            cafe_task(),
+        ])
+        dinner_route = query_with_tasks(tasks=[restaurant_task(), cafe_task()])
+
+        self.assertEqual("16:00", _route_slot_start_times(lunch_route.tasks)["2"])
+        self.assertEqual("20:30", _route_slot_start_times(dinner_route.tasks)["2"])
+
     def test_mock_agent_returns_explicit_placeholder(self):
         parsed = query_with_tasks(tasks=[cafe_task()])
         places = mock_places_for_task(parsed.tasks[0], lat=37.5, lng=126.9)

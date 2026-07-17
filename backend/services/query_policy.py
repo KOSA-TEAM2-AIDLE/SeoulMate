@@ -166,7 +166,14 @@ def infer_task_location(search_query: str) -> str | None:
         if match.start() == 0 or _has_locative_marker(search_query, match.end()):
             return token
 
-    broad = [alias for alias in BROAD_LOCATION_ALIASES if alias.lower() in lowered]
+    broad = [
+        alias
+        for alias in BROAD_LOCATION_ALIASES
+        if re.search(
+            rf"(?<![0-9a-z가-힣]){re.escape(alias.lower())}(?![0-9a-z가-힣])",
+            lowered,
+        )
+    ]
     return broad[0] if broad else None
 
 
@@ -192,14 +199,64 @@ def effective_task_filters(
     return parsed.filters.model_copy(update=updates)
 NOW_WORDS = {"지금", "현재", "바로", "now", "currently", "right now"}
 RADIUS_RE = re.compile(r"(?:반경\s*)?(\d+(?:\.\d+)?)\s*(?:km|킬로미터|킬로)", re.IGNORECASE)
+_RATING_NUMBER = r"[0-5](?:\.\d+)?"
+_RATING_COMPARATOR = (
+    r"(?:점\s*)?(?:이상|이거나\s*그\s*이상|넘(?:는|게)|부터|\+|"
+    r"or\s+higher|or\s+above|and\s+above|and\s+up|or\s+better|minimum)?"
+)
+_RATING_PREFIX = (
+    r"(?:리뷰\s*평점|사용자\s*평점|평가\s*점수|리뷰\s*점수|"
+    r"평점|별점|점수|star\s+rating|review\s+score|user\s+rating|"
+    r"rating|score|rated)"
+)
 RATING_RE = re.compile(
-    r"(?:평점|별점|rating|star\s+rating|rated)\s*(?:은|이|가|:)?\s*"
-    r"(\d(?:\.\d+)?)\s*(?:점|이상|or higher|and above|\+)?",
+    rf"(?:{_RATING_PREFIX}\s*(?:은|는|이|가|:|of|is|at)?\s*"
+    rf"{_RATING_NUMBER}\s*{_RATING_COMPARATOR})|"
+    rf"(?:{_RATING_NUMBER}\s*(?:점\s*(?:이상|넘(?:는|게)|부터|\+)|"
+    rf"\+?\s*stars?\s*(?:or\s+higher|or\s+above|and\s+above|and\s+up|or\s+better)?))|"
+    rf"(?:별\s*(?:[1-5]|한|두|세|네|다섯)\s*(?:개|점)?\s*"
+    rf"(?:이상|넘(?:는|게)|부터|\+)?)|"
+    rf"(?:(?:at\s+least|minimum(?:\s+rating)?(?:\s+of)?)\s*"
+    rf"{_RATING_NUMBER}\s*(?:stars?)?)",
+    re.IGNORECASE,
+)
+_RATING_VALUE_RES = (
+    re.compile(
+        rf"{_RATING_PREFIX}\s*(?:은|는|이|가|:|of|is|at)?\s*"
+        rf"(?P<value>{_RATING_NUMBER})\s*{_RATING_COMPARATOR}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?P<value>{_RATING_NUMBER})\s*(?:"
+        rf"점\s*(?:이상|넘(?:는|게)|부터|\+)|"
+        rf"\+?\s*stars?\s*(?:or\s+higher|or\s+above|and\s+above|and\s+up|or\s+better)?"
+        rf")",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"별\s*(?P<word>[1-5]|한|두|세|네|다섯)\s*(?:개|점)?\s*"
+        r"(?:이상|넘(?:는|게)|부터|\+)?",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:at\s+least|minimum(?:\s+rating)?(?:\s+of)?)\s*"
+        rf"(?P<value>{_RATING_NUMBER})\s*(?:stars?)?",
+        re.IGNORECASE,
+    ),
+)
+_KOREAN_STAR_VALUES = {"한": 1.0, "두": 2.0, "세": 3.0, "네": 4.0, "다섯": 5.0}
+_DIMENSION_SCORE_BEFORE_RE = re.compile(
+    r"(?:맛|서비스|분위기|청결|가성비|food|service|ambience|atmosphere|"
+    r"cleanliness|value)\s*(?:점수|score)?\s*$",
     re.IGNORECASE,
 )
 HIGH_RATING_PREFERENCE_RE = re.compile(
-    r"(?:평점|별점)(?:이|은|이\s*)?\s*(?:좋|높)|"
-    r"(?:highly|well|best)[-\s]?rated|good\s+(?:rating|reviews?)",
+    r"(?:고\s*평점|고\s*별점)|"
+    r"(?:평점|별점|평가)(?:이|가|은|는)?\s*(?:좋|높|훌륭|최고)|"
+    r"(?:평점|별점)\s*(?:높은\s*)?순|"
+    r"(?:highly|well|top|best|highest)[-\s]?rated|"
+    r"(?:high|good|great|excellent|top|best)\s+(?:star\s+)?rating|"
+    r"high\s+review\s+score|five[-\s]?star",
     re.IGNORECASE,
 )
 TIME_WORDS = {
@@ -435,9 +492,37 @@ def trusted_budget_bounds(parsed: StructuredTravelQuery) -> tuple[int | None, in
     return parsed.filters.budget_min_krw, parsed.filters.budget_max_krw
 
 
+def _find_rating_match(text: str):
+    matches: list[tuple[object, float]] = []
+    for pattern in _RATING_VALUE_RES:
+        for match in pattern.finditer(text):
+            # '서비스 점수 4.5', 'food score 4.5'는 종합 평점이 아니다.
+            prefix = text[max(0, match.start() - 16):match.start()]
+            if _DIMENSION_SCORE_BEFORE_RE.search(prefix):
+                continue
+            raw_value = match.groupdict().get("value")
+            raw_word = match.groupdict().get("word")
+            if raw_value is not None:
+                value = float(raw_value)
+            elif raw_word in _KOREAN_STAR_VALUES:
+                value = _KOREAN_STAR_VALUES[raw_word]
+            else:
+                value = float(raw_word) if raw_word else -1
+            if 0 <= value <= 5:
+                matches.append((match, value))
+    return min(matches, key=lambda item: item[0].start()) if matches else None
+
+
 def extract_min_rating(parsed: StructuredTravelQuery) -> float | None:
-    match = RATING_RE.search(parsed.original_question)
-    return float(match.group(1)) if match else None
+    found = _find_rating_match(parsed.original_question)
+    return found[1] if found else None
+
+
+def _remove_rating_expressions(text: str) -> str:
+    while found := _find_rating_match(text):
+        match, _ = found
+        text = f"{text[:match.start()]} {text[match.end():]}"
+    return text
 
 
 def prefers_high_rating(parsed: StructuredTravelQuery) -> bool:
@@ -481,7 +566,7 @@ def effective_query_language(parsed: StructuredTravelQuery) -> str:
 
 
 def _is_filter_only_fragment(text: str) -> bool:
-    return bool(RATING_RE.search(text) or CURRENCY_RE.search(text))
+    return bool(_find_rating_match(text) or CURRENCY_RE.search(text))
 
 
 # str.strip()은 '문자 집합'을 지우므로 strip(" ,|이고이며")는 '떡볶이' -> '떡볶',
@@ -502,7 +587,7 @@ def _strip_dangling_conjunctions(text: str) -> str:
 
 
 def _clean_base_query(text: str) -> str:
-    text = RATING_RE.sub(" ", text)
+    text = _remove_rating_expressions(text)
     text = re.sub(
         rf"(?:예산|가격|메뉴\s*가격|1인\s*메뉴\s*가격)?\s*{CURRENCY_RE.pattern}"
         rf"(?:\s*(?:이하|이상|미만|초과|사이|정도|까지|부터|or less|or more))?",
@@ -559,7 +644,8 @@ class StructuredRestaurantSearchPlan:
     location_name: str | None
     origin_lat: float | None
     origin_lng: float | None
-    radius_km: float
+    radius_km: float | None
+    citywide_search: bool
     open_now: bool
     include_weather_features: bool
     min_rating: float | None

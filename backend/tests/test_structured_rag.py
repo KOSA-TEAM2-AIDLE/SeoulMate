@@ -10,6 +10,8 @@ from services.query_policy import (
     deduplicate_recommendation_tasks,
     derive_source_mode,
     effective_query_language,
+    extract_min_rating,
+    prefers_high_rating,
     trusted_visit_date,
 )
 from services.rag import build_restaurant_search_plan, search_restaurants_structured
@@ -56,6 +58,12 @@ def parsed_query(
 
 
 class StructuredQueryPolicyTests(unittest.TestCase):
+    def test_broad_seoul_is_not_inferred_from_seoul_city_hall(self):
+        from services.query_policy import infer_task_location
+
+        self.assertEqual("서울", infer_task_location("서울 식당 추천"))
+        self.assertIsNone(infer_task_location("서울시청 근처 식당 추천"))
+
     @staticmethod
     def day_route_payload(task_count: int, target_count: int | None = None) -> dict:
         domains = ["attraction", "restaurant", "cafe", "attraction", "restaurant"]
@@ -391,6 +399,127 @@ class StructuredQueryPolicyTests(unittest.TestCase):
 
 
 class StructuredRestaurantPlanTests(unittest.TestCase):
+    def test_korean_and_english_numeric_rating_variants(self):
+        cases = (
+            ("평점이 4.3점 이상인 식당", 4.3),
+            ("평가 점수 4.2 이상 식당", 4.2),
+            ("리뷰 평점 4.4 이상", 4.4),
+            ("4.5점 이상 식당", 4.5),
+            ("별 4개 이상 식당", 4.0),
+            ("별 네 개 이상 식당", 4.0),
+            ("Find restaurants with a rating of 4.6 or higher", 4.6),
+            ("Show restaurants rated 4.7 and above", 4.7),
+            ("Find 4 stars or higher restaurants", 4.0),
+            ("At least 4.2 stars", 4.2),
+            ("Minimum rating of 4.1", 4.1),
+            ("Review score 4.4+", 4.4),
+        )
+        for question, expected in cases:
+            with self.subTest(question=question):
+                parsed = parsed_query(
+                    question,
+                    search_query="식당",
+                    location=None,
+                    language="en" if question[0].isascii() else "ko",
+                )
+                self.assertEqual(extract_min_rating(parsed), expected)
+
+    def test_qualitative_rating_variants_are_preferences_not_thresholds(self):
+        variants = (
+            "고평점 식당",
+            "별점 높은 순으로 추천",
+            "평가가 좋은 식당",
+            "highly rated restaurants",
+            "top-rated restaurants",
+            "highest rated restaurants",
+            "excellent rating restaurants",
+            "five-star restaurants",
+        )
+        for question in variants:
+            with self.subTest(question=question):
+                parsed = parsed_query(
+                    question,
+                    search_query=question,
+                    location=None,
+                    language="en" if question[0].isascii() else "ko",
+                )
+                self.assertTrue(prefers_high_rating(parsed))
+                self.assertIsNone(extract_min_rating(parsed))
+
+    def test_dimension_scores_and_review_volume_do_not_become_rating_filters(self):
+        for question in (
+            "서비스 점수 4.5 이상인 곳",
+            "분위기 점수 4점 이상인 곳",
+            "food score 4.7 or higher",
+            "리뷰 많은 식당",
+            "restaurants with many reviews",
+        ):
+            with self.subTest(question=question):
+                parsed = parsed_query(question, search_query=question, location=None)
+                self.assertIsNone(extract_min_rating(parsed))
+                self.assertFalse(prefers_high_rating(parsed))
+
+        dimension = parsed_query(
+            "분위기 점수 4점 이상인 식당",
+            search_query="분위기 점수 4점 이상인 식당",
+            location=None,
+        )
+        plan = build_restaurant_search_plan(dimension, dimension.tasks[0])
+        self.assertIn("분위기 점수", plan.retrieval_query)
+
+    @patch("services.rag.geocode_kakao")
+    def test_seoul_and_citywide_locations_disable_radius_filter(self, geocode):
+        for location in ("서울", "서울 전체", "서울 어디든", "지역 무관"):
+            with self.subTest(location=location):
+                parsed = parsed_query(
+                    f"{location} 식당 추천",
+                    search_query=f"{location} 식당",
+                    location=location,
+                )
+                plan = build_restaurant_search_plan(parsed, parsed.tasks[0])
+                self.assertTrue(plan.citywide_search)
+                self.assertEqual(plan.location_name, "서울 전체")
+                self.assertIsNone(plan.origin_lat)
+                self.assertIsNone(plan.origin_lng)
+                self.assertIsNone(plan.radius_km)
+        geocode.assert_not_called()
+
+    @patch("services.rag.search_restaurants")
+    def test_citywide_structured_search_reaches_rag_without_location_failure(self, search):
+        search.return_value = {
+            "candidates": [],
+            "location_name": "서울 전체",
+            "origin_lat": None,
+            "origin_lng": None,
+            "category_no_match": False,
+        }
+        parsed = parsed_query(
+            "서울 전체에서 식당 추천",
+            search_query="서울 전체 식당",
+            location="서울 전체",
+        )
+
+        result = search_restaurants_structured(parsed, parsed.tasks[0])
+
+        self.assertFalse(result["location_resolution_failed"])
+        self.assertTrue(result["citywide_search"])
+        self.assertIsNone(search.call_args.kwargs["radius_km"])
+
+    @patch("services.rag.geocode_kakao")
+    def test_seoul_city_hall_remains_a_specific_radius_search(self, geocode):
+        geocode.return_value = (37.5663, 126.9779, "서울시청")
+        parsed = parsed_query(
+            "서울시청 근처 식당 추천",
+            search_query="서울시청 근처 식당",
+            location="서울시청",
+        )
+
+        plan = build_restaurant_search_plan(parsed, parsed.tasks[0])
+
+        self.assertFalse(plan.citywide_search)
+        self.assertEqual(plan.location_name, "서울시청")
+        self.assertEqual(plan.radius_km, 2.0)
+
     @patch("services.rag.geocode_kakao")
     def test_task_local_location_overrides_global_location(self, geocode):
         geocode.return_value = (37.4979, 127.0276, "강남")
@@ -688,6 +817,23 @@ class StructuredRestaurantPlanTests(unittest.TestCase):
         self.assertIsNone(plan.origin_lat)
         self.assertIsNone(plan.origin_lng)
 
+    def test_unresolved_explicit_location_fails_closed_before_embedding_or_db(self):
+        parsed = parsed_query(
+            "없는동에서 조용한 중식당 추천",
+            search_query="없는동 조용한 중식당",
+            location="없는동",
+        )
+        with patch("services.rag.geocode_kakao", return_value=None), patch(
+            "services.rag._embedding"
+        ) as embedding, patch("services.rag._connection") as connection:
+            result = search_restaurants_structured(parsed, parsed.tasks[0], top_n=5)
+
+        self.assertEqual(result["candidates"], [])
+        self.assertEqual(result["location_name"], "없는동")
+        self.assertTrue(result["location_resolution_failed"])
+        embedding.assert_not_called()
+        connection.assert_not_called()
+
     def test_target_location_is_geocoded_when_current_location_name_is_missing(self):
         parsed = parsed_query(
             "홍대에서 조용한 중식당 추천",
@@ -716,14 +862,19 @@ class StructuredRestaurantPlanTests(unittest.TestCase):
             language="en-US",
             location="Hongdae",
         )
-        with patch("services.rag.geocode_kakao", return_value=None), patch(
+        with patch(
+            "services.rag.geocode_kakao",
+            return_value=(37.5572, 126.9254, "Hongdae"),
+        ), patch(
             "services.rag._embedding", return_value=[0.0]
         ), patch("services.rag._connection") as connection:
             cursor = connection.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
             cursor.fetchall.return_value = []
             search_restaurants_structured(parsed, parsed.tasks[0], top_n=5)
-        first_sql = cursor.execute.call_args_list[0].args[0]
-        self.assertIn("restaurant_embedding_en", first_sql)
+        sql_statements = [call.args[0] for call in cursor.execute.call_args_list]
+        # 반경 후보가 비어 있으면 벡터 SQL 전에 종료되므로 첫 지역 SQL만으로도
+        # 영문 테이블 변형이 선택됐는지 검증할 수 있다.
+        self.assertTrue(any("restaurant_en" in sql for sql in sql_statements))
 
     def test_chat_request_accepts_fixed_json_without_source_mode(self):
         parsed = parsed_query(
