@@ -78,6 +78,7 @@ class AttractionAnswerValidationTests(unittest.TestCase):
                 answer="추천합니다.",
             ),
             prediction(reasons={"1": "", "2": "근거", "3": "근거"}),
+            prediction(reasons={"1": " null ", "2": "근거", "3": "근거"}),
         ]
 
         for invalid in invalid_predictions:
@@ -87,6 +88,18 @@ class AttractionAnswerValidationTests(unittest.TestCase):
                         answer_input(), invalid
                     ).used_fallback
                 )
+
+    def test_string_null_answer_uses_ranked_fallback(self):
+        result = validate_attraction_prediction(
+            answer_input(),
+            prediction(answer=" NULL "),
+        )
+
+        self.assertTrue(result.used_fallback)
+        self.assertEqual(
+            ["1", "2", "3"],
+            [item.place_id for item in result.selections],
+        )
 
     def test_absent_congestion_cannot_be_used_as_quietness_evidence(self):
         invalid = prediction(

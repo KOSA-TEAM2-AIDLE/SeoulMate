@@ -11,6 +11,7 @@ from domains.attraction.answer_models import (
     AttractionAnswerResult,
     AttractionSelection,
 )
+from domains.attraction.value_normalization import is_nullish
 
 
 _QUIETNESS_TERMS = (
@@ -34,7 +35,7 @@ def validate_attraction_prediction(
     try:
         selected_ids = prediction.selected_place_ids
         if not isinstance(selected_ids, list) or not all(
-            isinstance(place_id, str) and place_id.strip()
+            isinstance(place_id, str) and not is_nullish(place_id)
             for place_id in selected_ids
         ):
             raise ValueError("선택 ID는 비어 있지 않은 문자열 목록이어야 합니다.")
@@ -58,13 +59,14 @@ def validate_attraction_prediction(
         if not isinstance(reasons, dict) or set(reasons) != set(selected_ids):
             raise ValueError("선정 이유는 선택 ID와 정확히 일치해야 합니다.")
         if any(
-            not isinstance(reasons[place_id], str) or not reasons[place_id].strip()
+            not isinstance(reasons[place_id], str)
+            or is_nullish(reasons[place_id])
             for place_id in selected_ids
         ):
             raise ValueError("선정 이유는 비어 있을 수 없습니다.")
 
         answer = prediction.answer
-        if not isinstance(answer, str) or not answer.strip():
+        if not isinstance(answer, str) or is_nullish(answer):
             raise ValueError("답변은 비어 있을 수 없습니다.")
         normalized_answer = answer.casefold()
         mentioned_ids = {

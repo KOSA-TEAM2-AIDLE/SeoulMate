@@ -9,6 +9,11 @@ from domains.attraction.answer_models import (
     AttractionAnswerInput,
     AttractionEvidenceCandidate,
 )
+from domains.attraction.value_normalization import (
+    is_nullish,
+    optional_text,
+    required_text,
+)
 from domains.common.models import SearchCandidate
 
 
@@ -36,10 +41,14 @@ def build_attraction_answer_input(
         )
     ]
     return AttractionAnswerInput(
-        question=question,
-        language=language,
-        location=location,
-        themes=themes,
+        question=required_text(question, field="question"),
+        language=required_text(language, field="language"),
+        location=optional_text(location),
+        themes=[
+            normalized
+            for theme in themes
+            if (normalized := optional_text(theme)) is not None
+        ],
         candidates=evidence_candidates,
     )
 
@@ -54,7 +63,7 @@ def _to_evidence(
         raise ValueError(f"관광 후보만 변환할 수 있습니다: {candidate.domain}")
 
     attributes = candidate.attributes
-    kind = str(attributes.get("kind") or "")
+    kind = optional_text(attributes.get("kind")) or ""
     start_date = _optional_date(attributes.get("start_date"), field="start_date")
     end_date = _optional_date(attributes.get("end_date"), field="end_date")
     if kind == "event" and end_date is not None and end_date < as_of:
@@ -63,18 +72,19 @@ def _to_evidence(
         )
 
     return AttractionEvidenceCandidate(
-        place_id=candidate.place_id,
+        place_id=required_text(candidate.place_id, field="place_id"),
         rank=rank,
-        name=candidate.name,
-        category=candidate.category,
+        name=required_text(candidate.name, field="name"),
+        category=required_text(candidate.category, field="category"),
         distance_m=_distance_m(attributes.get("distance_km")),
-        description=_optional_text(
-            attributes.get("description") or attributes.get("description_text")
+        description=(
+            optional_text(attributes.get("description"))
+            or optional_text(attributes.get("description_text"))
         ),
         reviews=[
-            review.strip()
+            normalized
             for review in candidate.evidence
-            if isinstance(review, str) and review.strip()
+            if (normalized := optional_text(review)) is not None
         ][:MAX_REVIEW_EVIDENCE],
         event_start_date=start_date if kind == "event" else None,
         event_end_date=end_date if kind == "event" else None,
@@ -83,7 +93,7 @@ def _to_evidence(
 
 
 def _optional_date(value: Any, *, field: str) -> date | None:
-    if value in (None, ""):
+    if is_nullish(value):
         return None
     if isinstance(value, date):
         return value
@@ -94,7 +104,7 @@ def _optional_date(value: Any, *, field: str) -> date | None:
 
 
 def _distance_m(value: Any) -> float | None:
-    if value in (None, ""):
+    if is_nullish(value):
         return None
     try:
         distance_km = float(value)
@@ -103,13 +113,6 @@ def _distance_m(value: Any) -> float | None:
     if distance_km < 0:
         raise ValueError("distance_km는 음수일 수 없습니다.")
     return round(distance_km * 1000, 1)
-
-
-def _optional_text(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 def _congestion_evidence(signals: dict[str, Any]) -> str | None:
@@ -121,8 +124,8 @@ def _congestion_evidence(signals: dict[str, Any]) -> str | None:
         ("score", "congestion_score"),
         ("observed_at", "congestion_observed_at"),
     ):
-        value = signals.get(key)
-        if value not in (None, ""):
+        value = optional_text(signals.get(key))
+        if value is not None:
             parts.append(f"{label}={value}")
     return "; ".join(parts) or None
 

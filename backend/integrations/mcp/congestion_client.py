@@ -1,12 +1,27 @@
 """서울 혼잡도 MCP를 공통 ContextProvider 계약으로 감싼다."""
 
 import json
+import os
 
+import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from core.config import settings
 from integrations.mcp.base_client import ContextRequest, ContextResult
+
+
+def _congestion_mcp_url() -> str:
+    return os.getenv(
+        "CONGESTION_MCP_URL",
+        "http://127.0.0.1:8002/mcp",
+    ).strip()
+
+
+def _congestion_mcp_timeout() -> float:
+    timeout = float(os.getenv("CONGESTION_MCP_TIMEOUT_SECONDS", "20"))
+    if timeout <= 0:
+        raise ValueError("CONGESTION_MCP_TIMEOUT_SECONDS는 0보다 커야 합니다.")
+    return timeout
 
 
 class CongestionMCPProvider:
@@ -16,17 +31,37 @@ class CongestionMCPProvider:
 
     async def get_context(self, request: ContextRequest) -> ContextResult:
         try:
-            async with streamable_http_client(settings.mcp_server_url) as streams:
-                read_stream, write_stream, _ = streams
-                async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
-                    tools = await session.list_tools()
-                    if self.tool_name not in {tool.name for tool in tools.tools}:
-                        raise RuntimeError(f"MCP Tool을 찾을 수 없습니다: {self.tool_name}")
-                    result = await session.call_tool(self.tool_name, arguments={
-                        "latitude": request.latitude,
-                        "longitude": request.longitude,
-                    })
+            token = os.getenv("CONGESTION_MCP_BEARER_TOKEN", "").strip()
+            headers = {"Authorization": f"Bearer {token}"} if token else None
+            async with httpx.AsyncClient(
+                headers=headers,
+                timeout=_congestion_mcp_timeout(),
+            ) as http_client:
+                async with streamable_http_client(
+                    _congestion_mcp_url(),
+                    http_client=http_client,
+                ) as streams:
+                    read_stream, write_stream, _ = streams
+                    async with ClientSession(
+                        read_stream,
+                        write_stream,
+                    ) as session:
+                        await session.initialize()
+                        tools = await session.list_tools()
+                        if self.tool_name not in {
+                            tool.name for tool in tools.tools
+                        }:
+                            raise RuntimeError(
+                                "MCP Tool을 찾을 수 없습니다: "
+                                f"{self.tool_name}"
+                            )
+                        result = await session.call_tool(
+                            self.tool_name,
+                            arguments={
+                                "latitude": request.latitude,
+                                "longitude": request.longitude,
+                            },
+                        )
             data = _parse_tool_payload(result)
             return ContextResult(provider=self.name, available=True, data=data)
         except Exception as error:
@@ -61,4 +96,8 @@ def _parse_tool_payload(result) -> dict:
     return payload
 
 
-__all__ = ["CongestionMCPProvider"]
+__all__ = [
+    "CongestionMCPProvider",
+    "_congestion_mcp_timeout",
+    "_congestion_mcp_url",
+]

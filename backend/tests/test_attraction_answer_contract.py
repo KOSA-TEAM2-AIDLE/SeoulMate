@@ -168,6 +168,61 @@ class AttractionAnswerEvidenceTests(unittest.TestCase):
 
         self.assertIsNone(result.candidates[0].event_end_date)
 
+    def test_string_nulls_are_removed_from_optional_dspy_evidence(self):
+        candidate = self._candidate("nullish", kind="event", end_date=" null ")
+        candidate = candidate.model_copy(update={
+            "evidence": ["null", " NONE ", "검증된 리뷰", "undefined"],
+            "attributes": {
+                **candidate.attributes,
+                "description": " null ",
+                "description_text": "대체 설명",
+                "start_date": "N/A",
+                "distance_km": "NaN",
+            },
+            "signals": {
+                "congestion_available": True,
+                "congestion_level": "null",
+                "congestion_score": " none ",
+                "congestion_observed_at": "undefined",
+            },
+        })
+
+        result = build_attraction_answer_input(
+            question="행사 추천",
+            language="ko",
+            location=" null ",
+            themes=["축제", "none", " "],
+            candidates=[candidate],
+            today=date(2026, 7, 16),
+        )
+
+        evidence = result.candidates[0]
+        self.assertIsNone(result.location)
+        self.assertEqual(result.themes, ["축제"])
+        self.assertEqual(evidence.description, "대체 설명")
+        self.assertEqual(evidence.reviews, ["검증된 리뷰"])
+        self.assertIsNone(evidence.distance_m)
+        self.assertIsNone(evidence.event_start_date)
+        self.assertIsNone(evidence.event_end_date)
+        self.assertIsNone(evidence.congestion)
+
+    def test_string_null_is_rejected_for_required_candidate_fields(self):
+        for field in ("place_id", "name", "category"):
+            candidate = self._candidate("required")
+            candidate = candidate.model_copy(update={field: " null "})
+
+            with self.subTest(field=field), self.assertRaisesRegex(
+                ValueError,
+                "필수",
+            ):
+                build_attraction_answer_input(
+                    question="관광지 추천",
+                    language="ko",
+                    location=None,
+                    themes=[],
+                    candidates=[candidate],
+                )
+
 
 class AttractionReviewRetrievalLimitTests(unittest.TestCase):
     def test_vector_search_requests_five_reviews_per_place(self):

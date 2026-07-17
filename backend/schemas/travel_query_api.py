@@ -57,7 +57,7 @@ class TravelQueryResumeRequest(BaseModel):
 
 class DomainAgentDispatchResult(BaseModel):
     domain: TaskDomain
-    status: Literal["placeholder"] = "placeholder"
+    status: Literal["completed", "placeholder"] = "placeholder"
     task_ids: list[str] = Field(default_factory=list)
     candidates: list[SearchCandidate] = Field(default_factory=list)
     assistant_message: str
@@ -79,11 +79,9 @@ class TravelQueryExecutionContext(BaseModel):
 
 class TravelQueryApiResponse(HumanInTheLoopResponse):
     thread_id: str = Field(min_length=1)
-    execution_context: TravelQueryExecutionContext = Field(
-        default_factory=TravelQueryExecutionContext,
-        exclude=True,
-        repr=False,
-    )
+    current_latitude: float | None = Field(default=None, ge=-90, le=90)
+    current_longitude: float | None = Field(default=None, ge=-180, le=180)
+    current_location_name: str | None = None
     agent_dispatches: list[DomainAgentDispatchResult] = Field(
         default_factory=list
     )

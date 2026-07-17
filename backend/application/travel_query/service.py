@@ -10,9 +10,6 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
-from application.recommendation.domain_dispatcher import (
-    ReadyDomainAgentDispatcher,
-)
 from models.intent.travel_query import create_intent_extraction_chain
 from application.travel_query.graph import (
     build_initial_state,
@@ -51,10 +48,8 @@ class TravelQueryService:
     def __init__(
         self,
         graph: CompiledStateGraph,
-        dispatcher: ReadyDomainAgentDispatcher | None = None,
     ) -> None:
         self._graph = graph
-        self._dispatcher = dispatcher or ReadyDomainAgentDispatcher()
 
     async def start(
         self,
@@ -80,7 +75,7 @@ class TravelQueryService:
             ),
         )
         result = await self._graph.ainvoke(initial_state, config=config)
-        return await self._to_dispatched_response(thread_id, result)
+        return _to_api_response(thread_id, result)
 
     async def resume(
         self,
@@ -95,18 +90,7 @@ class TravelQueryService:
             raise TravelQueryThreadCompletedError(thread_id)
 
         result = await self._graph.ainvoke(Command(resume=answer), config=config)
-        return await self._to_dispatched_response(thread_id, result)
-
-    async def _to_dispatched_response(
-        self,
-        thread_id: str,
-        result: dict[str, Any],
-    ) -> TravelQueryApiResponse:
-        response = _to_api_response(thread_id, result)
-        dispatches = await self._dispatcher.dispatch(response)
-        if not dispatches:
-            return response
-        return response.model_copy(update={"agent_dispatches": dispatches})
+        return _to_api_response(thread_id, result)
 
 
 @lru_cache
@@ -154,7 +138,13 @@ def _to_api_response(
             thread_id=thread_id,
             status="ready",
             structured_query=result.get("structured_query"),
+<<<<<<< HEAD
             execution_context=execution_context,
+=======
+            current_latitude=result.get("current_latitude"),
+            current_longitude=result.get("current_longitude"),
+            current_location_name=result.get("current_location_name"),
+>>>>>>> b64d5210e1088f1252384b0956b10717f0859e58
         )
     if status == "unsupported":
         return TravelQueryApiResponse(

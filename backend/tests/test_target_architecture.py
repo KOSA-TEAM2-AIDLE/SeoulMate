@@ -3,7 +3,6 @@ from datetime import date
 
 from application.recommendation.candidate_selector import validate_selected_ids
 from application.recommendation.request_factory import build_domain_search_request
-from domains.common.exceptions import DomainNotImplementedError
 from domains.common.models import DomainSearchRequest, SearchCandidate
 from domains.common.registry import build_default_domain_registry
 from integrations.mcp.registry import build_default_context_registry
@@ -28,8 +27,13 @@ class TargetArchitectureTests(unittest.IsolatedAsyncioTestCase):
             build_default_domain_registry().status(),
             {
                 "accommodation": False,
+<<<<<<< HEAD
                 "attraction": True,
                 "cafe": False,
+=======
+                "attraction": False,
+                "cafe": True,
+>>>>>>> b64d5210e1088f1252384b0956b10717f0859e58
                 "restaurant": True,
                 "storage_locker": False,
             },
@@ -39,15 +43,9 @@ class TargetArchitectureTests(unittest.IsolatedAsyncioTestCase):
             {"congestion": False, "weather": True},
         )
 
-    async def test_skeleton_service_fails_explicitly(self):
+    def test_default_registry_uses_implemented_cafe_service(self):
         service = build_default_domain_registry().get("cafe")
-        request = DomainSearchRequest(
-            task_id="task_1",
-            domain="cafe",
-            search_query="조용한 카페",
-        )
-        with self.assertRaises(DomainNotImplementedError):
-            await service.search(request)
+        self.assertTrue(service.implemented)
 
     def test_request_factory_uses_task_filters_and_keeps_structured_context(self):
         parsed = StructuredTravelQuery.model_validate({
