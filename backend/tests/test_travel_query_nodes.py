@@ -31,6 +31,29 @@ def _base_state() -> dict:
 
 
 class TravelIntentExtractorTests(unittest.TestCase):
+    def test_input_language_overrides_ui_language(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "single_place_recommendation",
+                "normalized_question": "Recommend quiet cafes near me",
+                "use_current_location": True,
+                "requested_domains": ["cafe"],
+            }
+        )
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "Recommend quiet cafes near me",
+                "language": "ko",
+            }
+        )
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertEqual("en", result["language"])
+        self.assertEqual("en", result["collected"]["language"])
+
     def test_nearby_expression_uses_available_current_coordinates(self) -> None:
         chain = RunnableLambda(
             lambda _: {

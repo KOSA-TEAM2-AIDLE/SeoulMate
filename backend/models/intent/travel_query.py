@@ -11,6 +11,7 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel, ConfigDict, Field
 
 from application.travel_query.state import TravelQueryGraphState
+from core.language import detect_input_language
 from schemas.route_planner import HHMMTime, RoutePace
 from schemas.structured_query import TaskDomain, TravelIntent
 
@@ -227,7 +228,11 @@ class TravelIntentExtractor:
             else IntentExtraction.model_validate(result)
         )
         extracted = extraction.model_dump(mode="json", exclude_none=True)
-        language = extracted.pop("language")
+        model_language = extracted.pop("language")
+        language = detect_input_language(
+            state["original_question"],
+            fallback=state.get("language") or model_language,
+        )
         extracted_intent = extracted.pop("intent")
         llm_normalized_question = extracted.pop("normalized_question")
         intent = (
