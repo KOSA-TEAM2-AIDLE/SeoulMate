@@ -3,6 +3,7 @@ import { streamChat } from "../../api/chat";
 import { resumeTravelQuery, startTravelQuery } from "../../api/travelQuery";
 import useTravelStore from "../../stores/useTravelStore";
 import { useLangStore } from "../../stores/useLangStore";
+import useLocationStore from "../../stores/useLocationStore";
 
 const UI_TEXT = {
     ko: {
@@ -35,6 +36,7 @@ function toChatHistory(messages) {
 export default function useChatSidebar() {
     const lang = useLangStore((state) => state.lang);
     const t = UI_TEXT[lang] || UI_TEXT.ko;
+    const coordinates = useLocationStore((state) => state.coordinates);
 
     const [messages, setMessages] = useState([
         {
@@ -114,13 +116,19 @@ export default function useChatSidebar() {
 
         try {
             const queryResponse = travelQueryThreadId
-                ? await resumeTravelQuery(travelQueryThreadId, trimmedMessage)
+                ? await resumeTravelQuery(
+                    travelQueryThreadId,
+                    trimmedMessage,
+                    coordinates
+                )
                 : await startTravelQuery({
                     message: trimmedMessage,
                     language: lang,
                     history: toChatHistory(messages).slice(-12),
                     previousStructuredQuery:
                         previousStructuredQueryRef.current ?? undefined,
+                    lat: coordinates?.latitude,
+                    lng: coordinates?.longitude,
                 });
 
             if (queryResponse.status === "collecting") {
@@ -155,6 +163,8 @@ export default function useChatSidebar() {
                 parsedIntent: parsedQuery.intent,
                 sourceMode: parsedQuery.source_mode ?? undefined,
                 parsedQuery,
+                lat: coordinates?.latitude,
+                lng: coordinates?.longitude,
                 onMeta: (payload) => {
                     const result = payload?.result;
                     if (!result) return;
