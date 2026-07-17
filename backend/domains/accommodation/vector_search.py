@@ -249,7 +249,7 @@ def query_hotels_by_radius(target_lat, target_lng, radius_km=5.0):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         query = """
-            SELECT id, name, hotel_style, amenities, address, rating, lat, lng,
+            SELECT id, name, hotel_style, amenities, address, rating, lat, lng, image, review_count,
                    (6371 * acos(
                         cos(radians(%s)) * cos(radians(lat)) * 
                         cos(radians(lng) - radians(%s)) + 

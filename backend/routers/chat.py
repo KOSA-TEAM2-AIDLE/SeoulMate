@@ -427,6 +427,21 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     name=raw["name"],
                     payload=wrapped["payload"],
                 ))
+        elif task.domain == "accommodation":
+            for candidate in batch.candidates[:5]:
+                place = search_candidate_to_place(candidate)
+                candidate_id = (
+                    f"{task.slot_id or task.task_id}:{task.domain}:{candidate.place_id}"
+                )
+                place_lookup[candidate_id] = place
+                wrapped = _accommodation_group_candidate(candidate)
+                candidates.append(RouteCandidate(
+                    candidate_id=candidate_id,
+                    domain=task.domain,
+                    place_id=candidate.place_id,
+                    name=candidate.name,
+                    payload=wrapped["payload"],
+                ))
         else:
             for candidate in batch.candidates[:5]:
                 place = search_candidate_to_place(candidate)
@@ -557,6 +572,29 @@ def _restaurant_group_candidate(candidate: dict, include_weather: bool) -> dict:
     }
 
 
+def _accommodation_group_candidate(candidate) -> dict:
+    payload = {
+        "category": candidate.category,
+        "price": candidate.attributes.get("price"),
+        "live_rating": candidate.attributes.get("live_rating"),
+        "rating": candidate.attributes.get("rating"),
+        "review_count": candidate.attributes.get("review_count"),
+        "features": candidate.attributes.get("features"),
+        "url": candidate.attributes.get("url"),
+        "evidence": candidate.evidence[:3] if candidate.evidence else [],
+    }
+    return {
+        "place_id": candidate.place_id,
+        "name": candidate.name,
+        "payload": payload,
+        "fallback_reason": (
+            str(candidate.attributes.get("reason") or "").strip()
+            or (candidate.evidence[0] if candidate.evidence else "검색 조건 관련도")
+        ),
+        "raw_candidate": candidate,
+    }
+
+
 async def _multi_task_recommendation_stream(
     body: ChatRequest,
     source_mode: str,
@@ -596,6 +634,11 @@ async def _multi_task_recommendation_stream(
             group_candidates = [
                 _restaurant_group_candidate(candidate, include_weather)
                 for candidate in candidates[:LLM_CANDIDATE_COUNT]
+            ]
+        elif task.domain == "accommodation":
+            group_candidates = [
+                _accommodation_group_candidate(candidate)
+                for candidate in batch.candidates[:LLM_CANDIDATE_COUNT]
             ]
         else:
             group_candidates = [
