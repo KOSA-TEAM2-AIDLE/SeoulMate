@@ -14,6 +14,11 @@ from application.travel_query.state import TravelQueryGraphState
 from core.language import detect_input_language
 from schemas.route_planner import HHMMTime, RoutePace
 from schemas.structured_query import TaskDomain, TravelIntent
+from services.location import (
+    CITYWIDE_LOCATION_NAME,
+    is_citywide_location,
+    wants_citywide_search,
+)
 
 
 class RequestedVisitSlot(BaseModel):
@@ -235,6 +240,42 @@ class TravelIntentExtractor:
         )
         extracted_intent = extracted.pop("intent")
         llm_normalized_question = extracted.pop("normalized_question")
+        budget_source = (
+            latest_answer
+            if isinstance(latest_answer, str) and missing_fields
+            else state["original_question"]
+        )
+        if (
+            extracted.get("budget_ambiguous")
+            and extracted.get("budget_min_krw") is None
+            and extracted.get("budget_max_krw") is None
+            and not re.search(
+                r"(?:예산|가격|금액|비용|원\b|만원|천원|krw|budget|price|cost|won|₩)",
+                budget_source,
+                flags=re.IGNORECASE,
+            )
+        ):
+            # '총 3곳' 같은 방문 수를 금액으로 오인한 결과는 HITL로 보내지 않는다.
+            extracted["budget_ambiguous"] = False
+        extracted_location = extracted.get("location")
+        location_clarification = bool(
+            latest_answer is not None
+            and any(
+                field in {"filters.location", "route_request.destination"}
+                for field in missing_fields
+            )
+        )
+        location_source = (
+            latest_answer if isinstance(latest_answer, str) else state["original_question"]
+        )
+        if is_citywide_location(extracted_location) or (
+            not extracted_location
+            and wants_citywide_search(
+                location_source,
+                location_clarification=location_clarification,
+            )
+        ):
+            extracted["location"] = CITYWIDE_LOCATION_NAME
         intent = (
             state["intent"]
             if latest_answer is not None
