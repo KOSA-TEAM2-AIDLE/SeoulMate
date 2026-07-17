@@ -80,6 +80,9 @@ class TravelQueryService:
         self,
         thread_id: str,
         answer: str | dict[str, Any],
+        *,
+        current_latitude: float | None = None,
+        current_longitude: float | None = None,
     ) -> TravelQueryApiResponse:
         config = _thread_config(thread_id)
         snapshot = await self._graph.aget_state(config)
@@ -88,7 +91,16 @@ class TravelQueryService:
         if not snapshot.next:
             raise TravelQueryThreadCompletedError(thread_id)
 
-        result = await self._graph.ainvoke(Command(resume=answer), config=config)
+        update = {}
+        if current_latitude is not None and current_longitude is not None:
+            update = {
+                "current_latitude": current_latitude,
+                "current_longitude": current_longitude,
+            }
+        result = await self._graph.ainvoke(
+            Command(resume=answer, update=update),
+            config=config,
+        )
         return _to_api_response(thread_id, result)
 
 

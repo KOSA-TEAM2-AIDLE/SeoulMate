@@ -5,6 +5,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 from schemas.common import Place, ToolResult
+from core.language import detect_input_language
 from schemas.frontend_response import FrontendResponse
 from schemas.structured_query import SourceMode, StructuredTravelQuery, TravelIntent
 
@@ -36,6 +37,7 @@ class ChatRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_structured_contract(self):
+        self.lang = detect_input_language(self.message, fallback=self.lang)
         if (self.lat is None) != (self.lng is None):
             raise ValueError("lat과 lng는 함께 제공해야 합니다.")
         if self.parsed_query is not None:

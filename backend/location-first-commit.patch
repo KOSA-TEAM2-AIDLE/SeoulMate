@@ -1,0 +1,61 @@
+diff --git a/frontend/src/MainPage.jsx b/frontend/src/MainPage.jsx
+index 3f76b5c..cf63e96 100644
+--- a/frontend/src/MainPage.jsx
++++ b/frontend/src/MainPage.jsx
+@@ -3,7 +3,10 @@ import MapWorkspace from "./pages/MapWorkspace";
+ import PlaceSidebar from "./pages/PlaceSidebar";
+ import ChatSidebarMock from "./pages/ChatSidebarMock.jsx";
++import { useCurrentLocation } from "./hooks/location/useCurrentLocation";
+ 
+ 
+ export default function MainPage() {
++    useCurrentLocation();
++
+     return (
+         <div className="flex h-screen w-screen flex-col bg-slate-50 text-slate-900 overflow-hidden">
+             <Header />
+diff --git a/frontend/src/hooks/location/useCurrentLocation.js b/frontend/src/hooks/location/useCurrentLocation.js
+new file mode 100644
+index 0000000..bc58de3
+--- /dev/null
++++ b/frontend/src/hooks/location/useCurrentLocation.js
+@@ -0,0 +1,22 @@
++import { useEffect } from 'react';
++import useLocationStore from '../../stores/useLocationStore';
++
++export function useCurrentLocation() {
++  const isGeolocationSupported = useLocationStore(
++    (state) => state.isGeolocationSupported,
++  );
++  const setCoordinates = useLocationStore((state) => state.setCoordinates);
++
++  useEffect(() => {
++    if (!isGeolocationSupported) {
++      return;
++    }
++
++    navigator.geolocation.getCurrentPosition((position) => {
++      setCoordinates({
++        latitude: position.coords.latitude,
++        longitude: position.coords.longitude,
++      });
++    });
++  }, [isGeolocationSupported, setCoordinates]);
++}
+diff --git a/frontend/src/stores/useLocationStore.js b/frontend/src/stores/useLocationStore.js
+new file mode 100644
+index 0000000..3ea4909
+--- /dev/null
++++ b/frontend/src/stores/useLocationStore.js
+@@ -0,0 +1,11 @@
++import { create } from 'zustand';
++
++const useLocationStore = create((set) => ({
++  coordinates: null,
++  isGeolocationSupported:
++    typeof navigator !== 'undefined' && 'geolocation' in navigator,
++
++  setCoordinates: (coordinates) => set({ coordinates }),
++}));
++
++export default useLocationStore;

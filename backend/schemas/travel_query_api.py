@@ -45,6 +45,8 @@ class TravelQueryStartRequest(BaseModel):
 
 class TravelQueryResumeRequest(BaseModel):
     answer: str | dict[str, Any]
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
 
     @model_validator(mode="after")
     def validate_answer(self) -> Self:
@@ -52,6 +54,8 @@ class TravelQueryResumeRequest(BaseModel):
             raise ValueError("answer는 공백일 수 없습니다.")
         if isinstance(self.answer, dict) and not self.answer:
             raise ValueError("answer 객체는 비어 있을 수 없습니다.")
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("lat과 lng는 함께 제공되어야 합니다.")
         return self
 
 

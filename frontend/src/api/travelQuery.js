@@ -20,6 +20,8 @@ export async function startTravelQuery({
   language = 'ko',
   history = [],
   previousStructuredQuery,
+  lat,
+  lng,
 }) {
   const response = await fetch(`${API_BASE_URL}/travel-query/start`, {
     method: 'POST',
@@ -33,13 +35,15 @@ export async function startTravelQuery({
       reference_at: new Date().toISOString(),
       history,
       previous_structured_query: previousStructuredQuery,
+      lat,
+      lng,
     }),
   });
 
   return parseJsonResponse(response, '질문 분석에 실패했습니다.');
 }
 
-export async function resumeTravelQuery(threadId, answer) {
+export async function resumeTravelQuery(threadId, answer, coordinates) {
   const response = await fetch(
     `${API_BASE_URL}/travel-query/${encodeURIComponent(threadId)}/resume`,
     {
@@ -48,7 +52,11 @@ export async function resumeTravelQuery(threadId, answer) {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({ answer }),
+      body: JSON.stringify({
+        answer,
+        lat: coordinates?.latitude,
+        lng: coordinates?.longitude,
+      }),
     },
   );
 

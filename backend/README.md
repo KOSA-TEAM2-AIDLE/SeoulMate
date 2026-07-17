@@ -46,8 +46,12 @@ RAG 식당 후보 30개
 ```powershell
 Copy-Item .env.example .env
 uv sync
-uv run fastapi dev main.py
+.\scripts\run_dev.ps1
 ```
+
+개발 서버 스크립트는 `.uv-cache`, 가상환경 및 `__pycache__` 변경을
+자동 reload 대상에서 제외합니다. 의존성 설치 중 서버가 반복 재시작되는
+문제를 방지하려면 `uv run fastapi dev main.py` 대신 이 스크립트를 사용하세요.
 
 `.env`에 PostgreSQL, OpenAI, 카카오 REST API, 기상청 API 키를 설정해야 실제 검색이 동작합니다.
 
