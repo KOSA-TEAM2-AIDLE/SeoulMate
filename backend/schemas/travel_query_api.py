@@ -5,7 +5,12 @@ from pydantic import BaseModel, Field, model_validator
 
 from domains.common.models import SearchCandidate
 from schemas.hitl import HumanInTheLoopResponse
-from schemas.structured_query import TaskDomain
+from schemas.structured_query import StructuredTravelQuery, TaskDomain
+
+
+class TravelQueryContextMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
 
 
 class TravelQueryStartRequest(BaseModel):
@@ -15,6 +20,11 @@ class TravelQueryStartRequest(BaseModel):
     lat: float | None = Field(default=None, ge=-90, le=90)
     lng: float | None = Field(default=None, ge=-180, le=180)
     location_name: str | None = None
+    history: list[TravelQueryContextMessage] = Field(
+        default_factory=list,
+        max_length=12,
+    )
+    previous_structured_query: StructuredTravelQuery | None = None
 
     @model_validator(mode="after")
     def validate_context(self) -> Self:

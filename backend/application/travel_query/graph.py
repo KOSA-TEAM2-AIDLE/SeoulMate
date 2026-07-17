@@ -154,6 +154,8 @@ def build_initial_state(
     current_latitude: float | None = None,
     current_longitude: float | None = None,
     current_location_name: str | None = None,
+    conversation_history: list[dict[str, str]] | None = None,
+    previous_structured_query: dict[str, Any] | None = None,
 ) -> TravelQueryGraphState:
     if not original_question.strip():
         raise ValueError("original_question은 비어 있을 수 없습니다.")
@@ -184,5 +186,6 @@ def build_initial_state(
         "structured_query": None,
         "validation_errors": [],
         "repair_attempts": 0,
-        "conversation_history": [],
+        "conversation_history": list(conversation_history or []),
+        "previous_structured_query": previous_structured_query,
     }

@@ -68,6 +68,15 @@ class TravelQueryService:
             current_latitude=request.lat,
             current_longitude=request.lng,
             current_location_name=request.location_name,
+            conversation_history=[
+                message.model_dump()
+                for message in request.history
+            ],
+            previous_structured_query=(
+                request.previous_structured_query.model_dump(mode="json")
+                if request.previous_structured_query is not None
+                else None
+            ),
         )
         result = await self._graph.ainvoke(initial_state, config=config)
         return await self._to_dispatched_response(thread_id, result)

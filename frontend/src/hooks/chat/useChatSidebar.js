@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { streamChat } from "../../api/chat";
+import { resumeTravelQuery, startTravelQuery } from "../../api/travelQuery";
 import useTravelStore from "../../stores/useTravelStore";
 import { useLangStore } from "../../stores/useLangStore";
 
@@ -44,7 +45,9 @@ export default function useChatSidebar() {
     ]);
     const [inputValue, setInputValue] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
+    const [travelQueryThreadId, setTravelQueryThreadId] = useState(null);
     const messageEndRef = useRef(null);
+    const previousStructuredQueryRef = useRef(null);
 
     const {
         setTravelPath,
@@ -81,6 +84,14 @@ export default function useChatSidebar() {
         );
     };
 
+    const setAssistantContent = (assistantId, content) => {
+        setMessages((current) =>
+            current.map((msg) =>
+                msg.id === assistantId ? { ...msg, content } : msg
+            )
+        );
+    };
+
     // 4. 메시지 전송 로직
     const handleSendMessage = async (messageText = inputValue) => {
         const trimmedMessage = messageText.trim();
@@ -102,21 +113,62 @@ export default function useChatSidebar() {
         setIsStreaming(true);
 
         try {
+            const queryResponse = travelQueryThreadId
+                ? await resumeTravelQuery(travelQueryThreadId, trimmedMessage)
+                : await startTravelQuery({
+                    message: trimmedMessage,
+                    language: lang,
+                    history: toChatHistory(messages).slice(-12),
+                    previousStructuredQuery:
+                        previousStructuredQueryRef.current ?? undefined,
+                });
+
+            if (queryResponse.status === "collecting") {
+                setTravelQueryThreadId(queryResponse.thread_id);
+                setAssistantContent(
+                    assistantMessage.id,
+                    queryResponse.assistant_message ?? t.errFallback
+                );
+                return;
+            }
+
+            if (queryResponse.status === "unsupported") {
+                setTravelQueryThreadId(null);
+                setAssistantContent(
+                    assistantMessage.id,
+                    queryResponse.assistant_message ?? t.errFallback
+                );
+                return;
+            }
+
+            const parsedQuery = queryResponse.structured_query;
+            if (queryResponse.status !== "ready" || !parsedQuery) {
+                throw new Error(t.errFallback);
+            }
+
+            setTravelQueryThreadId(null);
+            previousStructuredQueryRef.current = parsedQuery;
             await streamChat({
                 message: trimmedMessage,
                 history: toChatHistory(messages),
                 lang: lang,
-                onToken: (token) => appendAssistantToken(assistantMessage.id, token),
-                onDone: (payload) => {
-                    if (payload?.data) {
-                        const { allDay: nextAllDay, travelPath, recommendList } = payload.data;
-                        if (nextAllDay !== undefined && nextAllDay !== null) {
-                            setAllDay(nextAllDay);
-                        }
-                        if (travelPath) setTravelPath(travelPath);
-                        if (recommendList) setRecommendList(recommendList);
+                parsedIntent: parsedQuery.intent,
+                sourceMode: parsedQuery.source_mode ?? undefined,
+                parsedQuery,
+                onMeta: (payload) => {
+                    const result = payload?.result;
+                    if (!result) return;
+
+                    if (result.allDay !== undefined && result.allDay !== null) {
+                        setAllDay(result.allDay);
+                    }
+                    if (result.travelPath) setTravelPath(result.travelPath);
+                    if (Array.isArray(result.recommendList)) {
+                        setRecommendList(result.recommendList);
                     }
                 },
+                onToken: (token) => appendAssistantToken(assistantMessage.id, token),
+                onDone: () => {},
                 onError: (payload) => {
                     throw new Error(payload.message ?? t.errStreaming);
                 },
