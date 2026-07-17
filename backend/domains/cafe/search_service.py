@@ -14,6 +14,16 @@ from integrations.kakao.geocoding_client import geocode_kakao
 
 
 DEFAULT_LOCATION_RADIUS_KM = 2.0
+LOCATION_CAFE_VECTOR_LIMIT = 500
+LOCATION_REVIEW_VECTOR_POOL = 500
+CURRENT_LOCATION_ALIASES = frozenset({
+    "현재 위치",
+    "내 위치",
+    "여기",
+    "current location",
+    "my location",
+    "near me",
+})
 GENERIC_CAFE_TERMS = (
     "coffee shop",
     "coffee shops",
@@ -81,6 +91,12 @@ def _same_location(target: str | None, current: str | None) -> bool:
     return target.strip().casefold() == current.strip().casefold()
 
 
+def _is_current_location(target: str | None) -> bool:
+    if not target:
+        return False
+    return target.strip().casefold() in CURRENT_LOCATION_ALIASES
+
+
 class CafeSearchService:
     domain = "cafe"
     implemented = True
@@ -108,9 +124,10 @@ class CafeSearchService:
         origin_latitude = request.latitude
         origin_longitude = request.longitude
         target_location = request.location
-        if target_location and not _same_location(
-            target_location,
-            request.current_location_name,
+        if (
+            target_location
+            and not _is_current_location(target_location)
+            and not _same_location(target_location, request.current_location_name)
         ):
             geocoded = self.geocoder(target_location)
             if geocoded:
@@ -128,9 +145,16 @@ class CafeSearchService:
             )
 
         semantic_query = build_cafe_semantic_query(request)
+        retrieval_options = {}
+        if has_origin and radius_km is not None:
+            retrieval_options = {
+                "cafe_limit": LOCATION_CAFE_VECTOR_LIMIT,
+                "review_pool": LOCATION_REVIEW_VECTOR_POOL,
+            }
         retrieval = self.repository.retrieve(
             semantic_query,
             language=request.language,
+            **retrieval_options,
         )
         ranked = self.reranker.rerank(
             retrieval,

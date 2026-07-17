@@ -31,6 +31,29 @@ def _base_state() -> dict:
 
 
 class TravelIntentExtractorTests(unittest.TestCase):
+    def test_nearby_expression_uses_available_current_coordinates(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "single_place_recommendation",
+                "normalized_question": "여기 주변 카페 추천",
+                "requested_domains": ["cafe"],
+            }
+        )
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "여기 주변 카페 추천해줘.",
+                "current_latitude": 37.5563,
+                "current_longitude": 126.9236,
+            }
+        )
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertTrue(result["collected"]["use_current_location"])
+        self.assertEqual([], find_missing_fields(state | result))
+
     def test_previous_query_and_history_reach_extraction_chain(self) -> None:
         captured: dict = {}
 

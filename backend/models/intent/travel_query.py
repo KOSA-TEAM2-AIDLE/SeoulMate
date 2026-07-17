@@ -1,6 +1,7 @@
 """여행 질문의 인텐트와 구조화 조건을 추출하는 모델."""
 
 import json
+import re
 from datetime import date, timedelta
 from typing import Any, Literal
 
@@ -237,6 +238,7 @@ class TravelIntentExtractor:
             else extracted_intent
         )
         _apply_deterministic_defaults(intent, extracted)
+        _apply_current_location_hint(state, extracted)
 
         collected = dict(state.get("collected", {}))
         if latest_answer is not None and missing_fields:
@@ -263,6 +265,37 @@ class TravelIntentExtractor:
             "collected": collected,
             "latest_user_answer": None,
         }
+
+
+CURRENT_LOCATION_HINT_RE = re.compile(
+    r"(?:여기|이곳|현재\s*위치|내\s*위치|내\s*(?:주변|근처)|"
+    r"around\s+here|near\s+me|my\s+location|current\s+location)",
+    re.IGNORECASE,
+)
+
+
+def _apply_current_location_hint(
+    state: TravelQueryGraphState,
+    extracted: dict[str, Any],
+) -> None:
+    if extracted.get("location"):
+        return
+    if (
+        state.get("current_latitude") is None
+        or state.get("current_longitude") is None
+    ):
+        return
+
+    text = " ".join(
+        str(value)
+        for value in (
+            state.get("original_question"),
+            state.get("latest_user_answer"),
+        )
+        if value
+    )
+    if CURRENT_LOCATION_HINT_RE.search(text):
+        extracted["use_current_location"] = True
 
 
 def _clarification_patch(
