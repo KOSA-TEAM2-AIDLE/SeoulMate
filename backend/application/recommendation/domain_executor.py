@@ -5,7 +5,10 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from application.recommendation.request_factory import build_domain_search_request
-from domains.common.exceptions import DomainNotImplementedError
+from domains.common.exceptions import (
+    DomainNotImplementedError,
+    DomainNotRegisteredError,
+)
 from domains.common.models import SearchCandidate
 from domains.common.registry import DomainSearchRegistry
 from schemas.structured_query import StructuredQueryTask, StructuredTravelQuery
@@ -79,10 +82,13 @@ async def execute_domain_search(
         candidate_count=candidate_count,
         min_rating=min_rating,
     )
-    service = registry.get(task.domain)
+    # registry.get()이 미등록 도메인(예: 파서가 내보내는 'etc')에 대해 던지는
+    # DomainNotRegisteredError도 함께 잡아 mock 후보로 폴백한다. 이렇게 하면
+    # 단일 추천과 루트 모두에서 빈 응답/하드 크래시 대신 안전한 임시 후보가 나온다.
     try:
+        service = registry.get(task.domain)
         candidates = await service.search(request)
-    except DomainNotImplementedError as exc:
+    except (DomainNotImplementedError, DomainNotRegisteredError) as exc:
         return DomainSearchBatch(
             task_id=task.task_id,
             domain=task.domain,
