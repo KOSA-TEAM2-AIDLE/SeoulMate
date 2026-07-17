@@ -10,41 +10,35 @@ export default function LocationStatus() {
     return null;
   }
 
-  if (status === 'loading') {
+  if (status === 'error') {
     return (
-      <div
-        className="absolute right-4 top-4 z-20 rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm font-medium text-blue-600 shadow-md"
-        role="status"
-      >
-        현재 위치를 확인하고 있습니다.
-      </div>
+      <button
+        type="button"
+        className="absolute right-4 top-4 z-20 size-4 rounded-full border-2 border-white bg-red-500 shadow-md transition-transform hover:scale-125 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2"
+        onClick={requestCurrentLocation}
+        title={`${error?.message ?? '위치 정보를 확인하지 못했습니다.'} 다시 시도하려면 클릭하세요.`}
+        aria-label={`${error?.message ?? '위치 정보를 확인하지 못했습니다.'} 다시 시도`}
+      />
     );
   }
 
-  if (status === 'error') {
+  if (status === 'loading') {
     return (
-      <div
-        className="absolute right-4 top-4 z-20 max-w-xs rounded-lg border border-red-200 bg-white p-4 shadow-md"
-        role="alert"
-      >
-        <p className="text-sm font-semibold text-red-600">{error?.message}</p>
-        <button
-          type="button"
-          className="mt-3 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-          onClick={requestCurrentLocation}
-        >
-          다시 시도
-        </button>
-      </div>
+      <span
+        className="absolute right-4 top-4 z-20 size-4 animate-pulse rounded-full border-2 border-white bg-blue-500 shadow-md"
+        role="status"
+        title="현재 위치를 확인하고 있습니다."
+        aria-label="현재 위치 확인 중"
+      />
     );
   }
 
   return (
-    <div
-      className="absolute right-4 top-4 z-20 rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-700 shadow-md"
+    <span
+      className="absolute right-4 top-4 z-20 size-4 rounded-full border-2 border-white bg-emerald-500 shadow-md"
       role="status"
-    >
-      현재 위치를 확인했습니다.
-    </div>
+      title="현재 위치를 확인했습니다."
+      aria-label="현재 위치 확인 완료"
+    />
   );
 }
