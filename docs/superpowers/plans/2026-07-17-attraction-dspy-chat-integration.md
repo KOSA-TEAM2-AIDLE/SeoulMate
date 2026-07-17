@@ -96,10 +96,10 @@
 - Consumes: 원본 Task 순서, Task별 `DomainSearchRequest`, 후보 wrapper, 전용 선택 Registry
 - Produces: 현재 `generate_grouped_recommendation_result()`와 동일한 `answer`, `task_results` 구조
 
-- [ ] 단일 관광 Task는 DSPy만 호출하는 실패 테스트를 작성한다.
-- [ ] 관광이 없는 Task는 기존 공통 GPT를 한 번만 호출하는 테스트를 작성한다.
-- [ ] 혼합 Task는 관광 DSPy 결과와 나머지 공통 GPT 결과를 원래 Task 순서로 병합하는 테스트를 작성한다.
-- [ ] 전용 선택 결과의 ID를 wrapper 화이트리스트로 다시 검증하고 부족한 후보를 순위대로 보충한다.
+- [x] 단일 관광 Task는 DSPy만 호출하는 실패 테스트를 작성한다.
+- [x] 관광이 없는 Task는 기존 공통 GPT를 한 번만 호출하는 테스트를 작성한다.
+- [x] 혼합 Task는 관광 DSPy 결과와 나머지 공통 GPT 결과를 원래 Task 순서로 병합하는 테스트를 작성한다.
+- [x] 전용 선택 결과의 ID를 wrapper 화이트리스트로 다시 검증하고 부족한 후보를 순위대로 보충한다.
 
 ### Task 4: `/chat` 실행 경로 연결
 
@@ -112,10 +112,10 @@
 - Consumes: Task별 상위 10개 `SearchCandidate`, 관광 혼잡도 재랭킹 결과, 그룹 선택 조정기
 - Produces: 기존 `Place`, `recommendList`, `meta → token → done`
 
-- [ ] 관광 단일 추천에서 공통 GPT가 아니라 DSPy Selector가 호출되는 실패 테스트를 작성한다.
-- [ ] 기존 후보 wrapper에 Task 요청을 보존하고 그룹 선택 조정기를 호출한다.
-- [ ] 카페·숙박·식당 경로가 기존 선택기를 유지하는 회귀 테스트를 실행한다.
-- [ ] 관광 응답의 `source_id`, 좌표, 주소, 카테고리가 원본 `SearchCandidate`와 일치하는지 검증한다.
+- [x] 관광 단일 추천에서 공통 GPT가 아니라 DSPy Selector가 호출되는 실패 테스트를 작성한다.
+- [x] 기존 후보 wrapper에 Task 요청을 보존하고 그룹 선택 조정기를 호출한다.
+- [x] 카페·숙박·식당 경로가 기존 선택기를 유지하는 회귀 테스트를 실행한다.
+- [x] 관광 응답의 `source_id`, 좌표, 주소, 카테고리가 원본 `SearchCandidate`와 일치하는지 검증한다.
 
 ### Task 5: 기존 AttractionAgent 중복 경로 축소
 
