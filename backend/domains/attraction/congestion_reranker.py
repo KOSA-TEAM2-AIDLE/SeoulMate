@@ -14,10 +14,20 @@ class AttractionCongestionReranker:
     MAX_AGE_MINUTES = 180
     GENERAL_WEIGHT = 0.02
     EXPLICIT_WEIGHT = 0.10
-    LOW_CONGESTION_TERMS = ("한적", "덜 붐", "붐비지", "혼잡하지", "low congestion", "less crowded", "quiet")
+    LOW_CONGESTION_TERMS = (
+        "한적", "한산", "고즈넉", "조용", "여유로운", "평화로운",
+        "덜 붐", "붐비지", "혼잡하지", "사람 적은",
+        "low congestion", "less crowded", "uncrowded", "quiet",
+        "peaceful", "calm",
+    )
 
     def __init__(self, provider: ContextProvider) -> None:
         self._provider = provider
+
+    @classmethod
+    def prefers_low_congestion(cls, question: str) -> bool:
+        normalized = question.casefold()
+        return any(term in normalized for term in cls.LOW_CONGESTION_TERMS)
 
     async def rerank(
         self,
@@ -63,7 +73,11 @@ class AttractionCongestionReranker:
         ).total_seconds() <= self.MAX_AGE_MINUTES * 60
         adjustment = 0.0
         if fresh and score is not None:
-            weight = self.EXPLICIT_WEIGHT if any(term in question.casefold() for term in self.LOW_CONGESTION_TERMS) else self.GENERAL_WEIGHT
+            weight = (
+                self.EXPLICIT_WEIGHT
+                if self.prefers_low_congestion(question)
+                else self.GENERAL_WEIGHT
+            )
             centered = max(-1.0, min(1.0, (50.0 - float(score)) / 50.0))
             adjustment = centered * weight
         signals = dict(candidate.signals)

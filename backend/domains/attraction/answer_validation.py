@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from core.config import settings
 from domains.attraction.answer_models import (
     AttractionAnswerInput,
     AttractionAnswerResult,
@@ -38,7 +39,10 @@ def validate_attraction_prediction(
         ):
             raise ValueError("선택 ID는 비어 있지 않은 문자열 목록이어야 합니다.")
 
-        expected_count = min(3, len(answer_input.candidates))
+        expected_count = min(
+            settings.attraction_recommendation_limit,
+            len(answer_input.candidates),
+        )
         if len(selected_ids) != expected_count:
             raise ValueError("선택 개수가 올바르지 않습니다.")
         if len(selected_ids) != len(set(selected_ids)):
@@ -62,6 +66,14 @@ def validate_attraction_prediction(
         answer = prediction.answer
         if not isinstance(answer, str) or not answer.strip():
             raise ValueError("답변은 비어 있을 수 없습니다.")
+        normalized_answer = answer.casefold()
+        mentioned_ids = {
+            candidate.place_id
+            for candidate in answer_input.candidates
+            if candidate.name.casefold() in normalized_answer
+        }
+        if mentioned_ids and mentioned_ids != set(selected_ids):
+            raise ValueError("답변의 후보명이 선택 ID와 일치하지 않습니다.")
 
         for place_id in selected_ids:
             candidate = candidates_by_id[place_id]
@@ -94,7 +106,10 @@ def fallback_attraction_answer(
 ) -> AttractionAnswerResult:
     """LLM 결과와 무관하게 재랭킹 상위 후보를 안전하게 반환한다."""
 
-    selected = sorted(answer_input.candidates, key=lambda candidate: candidate.rank)[:3]
+    selected = sorted(
+        answer_input.candidates,
+        key=lambda candidate: candidate.rank,
+    )[:settings.attraction_recommendation_limit]
     english = answer_input.language.casefold().startswith("en")
     if english:
         reason = "Selected from the highest-ranked verified reranking results."

@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     attraction_dspy_model: str = "openai/gpt-4o-mini"
     attraction_dspy_temperature: float = Field(default=0.0, ge=0, le=2)
     attraction_dspy_max_tokens: int = Field(default=900, ge=1)
+    attraction_recommendation_limit: int = Field(default=3, ge=1, le=10)
     attraction_dspy_artifact_path: Path = (
         BASE_DIR
         / "domains"

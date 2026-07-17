@@ -4,6 +4,8 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from core.config import settings
+
 
 class AttractionEvidenceCandidate(BaseModel):
     """DSPy에 노출해도 되는 검증된 후보 근거."""
@@ -59,12 +61,19 @@ class AttractionAnswerResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     answer: str = Field(min_length=1)
-    selections: list[AttractionSelection] = Field(default_factory=list, max_length=3)
+    selections: list[AttractionSelection] = Field(
+        default_factory=list,
+        max_length=10,
+    )
     used_fallback: bool = False
 
     @model_validator(mode="after")
     def reject_duplicate_selection_ids(self) -> "AttractionAnswerResult":
         place_ids = [selection.place_id for selection in self.selections]
+        if len(place_ids) > settings.attraction_recommendation_limit:
+            raise ValueError(
+                "선정 후보는 설정된 최대 추천 개수를 넘을 수 없습니다."
+            )
         if len(place_ids) != len(set(place_ids)):
             raise ValueError("선정된 place_id는 중복될 수 없습니다.")
         return self

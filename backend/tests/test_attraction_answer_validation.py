@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from domains.attraction.answer_models import (
     AttractionAnswerInput,
@@ -97,6 +98,20 @@ class AttractionAnswerValidationTests(unittest.TestCase):
             validate_attraction_prediction(answer_input(), invalid).used_fallback
         )
 
+    def test_answer_cannot_replace_selected_candidate_with_another_name(self):
+        invalid = prediction(
+            ["1", "2", "3"],
+            answer="후보 1, 후보 2, 후보 4를 추천합니다.",
+        )
+
+        result = validate_attraction_prediction(answer_input(), invalid)
+
+        self.assertTrue(result.used_fallback)
+        self.assertEqual(
+            ["1", "2", "3"],
+            [item.place_id for item in result.selections],
+        )
+
     def test_fallback_uses_available_count_and_requested_language(self):
         korean = fallback_attraction_answer(answer_input())
         english_input = answer_input(language="en").model_copy(
@@ -107,6 +122,16 @@ class AttractionAnswerValidationTests(unittest.TestCase):
         self.assertIn("재랭킹", korean.selections[0].selection_reason)
         self.assertEqual(len(english.selections), 2)
         self.assertIn("reranking", english.selections[0].selection_reason)
+
+    def test_recommendation_limit_is_controlled_by_one_setting(self):
+        with patch(
+            "domains.attraction.answer_validation.settings."
+            "attraction_recommendation_limit",
+            2,
+        ):
+            result = fallback_attraction_answer(answer_input())
+
+        self.assertEqual(["1", "2"], [item.place_id for item in result.selections])
 
 
 if __name__ == "__main__":

@@ -57,7 +57,10 @@ class AttractionAnswerGenerator:
             "question": answer_input.question,
             "location": answer_input.location or "",
             "themes_json": json.dumps(answer_input.themes, ensure_ascii=False),
-            "selection_count": min(3, len(answer_input.candidates)),
+            "selection_count": min(
+                settings.attraction_recommendation_limit,
+                len(answer_input.candidates),
+            ),
             "candidates_json": json.dumps(
                 [
                     candidate.model_dump(mode="json")

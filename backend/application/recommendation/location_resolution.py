@@ -50,11 +50,10 @@ class SearchLocationResolver:
             )
 
         try:
-            resolution = await self._resolver.resolve(
-                query=target,
-                center_latitude=latitude,
-                center_longitude=longitude,
-            )
+            # 시설명 정확 매칭은 사용자와의 거리보다 우선한다.
+            # Kakao에 중심 좌표를 주면 거리순으로 입점 상점이
+            # 원본 시설보다 앞서 정확히 같은 이름을 놓칠 수 있다.
+            resolution = await self._resolver.resolve(query=target)
         except KakaoLocalServiceError as error:
             return ResolvedSearchLocation(location_name=target, warning=str(error))
 
@@ -67,6 +66,24 @@ class SearchLocationResolver:
                 source=selected.source,
                 candidates=resolution.candidates,
             )
+        if latitude is not None and longitude is not None:
+            try:
+                centered = await self._resolver.resolve(
+                    query=target,
+                    center_latitude=latitude,
+                    center_longitude=longitude,
+                )
+            except KakaoLocalServiceError:
+                centered = None
+            if centered is not None and centered.selected is not None:
+                selected = centered.selected
+                return ResolvedSearchLocation(
+                    location_name=selected.place_name,
+                    latitude=selected.latitude,
+                    longitude=selected.longitude,
+                    source=selected.source,
+                    candidates=centered.candidates,
+                )
         return ResolvedSearchLocation(
             location_name=target,
             candidates=resolution.candidates[:3],

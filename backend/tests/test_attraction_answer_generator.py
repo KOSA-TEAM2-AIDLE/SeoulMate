@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from domains.attraction import AttractionAnswerGenerator, AttractionRecommendationPipeline
+from domains.attraction.answer_models import AttractionAnswerResult, AttractionSelection
 from domains.common.models import DomainSearchRequest, SearchCandidate
 from domains.attraction.answer_program import (
     AttractionProgramArtifactError,
@@ -189,7 +190,19 @@ class AttractionRecommendationPipelineTests(unittest.IsolatedAsyncioTestCase):
         class Answer:
             async def generate(self, **values):
                 calls.append(("answer", [item.place_id for item in values["candidates"]]))
-                return "result"
+                return AttractionAnswerResult(
+                    answer="result",
+                    selections=[
+                        AttractionSelection(
+                            place_id="3",
+                            selection_reason="third",
+                        ),
+                        AttractionSelection(
+                            place_id="2",
+                            selection_reason="second",
+                        ),
+                    ],
+                )
 
         pipeline = AttractionRecommendationPipeline(
             search_service=Search(),
@@ -204,13 +217,67 @@ class AttractionRecommendationPipelineTests(unittest.IsolatedAsyncioTestCase):
                 search_query="경복궁",
                 location="경복궁",
                 themes=["역사"],
-            )
+            ),
+            use_congestion=True,
         )
 
-        self.assertEqual(result, "result")
+        self.assertEqual(result.answer.answer, "result")
+        self.assertEqual(
+            [candidate.place_id for candidate in result.candidates],
+            ["3", "2"],
+        )
         self.assertEqual(calls[0], "search")
         self.assertEqual(calls[1], ("congestion", ["2", "3", "1"]))
         self.assertEqual(calls[2], ("answer", ["2", "3", "1"]))
+
+    async def test_pipeline_skips_congestion_when_policy_disables_it(self):
+        calls = []
+        candidate = SearchCandidate(
+            domain="attraction",
+            place_id="1",
+            task_id="task_1",
+            name="후보 1",
+            category="관광지",
+            base_score=0.9,
+            final_score=0.9,
+            attributes={"kind": "attraction"},
+        )
+
+        class Search:
+            async def search(self, request):
+                return [candidate]
+
+        class Congestion:
+            async def rerank(self, *args, **kwargs):
+                calls.append("congestion")
+                return args[0]
+
+        class Answer:
+            async def generate(self, **values):
+                return AttractionAnswerResult(
+                    answer="result",
+                    selections=[AttractionSelection(
+                        place_id="1",
+                        selection_reason="reason",
+                    )],
+                )
+
+        pipeline = AttractionRecommendationPipeline(
+            search_service=Search(),
+            congestion_reranker=Congestion(),
+            answer_generator=Answer(),
+        )
+
+        await pipeline.recommend(
+            DomainSearchRequest(
+                task_id="task_1",
+                domain="attraction",
+                search_query="서울 관광지",
+            ),
+            use_congestion=False,
+        )
+
+        self.assertEqual([], calls)
 
 
 if __name__ == "__main__":
