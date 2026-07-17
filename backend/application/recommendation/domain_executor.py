@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import psycopg2.errors
 from pydantic import BaseModel, Field
 
 from application.recommendation.request_factory import build_domain_search_request
@@ -82,13 +83,20 @@ async def execute_domain_search(
         candidate_count=candidate_count,
         min_rating=min_rating,
     )
-    # registry.get()이 미등록 도메인(예: 파서가 내보내는 'etc')에 대해 던지는
-    # DomainNotRegisteredError도 함께 잡아 mock 후보로 폴백한다. 이렇게 하면
-    # 단일 추천과 루트 모두에서 빈 응답/하드 크래시 대신 안전한 임시 후보가 나온다.
+    # 아래 예외를 모두 mock 후보로 폴백한다. 이렇게 하면 단일 추천과 루트 모두에서
+    # 빈 응답/하드 크래시 대신 안전한 임시 후보가 나온다.
+    #  - DomainNotRegisteredError: 미등록 도메인(예: 파서가 내보내는 'etc')
+    #  - DomainNotImplementedError: 스켈레톤(미구현) 도메인
+    #  - UndefinedTable: 검색기는 구현됐지만 테이블이 아직 적재되지 않은 도메인
+    #    (예: 카페 데이터 미적재). 데이터가 들어오면 자동으로 실제 결과로 전환된다.
     try:
         service = registry.get(task.domain)
         candidates = await service.search(request)
-    except (DomainNotImplementedError, DomainNotRegisteredError) as exc:
+    except (
+        DomainNotImplementedError,
+        DomainNotRegisteredError,
+        psycopg2.errors.UndefinedTable,
+    ) as exc:
         return DomainSearchBatch(
             task_id=task.task_id,
             domain=task.domain,
