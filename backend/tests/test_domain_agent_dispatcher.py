@@ -8,6 +8,7 @@ from application.recommendation.domain_dispatcher import (
 from domains.accommodation.agent import AccommodationAgent
 from domains.attraction.agent import AttractionAgent
 from domains.cafe.agent import CafeAgent
+from domains.common.models import DomainSearchRequest, SearchCandidate
 from domains.etc.agent import EtcAgent
 from domains.restaurant.agent import RestaurantAgent
 from schemas.travel_query_api import (
@@ -95,6 +96,31 @@ class RecordingAgent:
         )
 
 
+class FakeCafeSearchService:
+    domain = "cafe"
+    implemented = True
+
+    def __init__(self) -> None:
+        self.received: list[DomainSearchRequest] = []
+
+    async def search(
+        self,
+        request: DomainSearchRequest,
+    ) -> list[SearchCandidate]:
+        self.received.append(request)
+        return [
+            SearchCandidate(
+                domain="cafe",
+                place_id="cafe-1",
+                task_id=request.task_id,
+                name="테스트 카페",
+                category="카페",
+                base_score=0.9,
+                final_score=0.9,
+            )
+        ]
+
+
 class ReadyDomainAgentDispatcherTests(unittest.IsolatedAsyncioTestCase):
     def test_default_registry_uses_separate_domain_agent_classes(self) -> None:
         registry = build_temporary_agent_registry()
@@ -142,12 +168,30 @@ class ReadyDomainAgentDispatcherTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([], results)
         self.assertEqual([], restaurant.received)
 
-    async def test_placeholder_agent_reports_received_tasks(self) -> None:
-        results = await ReadyDomainAgentDispatcher().dispatch(_ready_response())
+    async def test_cafe_agent_searches_with_pydantic_request(self) -> None:
+        service = FakeCafeSearchService()
+        cafe = CafeAgent(search_service=service)
+        dispatcher = ReadyDomainAgentDispatcher(
+            DomainAgentRegistry([
+                RecordingAgent("restaurant"),
+                cafe,
+            ])
+        )
 
-        self.assertEqual(["restaurant", "cafe"], [item.domain for item in results])
-        self.assertEqual(["task_1", "task_3"], results[0].task_ids)
-        self.assertEqual("placeholder", results[0].status)
+        results = await dispatcher.dispatch(_ready_response())
+
+        cafe_result = results[1]
+        self.assertEqual("cafe", cafe_result.domain)
+        self.assertEqual("completed", cafe_result.status)
+        self.assertEqual(["task_2"], cafe_result.task_ids)
+        self.assertEqual(["테스트 카페"], [
+            candidate.name for candidate in cafe_result.candidates
+        ])
+        self.assertEqual(1, len(service.received))
+        self.assertIsInstance(service.received[0], DomainSearchRequest)
+        self.assertEqual("task_2", service.received[0].task_id)
+        self.assertEqual("cafe", service.received[0].domain)
+        self.assertEqual("홍대 카페", service.received[0].search_query)
 
 
 if __name__ == "__main__":

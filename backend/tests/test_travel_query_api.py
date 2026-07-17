@@ -76,12 +76,7 @@ class TravelQueryApiTests(unittest.TestCase):
             4,
             ready["structured_query"]["route_request"]["target_places_per_day"],
         )
-        self.assertEqual(1, len(ready["agent_dispatches"]))
-        self.assertEqual("etc", ready["agent_dispatches"][0]["domain"])
-        self.assertEqual(
-            ["task_1", "task_2", "task_3", "task_4"],
-            ready["agent_dispatches"][0]["task_ids"],
-        )
+        self.assertEqual([], ready["agent_dispatches"])
 
         completed = self.client.post(
             f"/travel-query/{collecting['thread_id']}/resume",
