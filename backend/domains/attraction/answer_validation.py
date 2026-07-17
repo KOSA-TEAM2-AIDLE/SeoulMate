@@ -6,6 +6,10 @@ import json
 from typing import Any
 
 from core.config import settings
+from domains.attraction.answer_diagnostics import (
+    AttractionFallbackReason,
+    AttractionPredictionValidationError,
+)
 from domains.attraction.answer_models import (
     AttractionAnswerInput,
     AttractionAnswerResult,
@@ -33,74 +37,118 @@ def validate_attraction_prediction(
     """예측이 계약을 하나라도 위반하면 전체 fallback으로 전환한다."""
 
     try:
-        selected_ids = prediction.selected_place_ids
-        if not isinstance(selected_ids, list) or not all(
-            isinstance(place_id, str) and not is_nullish(place_id)
-            for place_id in selected_ids
-        ):
-            raise ValueError("선택 ID는 비어 있지 않은 문자열 목록이어야 합니다.")
-
-        expected_count = min(
-            settings.attraction_recommendation_limit,
-            len(answer_input.candidates),
-        )
-        if len(selected_ids) > expected_count:
-            raise ValueError("선택 개수가 최대치를 넘었습니다.")
-        if len(selected_ids) != len(set(selected_ids)):
-            raise ValueError("선택 ID가 중복됩니다.")
-
-        candidates_by_id = {
-            candidate.place_id: candidate for candidate in answer_input.candidates
-        }
-        if any(place_id not in candidates_by_id for place_id in selected_ids):
-            raise ValueError("후보에 없는 ID가 선택됐습니다.")
-
-        reasons = json.loads(prediction.selection_reasons_json)
-        if not isinstance(reasons, dict) or set(reasons) != set(selected_ids):
-            raise ValueError("선정 이유는 선택 ID와 정확히 일치해야 합니다.")
-        if any(
-            not isinstance(reasons[place_id], str)
-            or is_nullish(reasons[place_id])
-            for place_id in selected_ids
-        ):
-            raise ValueError("선정 이유는 비어 있을 수 없습니다.")
-
-        answer = prediction.answer
-        if not isinstance(answer, str) or is_nullish(answer):
-            raise ValueError("답변은 비어 있을 수 없습니다.")
-        normalized_answer = answer.casefold()
-        mentioned_ids = {
-            candidate.place_id
-            for candidate in answer_input.candidates
-            if candidate.name.casefold() in normalized_answer
-        }
-        if mentioned_ids and mentioned_ids != set(selected_ids):
-            raise ValueError("답변의 후보명이 선택 ID와 일치하지 않습니다.")
-
-        for place_id in selected_ids:
-            candidate = candidates_by_id[place_id]
-            if candidate.congestion is None and _mentions_quietness(
-                reasons[place_id]
-            ):
-                raise ValueError("혼잡도 없이 한적함을 추론했습니다.")
-        if any(
-            candidates_by_id[place_id].congestion is None
-            for place_id in selected_ids
-        ) and _mentions_quietness(answer):
-            raise ValueError("답변이 혼잡도 없이 한적함을 추론했습니다.")
-
-        return AttractionAnswerResult(
-            answer=answer.strip(),
-            selections=[
-                AttractionSelection(
-                    place_id=place_id,
-                    selection_reason=reasons[place_id].strip(),
-                )
-                for place_id in selected_ids
-            ],
-        )
-    except (AttributeError, TypeError, ValueError, json.JSONDecodeError):
+        return validate_attraction_prediction_or_raise(answer_input, prediction)
+    except AttractionPredictionValidationError:
         return fallback_attraction_answer(answer_input)
+
+
+def validate_attraction_prediction_or_raise(
+    answer_input: AttractionAnswerInput,
+    prediction: Any,
+) -> AttractionAnswerResult:
+    """검증 실패 원인을 상위 생성기가 로깅할 수 있게 전달한다."""
+
+    try:
+        selected_ids = prediction.selected_place_ids
+    except AttributeError as error:
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.INVALID_SELECTED_IDS
+        ) from error
+    if not isinstance(selected_ids, list) or not all(
+        isinstance(place_id, str) and not is_nullish(place_id)
+        for place_id in selected_ids
+    ):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.INVALID_SELECTED_IDS
+        )
+
+    expected_count = min(
+        settings.attraction_recommendation_limit,
+        len(answer_input.candidates),
+    )
+    if len(selected_ids) > expected_count:
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.TOO_MANY_SELECTED_IDS
+        )
+    if len(selected_ids) != len(set(selected_ids)):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.DUPLICATE_SELECTED_IDS
+        )
+
+    candidates_by_id = {
+        candidate.place_id: candidate for candidate in answer_input.candidates
+    }
+    if any(place_id not in candidates_by_id for place_id in selected_ids):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.UNKNOWN_SELECTED_ID
+        )
+
+    try:
+        reasons = json.loads(prediction.selection_reasons_json)
+    except (AttributeError, TypeError, json.JSONDecodeError) as error:
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.INVALID_REASONS_JSON
+        ) from error
+    if not isinstance(reasons, dict) or set(reasons) != set(selected_ids):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.REASONS_ID_MISMATCH
+        )
+    if any(
+        not isinstance(reasons[place_id], str)
+        or is_nullish(reasons[place_id])
+        for place_id in selected_ids
+    ):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.EMPTY_SELECTION_REASON
+        )
+
+    try:
+        answer = prediction.answer
+    except AttributeError as error:
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.EMPTY_ANSWER
+        ) from error
+    if not isinstance(answer, str) or is_nullish(answer):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.EMPTY_ANSWER
+        )
+    normalized_answer = answer.casefold()
+    mentioned_ids = {
+        candidate.place_id
+        for candidate in answer_input.candidates
+        if candidate.name.casefold() in normalized_answer
+    }
+    if mentioned_ids and mentioned_ids != set(selected_ids):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.ANSWER_CANDIDATE_MISMATCH
+        )
+
+    for place_id in selected_ids:
+        candidate = candidates_by_id[place_id]
+        if candidate.congestion is None and _mentions_quietness(
+            reasons[place_id]
+        ):
+            raise AttractionPredictionValidationError(
+                AttractionFallbackReason.UNSUPPORTED_QUIETNESS_CLAIM
+            )
+    if any(
+        candidates_by_id[place_id].congestion is None
+        for place_id in selected_ids
+    ) and _mentions_quietness(answer):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.UNSUPPORTED_QUIETNESS_CLAIM
+        )
+
+    return AttractionAnswerResult(
+        answer=answer.strip(),
+        selections=[
+            AttractionSelection(
+                place_id=place_id,
+                selection_reason=reasons[place_id].strip(),
+            )
+            for place_id in selected_ids
+        ],
+    )
 
 
 def fallback_attraction_answer(
@@ -149,4 +197,8 @@ def _mentions_quietness(text: str) -> bool:
     return any(term in normalized for term in _QUIETNESS_TERMS)
 
 
-__all__ = ["fallback_attraction_answer", "validate_attraction_prediction"]
+__all__ = [
+    "fallback_attraction_answer",
+    "validate_attraction_prediction",
+    "validate_attraction_prediction_or_raise",
+]

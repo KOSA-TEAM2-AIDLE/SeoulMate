@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import dspy
 
 from core.config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class AttractionProgramArtifactError(ValueError):
@@ -96,7 +100,25 @@ def load_attraction_program(
         raise AttractionProgramArtifactError(
             f"관광 DSPy artifact를 불러오지 못했습니다: {path}"
         ) from error
+    _warn_if_artifact_contract_mismatch(program)
     return program
+
+
+def _warn_if_artifact_contract_mismatch(
+    program: AttractionSelectionAnswerProgram,
+) -> None:
+    """이전 artifact가 후보 없음(0개)을 허용하지 않는지 진단한다."""
+
+    instructions = str(program.generate.signature.instructions)
+    legacy_exact_count = "정확히 selection_count개" in instructions
+    supports_empty_selection = "0개부터 selection_count개" in instructions
+    if legacy_exact_count and not supports_empty_selection:
+        logger.warning(
+            "attraction_dspy_artifact_warning "
+            "reason=artifact_contract_mismatch "
+            "artifact_selection_rule=exact_count "
+            "runtime_selection_rule=zero_to_limit"
+        )
 
 
 __all__ = [

@@ -9,6 +9,11 @@ from domains.attraction.answer_models import (
 from domains.attraction.answer_validation import (
     fallback_attraction_answer,
     validate_attraction_prediction,
+    validate_attraction_prediction_or_raise,
+)
+from domains.attraction.answer_diagnostics import (
+    AttractionFallbackReason,
+    AttractionPredictionValidationError,
 )
 
 
@@ -48,6 +53,32 @@ def prediction(
 
 
 class AttractionAnswerValidationTests(unittest.TestCase):
+    def test_validation_error_exposes_machine_readable_reason(self):
+        invalid = prediction(["unknown", "2", "3"])
+
+        with self.assertRaises(AttractionPredictionValidationError) as caught:
+            validate_attraction_prediction_or_raise(answer_input(), invalid)
+
+        self.assertEqual(
+            caught.exception.reason,
+            AttractionFallbackReason.UNKNOWN_SELECTED_ID,
+        )
+
+    def test_invalid_reason_json_has_distinct_diagnostic_reason(self):
+        invalid = SimpleNamespace(
+            selected_place_ids=["1", "2", "3"],
+            selection_reasons_json="{broken",
+            answer="추천합니다.",
+        )
+
+        with self.assertRaises(AttractionPredictionValidationError) as caught:
+            validate_attraction_prediction_or_raise(answer_input(), invalid)
+
+        self.assertEqual(
+            caught.exception.reason,
+            AttractionFallbackReason.INVALID_REASONS_JSON,
+        )
+
     def test_valid_prediction_is_returned_without_fallback(self):
         result = validate_attraction_prediction(answer_input(), prediction())
 

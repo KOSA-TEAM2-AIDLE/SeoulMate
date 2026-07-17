@@ -43,6 +43,19 @@ class AttractionSelectionAnswerSignatureTests(unittest.TestCase):
 
 
 class AttractionProgramLoaderTests(unittest.TestCase):
+    def test_legacy_exact_count_artifact_logs_contract_warning(self):
+        with self.assertLogs(
+            "domains.attraction.answer_program", level="WARNING"
+        ) as captured:
+            load_attraction_program()
+
+        self.assertTrue(
+            any(
+                "reason=artifact_contract_mismatch" in message
+                for message in captured.output
+            )
+        )
+
     def test_missing_artifact_raises_file_not_found(self):
         with tempfile.TemporaryDirectory() as directory:
             missing = Path(directory) / "missing.json"
@@ -157,6 +170,49 @@ class AttractionAnswerGeneratorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result.used_fallback)
         self.assertEqual([item.place_id for item in result.selections], ["1", "2", "3"])
+
+    async def test_program_load_failure_logs_diagnostic_stage_and_reason(self):
+        generator = AttractionAnswerGenerator(
+            program_loader=lambda: (_ for _ in ()).throw(
+                FileNotFoundError("artifact missing")
+            ),
+            lm_factory=lambda: None,
+        )
+
+        with self.assertLogs(
+            "domains.attraction.answer_generator", level="WARNING"
+        ) as captured:
+            result = await self._generate(generator)
+
+        self.assertTrue(result.used_fallback)
+        self.assertIn("stage=program_load", captured.output[0])
+        self.assertIn("reason=artifact_load_failed", captured.output[0])
+        self.assertNotIn("artifact missing", captured.output[0])
+
+    async def test_prediction_validation_failure_logs_exact_reason(self):
+        class Program:
+            def __call__(self, **inputs):
+                return SimpleNamespace(
+                    selected_place_ids=["unknown", "2", "3"],
+                    selection_reasons_json=(
+                        '{"unknown":"근거","2":"근거","3":"근거"}'
+                    ),
+                    answer="추천합니다.",
+                )
+
+        generator = AttractionAnswerGenerator(
+            program_loader=lambda: Program(),
+            lm_factory=lambda: None,
+        )
+
+        with self.assertLogs(
+            "domains.attraction.answer_generator", level="WARNING"
+        ) as captured:
+            result = await self._generate(generator)
+
+        self.assertTrue(result.used_fallback)
+        self.assertIn("stage=prediction_validation", captured.output[0])
+        self.assertIn("reason=unknown_selected_id", captured.output[0])
 
 
 if __name__ == "__main__":
