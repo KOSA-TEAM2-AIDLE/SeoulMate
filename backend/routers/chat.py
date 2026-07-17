@@ -580,6 +580,7 @@ def _accommodation_group_candidate(candidate) -> dict:
         "rating": candidate.attributes.get("rating"),
         "review_count": candidate.attributes.get("review_count"),
         "features": candidate.attributes.get("features"),
+        "url": candidate.attributes.get("url"),
         "evidence": candidate.evidence[:3] if candidate.evidence else [],
     }
     return {

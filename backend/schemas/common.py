@@ -30,7 +30,7 @@ class Place(BaseModel):
     weather_reasons: list[str] = Field(default_factory=list)
     price: Optional[str] = None
     live_rating: Optional[str] = None
-    url: Optional[str] = None
+    link: Optional[str] = None
     features: Optional[str] = None
 
 

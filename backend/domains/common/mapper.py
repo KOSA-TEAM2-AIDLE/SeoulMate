@@ -56,7 +56,7 @@ def search_candidate_to_place(
         weather_reasons=weather_reasons,
         price=attributes.get("price"),
         live_rating=attributes.get("live_rating"),
-        url=attributes.get("url"),
+        link=attributes.get("url"),
         features=attributes.get("features"),
     )
 
