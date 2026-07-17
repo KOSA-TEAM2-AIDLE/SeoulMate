@@ -628,6 +628,33 @@ def _load_weather_menu_features(
     return _build_weather_menu_features(rows, restaurant_ids, table_suffix)
 
 
+# 지오코딩은 "강남"도 강남역 지점으로 수렴시키므로, 사용자가 지역(구/동네)을
+# 말했는지 특정 지점(역/랜드마크)을 말했는지에 따라 기본 반경을 달리한다.
+STATION_DEFAULT_RADIUS_KM = 2.0   # "강남역" 같은 특정 지점 → 역 근처만
+DISTRICT_DEFAULT_RADIUS_KM = 5.0  # "강남구" 같은 자치구 → 넓게
+AREA_DEFAULT_RADIUS_KM = 4.0      # "강남/홍대" 같은 동네 → 지역 전체를 아우름
+CITYWIDE_RADIUS_KM = 60.0         # "서울" → 도시 전역(사실상 반경 무제한)
+CITYWIDE_TERMS = {"서울", "서울시", "서울특별시", "seoul"}
+
+
+def _area_default_radius(location: str | None) -> float:
+    """지오코딩 전 사용자 원본 지명으로 기본 검색 반경을 정한다."""
+    if not location:
+        return STATION_DEFAULT_RADIUS_KM
+    text = location.strip().lower()
+    # 도시 전역
+    if text in CITYWIDE_TERMS:
+        return CITYWIDE_RADIUS_KM
+    # 지하철역/특정 지점: 역 근처만 좁게
+    if text.endswith("역") or text.endswith("station") or "번 출구" in text:
+        return STATION_DEFAULT_RADIUS_KM
+    # 자치구 단위: 가장 넓게
+    if text.endswith("구") or text.endswith("-gu"):
+        return DISTRICT_DEFAULT_RADIUS_KM
+    # 그 외 동네/지역명(강남, 홍대, 이태원 등)은 지역 전체를 아우른다.
+    return AREA_DEFAULT_RADIUS_KM
+
+
 def build_restaurant_search_plan(
     parsed_query: StructuredTravelQuery,
     task: StructuredQueryTask,
@@ -666,6 +693,14 @@ def build_restaurant_search_plan(
 
     source_mode = derive_source_mode(parsed_query)
     location_name = task_filters.location
+    # 반경 판정은 정규화 전 사용자 원본 지명으로 한다. effective_task_filters는
+    # "강남역"을 "강남"으로 정규화해 역 근처 의도를 잃을 수 있으므로, Task/전역
+    # 필터의 원본 location을 우선 사용한다. (지오코딩 좌표는 어차피 동일)
+    requested_location_term = (
+        (task.filters.location if task.filters else None)
+        or parsed_query.filters.location
+        or location_name
+    )
     origin_lat, origin_lng = current_lat, current_lng
     same_as_current = bool(
         location_name
@@ -694,7 +729,9 @@ def build_restaurant_search_plan(
         location_name=location_name,
         origin_lat=origin_lat,
         origin_lng=origin_lng,
-        radius_km=trusted_radius_km(task_query),
+        radius_km=trusted_radius_km(
+            task_query, default=_area_default_radius(requested_location_term)
+        ),
         open_now=should_filter_open_now(task_query, task_filters),
         include_weather_features=source_mode == "rag_mcp",
         min_rating=extract_min_rating(task_query),
