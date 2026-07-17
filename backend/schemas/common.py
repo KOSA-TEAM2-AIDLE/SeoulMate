@@ -28,6 +28,10 @@ class Place(BaseModel):
     rag_score: Optional[float] = None
     weather_score: Optional[float] = None
     weather_reasons: list[str] = Field(default_factory=list)
+    price: Optional[str] = None
+    live_rating: Optional[str] = None
+    link: Optional[str] = None
+    features: Optional[str] = None
 
 
 class ToolResult(BaseModel):

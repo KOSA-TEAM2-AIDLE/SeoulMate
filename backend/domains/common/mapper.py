@@ -54,6 +54,10 @@ def search_candidate_to_place(
         rag_score=float(candidate.base_score),
         weather_score=_number(candidate.signals.get("weather_score"), float),
         weather_reasons=weather_reasons,
+        price=attributes.get("price"),
+        live_rating=attributes.get("live_rating"),
+        link=attributes.get("url"),
+        features=attributes.get("features"),
     )
 
 
