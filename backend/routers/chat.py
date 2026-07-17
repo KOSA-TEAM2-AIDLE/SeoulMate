@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from collections import OrderedDict
+from dataclasses import dataclass
 import json
 import logging
 from datetime import date, timedelta
@@ -12,6 +15,13 @@ from fastapi.responses import StreamingResponse
 
 from api.dependencies import domain_registry
 from application.recommendation.domain_executor import execute_domain_search
+from application.recommendation.group_selection import select_grouped_candidates
+from application.recommendation.location_resolution import SearchLocationResolver
+from application.recommendation.request_factory import build_domain_search_request
+from application.recommendation.selection_registry import (
+    build_default_selection_registry,
+)
+from application.travel_query.service import TravelQueryService, get_travel_query_service
 from application.response.frontend_response_mapper import (
     empty_frontend_response,
     recommendation_frontend_response,
@@ -33,6 +43,7 @@ from schemas.chat import (
     DayPlan,
     TimeSlot,
 )
+from schemas.travel_query_api import TravelQueryApiResponse, TravelQueryStartRequest
 from schemas.common import Place, ToolResult
 from schemas.route_planner import (
     RouteCandidate,
@@ -62,8 +73,11 @@ from services.query_policy import (
     trusted_visit_date,
 )
 from domains.restaurant.weather_policy import prepare_rag_only_candidates, rerank_with_weather
+from domains.attraction.congestion_reranker import AttractionCongestionReranker
+from domains.attraction.context_enricher import AttractionContextEnricher
 from services.source_router import decide_source_mode, mode_to_intent, normalize_source_mode
-from integrations.mcp.weather_client import get_weather_via_mcp
+from integrations.mcp.congestion_client import CongestionMCPProvider
+from integrations.mcp.weather_client import WeatherMCPProvider, get_weather_via_mcp
 from application.route.route_planner import generate_route_plan
 
 
@@ -98,6 +112,13 @@ DOMAIN_DEFAULT_TIMES = {
     "cafe": "20:30",
     "accommodation": "22:00",
 }
+ATTRACTION_CONGESTION_SOURCE = "Seoul-Congestion-MCP"
+attraction_congestion_reranker = AttractionCongestionReranker(CongestionMCPProvider())
+attraction_context_enricher = AttractionContextEnricher(
+    congestion_reranker=attraction_congestion_reranker,
+    weather_provider=WeatherMCPProvider(),
+)
+domain_selection_registry = build_default_selection_registry()
 
 MEAL_TIME_HINTS = (
     (("아침", "조식", "breakfast"), "09:00"),
@@ -235,6 +256,33 @@ async def _search_structured_task(
     )
 
 
+async def _rerank_attraction_candidates(
+    candidates,
+    parsed,
+    source_mode: str,
+    request,
+):
+    # 식당·카페와 같이 검색 모드와 Context 정책을 분리한다.
+    # 날씨는 Enricher 내부 조건을 따르고, 관광 혼잡도는 좌표·위치·
+    # 명시적 한적함 요청이 있으면 rag_only에서도 보강한다.
+    reranked = await attraction_context_enricher.enrich(
+        request,
+        candidates,
+    )
+    sources = []
+    if any(
+        candidate.signals.get("congestion_available") is True
+        for candidate in reranked
+    ):
+        sources.append(ATTRACTION_CONGESTION_SOURCE)
+    if any(
+        candidate.signals.get("weather_available") is True
+        for candidate in reranked
+    ):
+        sources.append("KMA-via-Weather-MCP")
+    return reranked, tuple(sources)
+
+
 async def _structured_weather(body: ChatRequest, source_mode: str):
     if normalize_source_mode(source_mode) not in {"rag_mcp", "mcp_only"}:
         return None, [], []
@@ -307,7 +355,10 @@ async def _execute_structured_tasks(body: ChatRequest, source_mode: str):
     if parsed is None:
         raise ValueError("structured task 실행에는 parsed_query가 필요합니다.")
 
-    weather, tool_results, weather_sources = await _structured_weather(body, source_mode)
+    if any(task.domain == "restaurant" for task in parsed.tasks):
+        weather, tool_results, weather_sources = await _structured_weather(body, source_mode)
+    else:
+        weather, tool_results, weather_sources = None, [], []
     places: list[Place] = []
     sources: list[str] = []
     has_mock = False
@@ -338,10 +389,26 @@ async def _execute_structured_tasks(body: ChatRequest, source_mode: str):
             count = min(max(task.desired_count, 1), 3)
             places.extend(_place(candidate) for candidate in candidates[:count])
         else:
+            attraction_request = build_domain_search_request(
+                parsed,
+                task,
+                latitude=body.lat,
+                longitude=body.lng,
+                current_location_name=body.location_name,
+                candidate_count=candidate_count,
+                min_rating=body.min_rating,
+            )
+            candidates, attraction_sources = await _rerank_attraction_candidates(
+                batch.candidates,
+                parsed,
+                source_mode,
+                attraction_request,
+            ) if task.domain == "attraction" else (batch.candidates, ())
+            sources.extend(attraction_sources)
             count = min(max(task.desired_count, 1), 3)
             places.extend(
                 search_candidate_to_place(candidate)
-                for candidate in batch.candidates[:count]
+                for candidate in candidates[:count]
             )
 
     return (
@@ -523,7 +590,22 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     payload=wrapped["payload"],
                 ))
         else:
-            for candidate in batch.candidates[:5]:
+            attraction_request = build_domain_search_request(
+                parsed,
+                task,
+                latitude=body.lat,
+                longitude=body.lng,
+                current_location_name=body.location_name,
+                candidate_count=5,
+                min_rating=body.min_rating,
+            )
+            domain_candidates, _ = await _rerank_attraction_candidates(
+                batch.candidates,
+                parsed,
+                source_mode,
+                attraction_request,
+            ) if task.domain == "attraction" else (batch.candidates, ())
+            for candidate in domain_candidates[:5]:
                 place = search_candidate_to_place(candidate)
                 candidate_id = (
                     f"{task.slot_id or task.task_id}:{task.domain}:{candidate.place_id}"
@@ -686,17 +768,33 @@ async def _multi_task_recommendation_stream(
         raise ValueError("복합 Task 추천에는 parsed_query가 필요합니다.")
     canonical_mode = normalize_source_mode(source_mode)
     include_weather = canonical_mode == "rag_mcp"
-    weather, tool_results, weather_sources = await _structured_weather(body, canonical_mode)
+    if any(task.domain == "restaurant" for task in parsed.tasks):
+        weather, tool_results, weather_sources = await _structured_weather(body, canonical_mode)
+    else:
+        weather, tool_results, weather_sources = None, [], []
     task_groups: list[dict] = []
+    requests_by_task = {}
     sources: list[str] = []
     has_mock = False
 
     for task in parsed.tasks:
         group_candidates: list[dict] = []
+        candidate_count = (
+            30 if task.domain == "restaurant" else LLM_CANDIDATE_COUNT
+        )
+        requests_by_task[str(task.task_id)] = build_domain_search_request(
+            parsed,
+            task,
+            latitude=body.lat,
+            longitude=body.lng,
+            current_location_name=body.location_name,
+            candidate_count=candidate_count,
+            min_rating=body.min_rating,
+        )
         batch = await _search_structured_task(
             body,
             task,
-            candidate_count=30 if task.domain == "restaurant" else LLM_CANDIDATE_COUNT,
+            candidate_count=candidate_count,
         )
         sources.extend(batch.sources)
         has_mock = has_mock or batch.used_mock
@@ -721,6 +819,13 @@ async def _multi_task_recommendation_stream(
                 for candidate in batch.candidates[:LLM_CANDIDATE_COUNT]
             ]
         else:
+            candidates, attraction_sources = await _rerank_attraction_candidates(
+                batch.candidates,
+                parsed,
+                canonical_mode,
+                requests_by_task[str(task.task_id)],
+            ) if task.domain == "attraction" else (batch.candidates, ())
+            sources.extend(attraction_sources)
             group_candidates = [
                 {
                     "place_id": candidate.place_id,
@@ -728,6 +833,11 @@ async def _multi_task_recommendation_stream(
                     "payload": {
                         "category": candidate.category,
                         "evidence": candidate.evidence[:3],
+                        "congestion": {
+                            "level": candidate.signals.get("congestion_level"),
+                            "score": candidate.signals.get("congestion_score"),
+                            "observed_at": candidate.signals.get("congestion_observed_at"),
+                        } if candidate.signals.get("congestion_available") else None,
                     },
                     "fallback_reason": (
                         str(candidate.attributes.get("reason") or "").strip()
@@ -735,7 +845,7 @@ async def _multi_task_recommendation_stream(
                     ),
                     "raw_candidate": candidate,
                 }
-                for candidate in batch.candidates[:LLM_CANDIDATE_COUNT]
+                for candidate in candidates[:LLM_CANDIDATE_COUNT]
             ]
         task_groups.append({
             "task_id": task.task_id,
@@ -756,13 +866,15 @@ async def _multi_task_recommendation_stream(
         yield _sse(ChatDone().model_dump())
         return
 
-    recommendation = await asyncio.to_thread(
-        generate_grouped_recommendation_result,
-        body.message,
-        effective_query_language(parsed),
-        task_groups,
-        weather,
-        canonical_mode,
+    recommendation = await select_grouped_candidates(
+        message=body.message,
+        language=effective_query_language(parsed),
+        task_groups=task_groups,
+        requests_by_task=requests_by_task,
+        selection_registry=domain_selection_registry,
+        common_selector=generate_grouped_recommendation_result,
+        weather=weather,
+        source_mode=canonical_mode,
     )
     places: list[Place] = []
     selected_weather_reasons: list[str] = []
@@ -986,8 +1098,130 @@ def _with_resolved_message(body: ChatRequest) -> ChatRequest:
     )
 
 
+@dataclass(frozen=True)
+class _PendingLocationChoice:
+    parsed_query: object
+    candidates: list
+
+
+_PENDING_LOCATION_CHOICES: OrderedDict[str, _PendingLocationChoice] = OrderedDict()
+_MAX_PENDING_LOCATION_CHOICES = 100
+
+
+def _store_location_choice(thread_id: str, pending: _PendingLocationChoice) -> None:
+    _PENDING_LOCATION_CHOICES[thread_id] = pending
+    _PENDING_LOCATION_CHOICES.move_to_end(thread_id)
+    while len(_PENDING_LOCATION_CHOICES) > _MAX_PENDING_LOCATION_CHOICES:
+        _PENDING_LOCATION_CHOICES.popitem(last=False)
+
+
+def _selected_location_choice(thread_id: str, answer: str):
+    pending = _PENDING_LOCATION_CHOICES.get(thread_id)
+    if pending is None:
+        return None
+    match = re.search(r"\d+", answer)
+    if match is None:
+        return False
+    index = int(match.group()) - 1
+    if not 0 <= index < len(pending.candidates):
+        return False
+    _PENDING_LOCATION_CHOICES.pop(thread_id, None)
+    return pending, pending.candidates[index]
+
+
+async def resolve_travel_query(
+    body: ChatRequest,
+    *,
+    service: TravelQueryService | None = None,
+    location_resolver: SearchLocationResolver | None = None,
+):
+    """원문 채팅을 StructuredTravelQuery로 변환하거나 HITL thread를 재개한다."""
+    if body.travel_query_thread_id:
+        choice = _selected_location_choice(body.travel_query_thread_id, body.message)
+        if choice is False:
+            return None, TravelQueryApiResponse(
+                thread_id=body.travel_query_thread_id,
+                status="collecting",
+                assistant_message="후보 번호를 입력해 주세요.",
+                missing_fields=["location_choice"],
+            )
+        if choice is not None:
+            pending, selected = choice
+            return body.model_copy(update={
+                "parsed_query": pending.parsed_query,
+                "lat": selected.latitude,
+                "lng": selected.longitude,
+                "location_name": selected.place_name,
+            }), None
+    if body.parsed_query is not None:
+        return body, None
+    else:
+        service = service or get_travel_query_service()
+        if body.travel_query_thread_id:
+            response = await service.resume(body.travel_query_thread_id, body.message)
+        else:
+            language = "en" if body.lang.lower().startswith("en") else "ko"
+            response = await service.start(TravelQueryStartRequest(
+                message=body.message,
+                language=language,
+                lat=body.lat,
+                lng=body.lng,
+                location_name=body.location_name,
+            ))
+        if response.status != "ready":
+            return None, response
+        parsed_query = response.structured_query
+        thread_id = response.thread_id
+
+    resolver = location_resolver or SearchLocationResolver()
+    resolved = await resolver.resolve(
+        location=parsed_query.filters.location,
+        latitude=body.lat,
+        longitude=body.lng,
+        current_location_name=body.location_name,
+    )
+    if resolved.requires_disambiguation:
+        _store_location_choice(thread_id, _PendingLocationChoice(parsed_query, resolved.candidates))
+        lines = [
+            f"{index}. {candidate.place_name} ({candidate.road_address_name or candidate.address_name or '주소 정보 없음'})"
+            for index, candidate in enumerate(resolved.candidates, start=1)
+        ]
+        prompt = (
+            "Which location did you mean? Reply with a number.\n"
+            if parsed_query.language == "en"
+            else "어느 장소를 말씀하셨나요? 번호로 선택해 주세요.\n"
+        )
+        return None, TravelQueryApiResponse(
+            thread_id=thread_id,
+            status="collecting",
+            assistant_message=prompt + "\n".join(lines),
+            missing_fields=["location_choice"],
+        )
+    return body.model_copy(update={
+        "parsed_query": parsed_query,
+        "lat": resolved.latitude,
+        "lng": resolved.longitude,
+        "location_name": resolved.location_name,
+    }), None
+
+
 async def _stream(body: ChatRequest):
     try:
+        body, travel_response = await resolve_travel_query(body)
+        if travel_response is not None:
+            continuation = {
+                "thread_id": travel_response.thread_id,
+                "missing_fields": travel_response.missing_fields,
+            } if travel_response.status == "collecting" else None
+            yield _sse(ChatMetaPlaces(
+                intent="chitchat",
+                sources=["travel-query"],
+                continuation=continuation,
+                result=empty_frontend_response("general"),
+            ).model_dump())
+            yield _sse(ChatToken(text=travel_response.assistant_message or "요청을 처리할 수 없습니다.").model_dump())
+            yield _sse(ChatDone().model_dump())
+            return
         body = _with_resolved_message(body)
         if body.parsed_intent == "modify_route" or (
             body.parsed_query is not None

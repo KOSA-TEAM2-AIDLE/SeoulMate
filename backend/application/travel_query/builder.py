@@ -123,6 +123,8 @@ def _build_single_tasks(
     location: str | None,
     language: str,
 ) -> list[TravelTask]:
+    if not collected.get("requested_domains"):
+        raise ValueError("단일 장소 추천에는 검색 도메인이 필요합니다.")
     domains = _domains(collected)
     return [
         TravelTask(

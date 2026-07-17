@@ -18,6 +18,7 @@ from application.travel_query.graph import (
 from core.config import settings
 from schemas.travel_query_api import (
     TravelQueryApiResponse,
+    TravelQueryExecutionContext,
     TravelQueryStartRequest,
 )
 
@@ -128,10 +129,19 @@ def _to_api_response(
     thread_id: str,
     result: dict[str, Any],
 ) -> TravelQueryApiResponse:
+    execution_context = TravelQueryExecutionContext(
+        latitude=result.get("current_latitude"),
+        longitude=result.get("current_longitude"),
+        location_name=result.get("current_location_name"),
+    )
     interrupts = result.get("__interrupt__") or []
     if interrupts:
         return TravelQueryApiResponse.model_validate(
-            {"thread_id": thread_id, **interrupts[0].value}
+            {
+                "thread_id": thread_id,
+                "execution_context": execution_context,
+                **interrupts[0].value,
+            }
         )
 
     status = result.get("status")
@@ -149,5 +159,6 @@ def _to_api_response(
             thread_id=thread_id,
             status="unsupported",
             assistant_message=result.get("assistant_message"),
+            execution_context=execution_context,
         )
     raise TravelQueryExecutionError(result.get("validation_errors", []))

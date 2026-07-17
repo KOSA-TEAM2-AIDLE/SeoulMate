@@ -260,6 +260,21 @@ class StructuredQueryPolicyTests(unittest.TestCase):
         )
         self.assertEqual(derive_source_mode(parsed), "rag_mcp")
 
+    def test_low_congestion_attraction_request_uses_rag_mcp(self):
+        parsed = parsed_query(
+            "경복궁 근처 한적한 문화시설 추천",
+            tasks=[{
+                "task_id": "1",
+                "domain": "attraction",
+                "search_query": "경복궁 한적한 문화시설",
+                "themes": ["한적한", "문화시설"],
+                "desired_count": 3,
+            }],
+            location="경복궁",
+        )
+
+        self.assertEqual(derive_source_mode(parsed), "rag_mcp")
+
     def test_undated_restaurant_uses_rag_only(self):
         parsed = parsed_query(
             "조용한 중식당 추천해줘",

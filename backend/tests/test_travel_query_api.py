@@ -13,6 +13,7 @@ from application.travel_query.graph import build_travel_query_graph
 from application.travel_query.service import (
     TravelQueryConfigurationError,
     TravelQueryService,
+    _to_api_response,
 )
 
 
@@ -31,6 +32,34 @@ def _extraction(inputs: dict) -> dict:
 
 
 class TravelQueryApiTests(unittest.TestCase):
+    def test_current_location_context_uses_public_response_fields(self) -> None:
+        response = _to_api_response(
+            "context-thread",
+            {
+                "status": "ready",
+                "current_latitude": 37.5796,
+                "current_longitude": 126.977,
+                "current_location_name": "경복궁",
+                "structured_query": {
+                    "language": "ko",
+                    "intent": "single_place_recommendation",
+                    "original_question": "내 근처 관광지 추천해줘",
+                    "normalized_question": "현재 위치 근처 관광지 추천",
+                    "tasks": [{
+                        "task_id": "task_1",
+                        "domain": "attraction",
+                        "search_query": "현재 위치 근처 관광지",
+                    }],
+                    "filters": {"location": "현재 위치"},
+                },
+            },
+        )
+
+        self.assertEqual(37.5796, response.current_latitude)
+        self.assertEqual(126.977, response.current_longitude)
+        self.assertEqual("경복궁", response.current_location_name)
+        self.assertNotIn("execution_context", response.model_dump(mode="json"))
+
     def setUp(self) -> None:
         app = FastAPI()
         app.include_router(router)
