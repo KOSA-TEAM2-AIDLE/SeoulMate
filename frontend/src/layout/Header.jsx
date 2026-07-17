@@ -5,12 +5,11 @@ export default function Header() {
 
     return (
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5">
-            <div className="flex items-center gap-3">
-                <div className="flex size-9 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">
-                    S
-                </div>
-                <h1 className="text-2xl font-bold text-blue-600">SeoulMate</h1>
-            </div>
+            <img
+                src="/seoulmate-logo.png"
+                alt="SeoulMate"
+                className="h-12 w-auto max-w-[220px] object-contain"
+            />
 
             {/* 라디오 버튼 그룹 Container */}
             <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1">

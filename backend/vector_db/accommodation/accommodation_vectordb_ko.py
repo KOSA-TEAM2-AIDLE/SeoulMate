@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- 설정 ---
-ACCOMMODATION_CSV = "data/accommodation_ko.csv"
+ACCOMMODATION_CSV = "data/db_seed/accommodation/tripadvisor_cleaned_result.csv"
 
 EMBEDDING_MODEL = "text-embedding-3-large"
 EMBEDDING_DIM = 1536  # Matryoshka 축소

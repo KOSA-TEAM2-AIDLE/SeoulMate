@@ -49,7 +49,12 @@ async def resume_travel_query(
     service: TravelQueryService = Depends(get_travel_query_service_dependency),
 ) -> TravelQueryApiResponse:
     try:
-        return await service.resume(thread_id, body.answer)
+        return await service.resume(
+            thread_id,
+            body.answer,
+            current_latitude=body.lat,
+            current_longitude=body.lng,
+        )
     except TravelQueryThreadNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

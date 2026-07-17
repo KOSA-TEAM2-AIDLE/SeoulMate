@@ -20,7 +20,7 @@ class RecordingRepository:
         self.calls: list[tuple[str, str]] = []
         self.supporting_calls: list[tuple[tuple[float, ...], list[int], str]] = []
 
-    def retrieve(self, query: str, *, language: str):
+    def retrieve(self, query: str, *, language: str, **_options):
         self.calls.append((query, language))
         return self.retrieval
 
@@ -158,6 +158,30 @@ class CafeSearchServiceTests(unittest.IsolatedAsyncioTestCase):
         candidates = await service.search(request)
 
         self.assertEqual(1, len(candidates))
+
+    async def test_current_location_alias_reuses_coordinates_without_geocoding(self):
+        repository = RecordingRepository(retrieval())
+
+        def unexpected_geocode(location):
+            raise AssertionError(f"unexpected geocode: {location}")
+
+        service = CafeSearchService(
+            repository=repository,
+            geocoder=unexpected_geocode,
+        )
+        request = DomainSearchRequest(
+            task_id="cafe-1",
+            domain="cafe",
+            search_query="현재 위치 분위기 좋은 카페",
+            location="현재 위치",
+            latitude=37.5444,
+            longitude=127.0558,
+        )
+
+        candidates = await service.search(request)
+
+        self.assertEqual(1, len(candidates))
+        self.assertLess(candidates[0].signals["distance_km"], 1)
 
     async def test_explicit_radius_without_resolved_coordinates_fails(self):
         service = CafeSearchService(

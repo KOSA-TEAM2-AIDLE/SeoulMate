@@ -20,6 +20,8 @@ export async function streamChat({
   parsedIntent,
   sourceMode,
   parsedQuery,
+  lat,
+  lng,
   onMeta,
   onToken,
   onDone,
@@ -38,6 +40,8 @@ export async function streamChat({
       parsed_intent: parsedIntent,
       source_mode: sourceMode,
       parsed_query: parsedQuery,
+      lat,
+      lng,
     }),
   });
 

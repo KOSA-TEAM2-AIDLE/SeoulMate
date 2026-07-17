@@ -3,9 +3,12 @@ import ChatSidebar from "./pages/ChatSidebar";
 import MapWorkspace from "./pages/MapWorkspace";
 import PlaceSidebar from "./pages/PlaceSidebar";
 import ChatSidebarMock from "./pages/ChatSidebarMock.jsx";
+import { useCurrentLocation } from "./hooks/location/useCurrentLocation";
 
 
 export default function MainPage() {
+    useCurrentLocation();
+
     return (
         <div className="flex h-screen w-screen flex-col bg-slate-50 text-slate-900 overflow-hidden">
             <Header />

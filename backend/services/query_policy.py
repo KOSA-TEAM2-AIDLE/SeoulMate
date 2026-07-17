@@ -12,6 +12,7 @@ from schemas.structured_query import (
     StructuredSearchFilters,
     StructuredTravelQuery,
 )
+from core.language import detect_input_language
 
 
 ExecutionMode = Literal["rag_only", "rag_mcp", "mcp_only", "general"]
@@ -473,12 +474,10 @@ def explicit_feature_fields(parsed: StructuredTravelQuery) -> tuple[str, ...]:
 
 def effective_query_language(parsed: StructuredTravelQuery) -> str:
     """명백한 영문 질문을 GPT가 ko로 잘못 표기한 경우 검색 테이블 언어를 교정한다."""
-    text = parsed.original_question
-    hangul_count = len(re.findall(r"[가-힣]", text))
-    latin_words = re.findall(r"\b[A-Za-z]{2,}\b", text)
-    if not hangul_count and len(latin_words) >= 2:
-        return "en"
-    return "en" if parsed.language.lower().startswith("en") else "ko"
+    return detect_input_language(
+        parsed.original_question,
+        fallback=parsed.language,
+    )
 
 
 def _is_filter_only_fragment(text: str) -> bool:
