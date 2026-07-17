@@ -389,6 +389,7 @@ class WeatherMenuFeatureTests(unittest.TestCase):
         self.assertTrue(item["opening_status"])
         self.assertEqual(item["opening_status_basis"], "requested_time")
         self.assertEqual(item["menu_price_median_krw"], 18000)
+        self.assertNotIn("menu_price_min_krw", item)
         self.assertEqual(item["confirmed_features"], ["parking", "private_room"])
         self.assertNotIn("pets_allowed", item["confirmed_features"])
 

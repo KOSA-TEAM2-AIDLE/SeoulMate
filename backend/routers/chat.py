@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import date, timedelta
 
 from fastapi import APIRouter
@@ -50,12 +51,13 @@ from services.llm import (
     stream_chat_response,
     stream_mcp_only_answer,
 )
-from services.location import SEOUL_CENTER, geocode_kakao
+from services.location import SEOUL_CENTER, geocode_kakao, is_citywide_location
 from services.rag import search_restaurants
 from services.query_policy import (
     deduplicate_recommendation_tasks,
     derive_source_mode,
     effective_query_language,
+    effective_task_filters,
     trusted_time_window,
     trusted_visit_date,
 )
@@ -63,6 +65,23 @@ from domains.restaurant.weather_policy import prepare_rag_only_candidates, reran
 from services.source_router import decide_source_mode, mode_to_intent, normalize_source_mode
 from integrations.mcp.weather_client import get_weather_via_mcp
 from application.route.route_planner import generate_route_plan
+
+
+logger = logging.getLogger(__name__)
+
+# 내부 예외 메시지를 그대로 사용자에게 노출하지 않기 위한 안전한 안내 문구.
+GENERIC_ERROR_MESSAGE = {
+    "ko": "요청을 처리하는 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    "en": "Something went wrong while processing your request. Please try again in a moment.",
+}
+
+
+def _safe_error_message(language: str | None) -> str:
+    return (
+        GENERIC_ERROR_MESSAGE["en"]
+        if str(language or "").lower().startswith("en")
+        else GENERIC_ERROR_MESSAGE["ko"]
+    )
 
 
 router = APIRouter()
@@ -80,12 +99,70 @@ DOMAIN_DEFAULT_TIMES = {
     "accommodation": "22:00",
 }
 
+MEAL_TIME_HINTS = (
+    (("아침", "조식", "breakfast"), "09:00"),
+    (("브런치", "brunch"), "11:00"),
+    (("점심", "런치", "lunch", "noon"), "12:00"),
+    (("저녁", "디너", "dinner", "evening"), "19:00"),
+    (("야식", "늦은 밤", "late night"), "21:00"),
+)
+
+
+def _route_slot_start_time(task) -> str:
+    """첫 GPT가 시각을 비워도 Task의 식사 시간 표현을 일정 순서에 반영한다."""
+    if task.start_time:
+        return task.start_time
+    task_text = " ".join([task.search_query, *task.themes]).lower()
+    if task.domain == "restaurant":
+        for keywords, start_time in MEAL_TIME_HINTS:
+            if any(keyword in task_text for keyword in keywords):
+                return start_time
+    if task.domain == "cafe":
+        return "16:00"
+    return DOMAIN_DEFAULT_TIMES.get(task.domain, "16:00")
+
+
+def _route_slot_start_times(tasks) -> dict[str, str]:
+    """앞 식사 시각을 고려해 시각이 없는 카페를 식사 뒤에 배치한다."""
+    start_times: dict[str, str] = {}
+    previous_restaurant_time: str | None = None
+    for task in tasks:
+        start_time = _route_slot_start_time(task)
+        if task.domain == "cafe" and not task.start_time:
+            task_text = " ".join([task.search_query, *task.themes]).lower()
+            has_time_hint = any(
+                keyword in task_text
+                for keywords, _ in MEAL_TIME_HINTS
+                for keyword in keywords
+            )
+            if (
+                not has_time_hint
+                and previous_restaurant_time is not None
+                and previous_restaurant_time >= "18:00"
+            ):
+                start_time = "20:30"
+        if task.domain == "restaurant":
+            previous_restaurant_time = start_time
+        start_times[task.task_id] = start_time
+    return start_times
+
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def _empty_restaurant_message(rag_result: dict, language: str) -> str:
+    if rag_result.get("location_resolution_failed"):
+        location = rag_result.get("location_name") or "the requested location"
+        if str(language).lower().startswith("en"):
+            return (
+                f"I couldn't identify the location '{location}'. "
+                "Try a district, neighborhood, or station name in Seoul."
+            )
+        return (
+            f"'{location}' 지역을 정확히 확인하지 못했습니다. "
+            "서울의 구·동·역 이름으로 다시 입력해 주세요."
+        )
     if rag_result.get("menu_no_match"):
         terms = ", ".join(rag_result.get("required_menu_terms") or [])
         location = rag_result.get("location_name")
@@ -180,7 +257,9 @@ async def _structured_weather(body: ChatRequest, source_mode: str):
     )
     # 식당 RAG와 동일하게, 현재 좌표의 지명이 타깃과 같다는 근거가 없으면
     # 날씨도 타깃 위치를 지오코딩한다.
-    if parsed and location_name and not same_as_current:
+    if parsed and is_citywide_location(location_name):
+        lat, lng, location_name = SEOUL_CENTER[0], SEOUL_CENTER[1], "서울"
+    elif parsed and location_name and not same_as_current:
         geocoded = await asyncio.to_thread(geocode_kakao, location_name)
         if geocoded:
             lat, lng, location_name = geocoded
@@ -357,6 +436,7 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
     place_lookup: dict[str, Place] = {}
     has_mock = False
     per_day_counts: dict[int, int] = {}
+    slot_start_times = _route_slot_start_times(parsed.tasks)
     for index, task in enumerate(parsed.tasks, start=1):
         day_number = task.day_number or 1
         if day_number > day_count:
@@ -378,7 +458,7 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         )
         has_mock = has_mock or batch.used_mock
         if task.domain == "restaurant":
-            slot_time = task.start_time or DOMAIN_DEFAULT_TIMES.get(task.domain, "16:00")
+            slot_time = slot_start_times[task.task_id]
             weather = None
             if include_weather:
                 cache_key = (visit_date.isoformat(), slot_time)
@@ -466,7 +546,7 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
             slot_id=task.slot_id or task.task_id,
             day_number=day_number,
             date=visit_date,
-            start_time=task.start_time or DOMAIN_DEFAULT_TIMES.get(task.domain, "16:00"),
+            start_time=slot_start_times[task.task_id],
             end_date=task.end_date,
             end_time=task.end_time,
             domain=task.domain,
@@ -754,6 +834,20 @@ async def _restaurant_stream(
         rag_result = {
             "candidates": [to_legacy_candidate(item) for item in batch.candidates],
         }
+        # 공통 도메인 검색 계약은 후보 목록만 반환하므로, 빈 결과일 때는 명시된
+        # 지역의 해석 실패 여부를 복원해 사용자 안내가 일반 조건 불일치로 흐려지지
+        # 않게 한다. 주요 권역은 geocode_kakao 내부의 안정 좌표로 즉시 해결된다.
+        if not batch.candidates:
+            requested_location = effective_task_filters(
+                body.parsed_query, structured_task
+            ).location
+            if requested_location and await asyncio.to_thread(
+                geocode_kakao, requested_location
+            ) is None:
+                rag_result.update({
+                    "location_name": requested_location,
+                    "location_resolution_failed": True,
+                })
         sources = list(batch.sources)
     else:
         rag_result = await asyncio.to_thread(
@@ -1067,9 +1161,12 @@ async def _stream(body: ChatRequest):
         ):
             yield _sse(ChatToken(text=chunk).model_dump())
         yield _sse(ChatDone().model_dump())
-    except Exception as exc:
+    except Exception:
+        # 실제 예외는 서버 로그에만 남기고, 사용자에게는 내부 정보(도메인명, DB 접속
+        # 문자열 등)가 노출되지 않는 일반 안내 메시지를 전달한다.
+        logger.exception("POST /chat 처리 중 예외 발생 (message=%r)", body.message)
         yield _sse(ChatError(
-            message=str(exc),
+            message=_safe_error_message(body.lang),
             result=empty_frontend_response("error"),
         ).model_dump())
 
