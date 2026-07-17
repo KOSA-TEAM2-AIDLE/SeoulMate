@@ -72,9 +72,10 @@ from services.query_policy import (
 )
 from domains.restaurant.weather_policy import prepare_rag_only_candidates, rerank_with_weather
 from domains.attraction.congestion_reranker import AttractionCongestionReranker
+from domains.attraction.context_enricher import AttractionContextEnricher
 from services.source_router import decide_source_mode, mode_to_intent, normalize_source_mode
 from integrations.mcp.congestion_client import CongestionMCPProvider
-from integrations.mcp.weather_client import get_weather_via_mcp
+from integrations.mcp.weather_client import WeatherMCPProvider, get_weather_via_mcp
 from application.route.route_planner import generate_route_plan
 
 
@@ -94,6 +95,10 @@ DOMAIN_DEFAULT_TIMES = {
 }
 ATTRACTION_CONGESTION_SOURCE = "Seoul-Congestion-MCP"
 attraction_congestion_reranker = AttractionCongestionReranker(CongestionMCPProvider())
+attraction_context_enricher = AttractionContextEnricher(
+    congestion_reranker=attraction_congestion_reranker,
+    weather_provider=WeatherMCPProvider(),
+)
 domain_selection_registry = build_default_selection_registry()
 
 
@@ -174,19 +179,30 @@ async def _search_structured_task(
     )
 
 
-async def _rerank_attraction_candidates(candidates, parsed, source_mode: str):
+async def _rerank_attraction_candidates(
+    candidates,
+    parsed,
+    source_mode: str,
+    request,
+):
     if normalize_source_mode(source_mode) != "rag_mcp":
-        return candidates, False
-    reranked = await attraction_congestion_reranker.rerank(
+        return candidates, ()
+    reranked = await attraction_context_enricher.enrich(
+        request,
         candidates,
-        parsed.original_question,
-        language=effective_query_language(parsed),
     )
-    used_live_context = any(
+    sources = []
+    if any(
         candidate.signals.get("congestion_available") is True
         for candidate in reranked
-    )
-    return reranked, used_live_context
+    ):
+        sources.append(ATTRACTION_CONGESTION_SOURCE)
+    if any(
+        candidate.signals.get("weather_available") is True
+        for candidate in reranked
+    ):
+        sources.append("KMA-via-Weather-MCP")
+    return reranked, tuple(sources)
 
 
 async def _structured_weather(body: ChatRequest, source_mode: str):
@@ -293,13 +309,22 @@ async def _execute_structured_tasks(body: ChatRequest, source_mode: str):
             count = min(max(task.desired_count, 1), 3)
             places.extend(_place(candidate) for candidate in candidates[:count])
         else:
-            candidates, used_congestion = await _rerank_attraction_candidates(
+            attraction_request = build_domain_search_request(
+                parsed,
+                task,
+                latitude=body.lat,
+                longitude=body.lng,
+                current_location_name=body.location_name,
+                candidate_count=candidate_count,
+                min_rating=body.min_rating,
+            )
+            candidates, attraction_sources = await _rerank_attraction_candidates(
                 batch.candidates,
                 parsed,
                 source_mode,
-            ) if task.domain == "attraction" else (batch.candidates, False)
-            if used_congestion:
-                sources.append(ATTRACTION_CONGESTION_SOURCE)
+                attraction_request,
+            ) if task.domain == "attraction" else (batch.candidates, ())
+            sources.extend(attraction_sources)
             count = min(max(task.desired_count, 1), 3)
             places.extend(
                 search_candidate_to_place(candidate)
@@ -484,11 +509,21 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     payload=wrapped["payload"],
                 ))
         else:
+            attraction_request = build_domain_search_request(
+                parsed,
+                task,
+                latitude=body.lat,
+                longitude=body.lng,
+                current_location_name=body.location_name,
+                candidate_count=5,
+                min_rating=body.min_rating,
+            )
             domain_candidates, _ = await _rerank_attraction_candidates(
                 batch.candidates,
                 parsed,
                 source_mode,
-            ) if task.domain == "attraction" else (batch.candidates, False)
+                attraction_request,
+            ) if task.domain == "attraction" else (batch.candidates, ())
             for candidate in domain_candidates[:5]:
                 place = search_candidate_to_place(candidate)
                 candidate_id = (
@@ -703,13 +738,13 @@ async def _multi_task_recommendation_stream(
                 for candidate in batch.candidates[:LLM_CANDIDATE_COUNT]
             ]
         else:
-            candidates, used_congestion = await _rerank_attraction_candidates(
+            candidates, attraction_sources = await _rerank_attraction_candidates(
                 batch.candidates,
                 parsed,
                 canonical_mode,
+                requests_by_task[str(task.task_id)],
             ) if task.domain == "attraction" else (batch.candidates, False)
-            if used_congestion:
-                sources.append(ATTRACTION_CONGESTION_SOURCE)
+            sources.extend(attraction_sources)
             group_candidates = [
                 {
                     "place_id": candidate.place_id,

@@ -1,24 +1,20 @@
 """서울 혼잡도 MCP를 공통 ContextProvider 계약으로 감싼다."""
 
 import json
-import os
-
 import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from integrations.mcp.base_client import ContextRequest, ContextResult
+from core.config import settings
 
 
 def _congestion_mcp_url() -> str:
-    return os.getenv(
-        "CONGESTION_MCP_URL",
-        "http://127.0.0.1:8002/mcp",
-    ).strip()
+    return settings.congestion_mcp_url.strip()
 
 
 def _congestion_mcp_timeout() -> float:
-    timeout = float(os.getenv("CONGESTION_MCP_TIMEOUT_SECONDS", "20"))
+    timeout = settings.congestion_mcp_timeout_seconds
     if timeout <= 0:
         raise ValueError("CONGESTION_MCP_TIMEOUT_SECONDS는 0보다 커야 합니다.")
     return timeout
@@ -31,7 +27,11 @@ class CongestionMCPProvider:
 
     async def get_context(self, request: ContextRequest) -> ContextResult:
         try:
-            token = os.getenv("CONGESTION_MCP_BEARER_TOKEN", "").strip()
+            token = (
+                settings.congestion_mcp_bearer_token.get_secret_value().strip()
+                if settings.congestion_mcp_bearer_token is not None
+                else ""
+            )
             headers = {"Authorization": f"Bearer {token}"} if token else None
             async with httpx.AsyncClient(
                 headers=headers,

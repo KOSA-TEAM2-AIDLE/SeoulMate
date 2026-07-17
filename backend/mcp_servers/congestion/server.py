@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import hmac
 import logging
-import os
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from starlette.responses import JSONResponse
+from core.config import settings
 
 from mcp_servers.congestion.tools.congestion import register_congestion_tools
 from mcp_servers.congestion.tools.place import register_place_tools
@@ -21,6 +21,14 @@ from services.storage_lockers import StorageLockerService
 
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def _bearer_token() -> str:
+    return (
+        settings.congestion_mcp_bearer_token.get_secret_value().strip()
+        if settings.congestion_mcp_bearer_token is not None
+        else ""
+    )
 
 mcp = FastMCP(
     name="SeoulMate Location",
@@ -61,13 +69,13 @@ class LocationMCPGateway:
                     "service": "seoul_location_mcp",
                     "mcp_endpoint": "/mcp",
                     "authentication_required": bool(
-                        os.getenv("CONGESTION_MCP_BEARER_TOKEN")
+                        _bearer_token()
                     ),
                 })
                 await response(scope, receive, send)
                 return
 
-            token = os.getenv("CONGESTION_MCP_BEARER_TOKEN", "").strip()
+            token = _bearer_token()
             if token and path.startswith("/mcp"):
                 headers = {
                     key.lower(): value
@@ -98,9 +106,9 @@ def main() -> None:
 
     uvicorn.run(
         app,
-        host=os.getenv("CONGESTION_MCP_HOST", "127.0.0.1"),
-        port=int(os.getenv("CONGESTION_MCP_PORT", "8002")),
-        log_level=os.getenv("CONGESTION_MCP_LOG_LEVEL", "info").lower(),
+        host=settings.congestion_mcp_host,
+        port=settings.congestion_mcp_port,
+        log_level=settings.congestion_mcp_log_level.lower(),
     )
 
 

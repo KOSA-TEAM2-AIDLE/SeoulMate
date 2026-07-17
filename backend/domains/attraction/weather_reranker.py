@@ -55,6 +55,7 @@ class AttractionWeatherReranker:
             "weather_source": weather.get("source"),
             "weather_error": weather.get("error"),
             "weather_adjustment": 0.0,
+            "weather_score": 0.5 if available else None,
             "weather_reasons": [],
         })
         if not available:
@@ -76,6 +77,11 @@ class AttractionWeatherReranker:
             reasons.append("비·눈 예보와 명시적 야외 활동 근거가 있음")
         signals.update({
             "weather_adjustment": adjustment,
+            "weather_score": (
+                0.75 if adjustment > 0
+                else 0.25 if adjustment < 0
+                else 0.5
+            ),
             "weather_reasons": reasons,
             "weather_indoor_evidence": indoor,
             "weather_outdoor_evidence": outdoor,

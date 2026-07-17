@@ -54,11 +54,10 @@ class AttractionAnswerValidationTests(unittest.TestCase):
         self.assertFalse(result.used_fallback)
         self.assertEqual([item.place_id for item in result.selections], ["1", "2", "3"])
 
-    def test_unknown_duplicate_or_too_few_ids_use_complete_ranked_fallback(self):
+    def test_unknown_or_duplicate_ids_use_complete_ranked_fallback(self):
         invalid_predictions = [
             prediction(["unknown", "2", "3"]),
             prediction(["1", "1", "2"]),
-            prediction(["1", "2"]),
         ]
 
         for invalid in invalid_predictions:

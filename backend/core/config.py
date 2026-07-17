@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     seoul_api_timeout_seconds : float = 5.0
 
     congestion_cache_ttl_seconds: int = 300
+    congestion_mcp_host: str = "127.0.0.1"
+    congestion_mcp_port: int = Field(default=8002, ge=1, le=65535)
+    congestion_mcp_url: str = "http://127.0.0.1:8002/mcp"
+    congestion_mcp_bearer_token: SecretStr | None = None
+    congestion_mcp_timeout_seconds: float = Field(default=20.0, gt=0)
+    congestion_mcp_log_level: str = "info"
 
     kakao_rest_api_key: SecretStr | None = None
     kakao_local_api_base_url: str = "https://dapi.kakao.com"
@@ -46,10 +52,6 @@ class Settings(BaseSettings):
     storage_locker_api_timeout_seconds: float = Field(default=10.0, gt=0)
     storage_locker_api_page_size: int = Field(default=1000, ge=1, le=10000)
     storage_locker_cache_ttl_seconds: int = Field(default=60, ge=0)
-
-    mcp_server_url: str = "http://localhost:8001/mcp"
-    mcp_server_host: str = "127.0.0.1"
-    mcp_server_port: int = 8001
 
     kma_api_key: SecretStr | None = None
     weather_cache_ttl_seconds: int = Field(default=600, ge=0)
