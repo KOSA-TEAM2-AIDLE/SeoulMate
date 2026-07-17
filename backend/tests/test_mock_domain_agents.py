@@ -124,7 +124,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotEqual(first_places[0].task_id, second_places[0].task_id)
 
-    async def test_single_cafe_uses_mock_without_restaurant_search(self):
+    async def test_single_cafe_uses_real_service_without_restaurant_search(self):
         parsed = query_with_tasks(tasks=[cafe_task()])
         body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
         with (
@@ -138,7 +138,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         # 원문에 '내일'이 있으므로 파서가 날짜 필드를 빠뜨려도 날씨 경로를 사용한다.
         self.assertEqual(meta["intent"], "both")
         self.assertEqual(meta["places"][0]["source_type"], "cafe")
-        self.assertIn("mock-cafe-agent", meta["sources"])
+        self.assertIn("cafe-search-service", meta["sources"])
 
     async def test_single_restaurant_candidate_survives_llm_failure_in_chat_api(self):
         parsed = query_with_tasks(tasks=[restaurant_task()])
@@ -158,7 +158,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(meta["places"][0]["restaurant_id"], "10")
         self.assertEqual(decode_sse(events[-1])["type"], "done")
 
-    async def test_mixed_tasks_use_real_restaurant_and_mock_cafe(self):
+    async def test_mixed_tasks_use_real_restaurant_and_cafe(self):
         parsed = query_with_tasks(
             start_date="2026-07-15",
             tasks=[restaurant_task(), cafe_task()],
@@ -185,7 +185,7 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
             {place["source_type"] for place in meta["places"]},
             {"restaurant", "cafe"},
         )
-        self.assertIn("mock-cafe-agent", meta["sources"])
+        self.assertIn("cafe-search-service", meta["sources"])
         self.assertIn("KMA-via-Weather-MCP", meta["sources"])
 
     async def test_weather_geocodes_target_when_current_location_name_is_missing(self):

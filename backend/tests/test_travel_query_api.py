@@ -32,7 +32,7 @@ def _extraction(inputs: dict) -> dict:
 
 
 class TravelQueryApiTests(unittest.TestCase):
-    def test_execution_context_is_available_but_not_serialized(self) -> None:
+    def test_current_location_context_uses_public_response_fields(self) -> None:
         response = _to_api_response(
             "context-thread",
             {
@@ -55,9 +55,9 @@ class TravelQueryApiTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(37.5796, response.execution_context.latitude)
-        self.assertEqual(126.977, response.execution_context.longitude)
-        self.assertEqual("경복궁", response.execution_context.location_name)
+        self.assertEqual(37.5796, response.current_latitude)
+        self.assertEqual(126.977, response.current_longitude)
+        self.assertEqual("경복궁", response.current_location_name)
         self.assertNotIn("execution_context", response.model_dump(mode="json"))
 
     def setUp(self) -> None:

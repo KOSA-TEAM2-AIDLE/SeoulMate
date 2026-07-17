@@ -22,12 +22,12 @@ def candidate(place_id: str) -> SearchCandidate:
 
 
 class TargetArchitectureTests(unittest.IsolatedAsyncioTestCase):
-    def test_default_registry_marks_only_real_implementations_ready(self):
+    def test_default_registry_reports_current_implementations(self):
         self.assertEqual(
             build_default_domain_registry().status(),
             {
-                "accommodation": False,
-                "attraction": False,
+                "accommodation": True,
+                "attraction": True,
                 "cafe": True,
                 "restaurant": True,
                 "storage_locker": False,
@@ -35,7 +35,7 @@ class TargetArchitectureTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             build_default_context_registry().status(),
-            {"congestion": False, "weather": True},
+            {"congestion": True, "weather": True},
         )
 
     def test_default_registry_uses_implemented_cafe_service(self):

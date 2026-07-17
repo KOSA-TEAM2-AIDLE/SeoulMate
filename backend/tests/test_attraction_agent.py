@@ -10,10 +10,7 @@ from domains.attraction.recommendation_pipeline import (
 )
 from domains.common.models import SearchCandidate
 from application.recommendation.location_resolution import ResolvedSearchLocation
-from schemas.travel_query_api import (
-    TravelQueryApiResponse,
-    TravelQueryExecutionContext,
-)
+from schemas.travel_query_api import TravelQueryApiResponse
 
 
 def _response(
@@ -21,7 +18,9 @@ def _response(
     status: str = "ready",
     question: str = "경복궁 근처 관광지와 식당을 추천해줘",
     location: str = "경복궁",
-    execution_context: TravelQueryExecutionContext | None = None,
+    current_latitude: float | None = None,
+    current_longitude: float | None = None,
+    current_location_name: str | None = None,
 ) -> TravelQueryApiResponse:
     values = {
         "thread_id": "attraction-agent-thread",
@@ -60,10 +59,12 @@ def _response(
             "assistant_message": "어느 지역에서 찾을까요?",
             "missing_fields": ["filters.location"],
         })
-    response = TravelQueryApiResponse.model_validate(values)
-    if execution_context is not None:
-        response.execution_context = execution_context
-    return response
+    values.update({
+        "current_latitude": current_latitude,
+        "current_longitude": current_longitude,
+        "current_location_name": current_location_name,
+    })
+    return TravelQueryApiResponse.model_validate(values)
 
 
 class RecordingPipeline:
@@ -144,11 +145,9 @@ class AttractionAgentTests(unittest.IsolatedAsyncioTestCase):
         response = _response(
             question="내 주변 3km 이내 관광지 추천해줘",
             location="서울시청",
-            execution_context=TravelQueryExecutionContext(
-                latitude=37.5796,
-                longitude=126.977,
-                location_name="서울시청",
-            ),
+            current_latitude=37.5796,
+            current_longitude=126.977,
+            current_location_name="서울시청",
         )
 
         await agent.execute(response)

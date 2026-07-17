@@ -92,20 +92,19 @@ class AttractionAgent:
         response: TravelQueryApiResponse,
         use_current_location: bool,
     ) -> tuple[float | None, float | None, str | None]:
-        context = response.execution_context
         normalized = location.casefold()
         if use_current_location or normalized in self.CURRENT_LOCATION_NAMES:
-            return context.latitude, context.longitude, (
-                context.location_name or location or None
+            return response.current_latitude, response.current_longitude, (
+                response.current_location_name or location or None
             )
         if not location or normalized in self.BROAD_LOCATIONS:
             return None, None, location or None
 
         resolved = await self._location_resolver.resolve(
             location=location,
-            latitude=context.latitude,
-            longitude=context.longitude,
-            current_location_name=context.location_name,
+            latitude=response.current_latitude,
+            longitude=response.current_longitude,
+            current_location_name=response.current_location_name,
         )
         return (
             resolved.latitude,

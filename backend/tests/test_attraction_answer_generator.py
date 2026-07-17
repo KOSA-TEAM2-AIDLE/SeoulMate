@@ -241,17 +241,17 @@ class AttractionRecommendationPipelineTests(unittest.IsolatedAsyncioTestCase):
                 calls.append(("congestion", [item.place_id for item in values]))
                 return values
 
-        class Answer:
-            async def generate(self, **values):
-                calls.append(("answer", [item.place_id for item in values["candidates"]]))
-                return AttractionAnswerResult(
+        class SelectionService:
+            async def select(self, request, candidates):
+                calls.append(("selection", [item.place_id for item in candidates]))
+                return CandidateSelectionResult(
                     answer="result",
                     selections=[
-                        AttractionSelection(
+                        CandidateSelection(
                             place_id="3",
                             selection_reason="third",
                         ),
-                        AttractionSelection(
+                        CandidateSelection(
                             place_id="2",
                             selection_reason="second",
                         ),
@@ -261,7 +261,7 @@ class AttractionRecommendationPipelineTests(unittest.IsolatedAsyncioTestCase):
         pipeline = AttractionRecommendationPipeline(
             search_service=Search(),
             congestion_reranker=Congestion(),
-            answer_generator=Answer(),
+            selection_service=SelectionService(),
         )
         result = await pipeline.recommend(
             DomainSearchRequest(
@@ -282,7 +282,7 @@ class AttractionRecommendationPipelineTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(calls[0], "search")
         self.assertEqual(calls[1], ("congestion", ["2", "3", "1"]))
-        self.assertEqual(calls[2], ("answer", ["2", "3", "1"]))
+        self.assertEqual(calls[2], ("selection", ["2", "3", "1"]))
 
     async def test_pipeline_skips_congestion_when_policy_disables_it(self):
         calls = []
