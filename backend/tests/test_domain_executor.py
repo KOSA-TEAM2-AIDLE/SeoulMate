@@ -89,17 +89,36 @@ class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(place.rating, 4.7)
         self.assertEqual(place.review_count, 321)
 
-    async def test_unimplemented_service_uses_explicit_mock(self):
+    async def test_default_cafe_service_is_no_longer_a_mock_fallback(self):
         registry = DomainSearchRegistry()
-        registry.register(CafeSearchService())
+        service = CafeSearchService()
+        registry.register(service)
         parsed = cafe_query()
 
-        batch = await execute_domain_search(registry, parsed, parsed.tasks[0])
+        with patch.object(
+            service,
+            "search",
+            return_value=[
+                SearchCandidate(
+                    domain="cafe",
+                    place_id="CAFE-LIVE-1",
+                    task_id="cafe-1",
+                    name="실제 카페",
+                    category="카페",
+                    base_score=0.8,
+                    final_score=0.8,
+                )
+            ],
+        ):
+            batch = await execute_domain_search(
+                registry,
+                parsed,
+                parsed.tasks[0],
+            )
 
-        self.assertTrue(batch.used_mock)
-        self.assertEqual(batch.sources, ["mock-cafe-agent"])
-        self.assertTrue(batch.candidates[0].attributes["mock"])
-        self.assertTrue(batch.warnings)
+        self.assertFalse(batch.used_mock)
+        self.assertEqual(batch.sources, ["cafe-search-service"])
+        self.assertEqual("CAFE-LIVE-1", batch.candidates[0].place_id)
 
     async def test_live_service_failure_is_not_hidden_by_mock(self):
         registry = DomainSearchRegistry()
