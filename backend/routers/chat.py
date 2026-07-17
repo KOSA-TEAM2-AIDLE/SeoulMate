@@ -14,7 +14,12 @@ from fastapi.responses import StreamingResponse
 
 from api.dependencies import domain_registry
 from application.recommendation.domain_executor import execute_domain_search
+from application.recommendation.group_selection import select_grouped_candidates
 from application.recommendation.location_resolution import SearchLocationResolver
+from application.recommendation.request_factory import build_domain_search_request
+from application.recommendation.selection_registry import (
+    build_default_selection_registry,
+)
 from application.travel_query.service import TravelQueryService, get_travel_query_service
 from application.response.frontend_response_mapper import (
     empty_frontend_response,
@@ -89,6 +94,7 @@ DOMAIN_DEFAULT_TIMES = {
 }
 ATTRACTION_CONGESTION_SOURCE = "Seoul-Congestion-MCP"
 attraction_congestion_reranker = AttractionCongestionReranker(CongestionMCPProvider())
+domain_selection_registry = build_default_selection_registry()
 
 
 def _sse(payload: dict) -> str:
@@ -613,15 +619,28 @@ async def _multi_task_recommendation_stream(
     else:
         weather, tool_results, weather_sources = None, [], []
     task_groups: list[dict] = []
+    requests_by_task = {}
     sources: list[str] = []
     has_mock = False
 
     for task in parsed.tasks:
         group_candidates: list[dict] = []
+        candidate_count = (
+            30 if task.domain == "restaurant" else LLM_CANDIDATE_COUNT
+        )
+        requests_by_task[str(task.task_id)] = build_domain_search_request(
+            parsed,
+            task,
+            latitude=body.lat,
+            longitude=body.lng,
+            current_location_name=body.location_name,
+            candidate_count=candidate_count,
+            min_rating=body.min_rating,
+        )
         batch = await _search_structured_task(
             body,
             task,
-            candidate_count=30 if task.domain == "restaurant" else LLM_CANDIDATE_COUNT,
+            candidate_count=candidate_count,
         )
         sources.extend(batch.sources)
         has_mock = has_mock or batch.used_mock
@@ -688,13 +707,15 @@ async def _multi_task_recommendation_stream(
         yield _sse(ChatDone().model_dump())
         return
 
-    recommendation = await asyncio.to_thread(
-        generate_grouped_recommendation_result,
-        body.message,
-        effective_query_language(parsed),
-        task_groups,
-        weather,
-        canonical_mode,
+    recommendation = await select_grouped_candidates(
+        message=body.message,
+        language=effective_query_language(parsed),
+        task_groups=task_groups,
+        requests_by_task=requests_by_task,
+        selection_registry=domain_selection_registry,
+        common_selector=generate_grouped_recommendation_result,
+        weather=weather,
+        source_mode=canonical_mode,
     )
     places: list[Place] = []
     selected_weather_reasons: list[str] = []

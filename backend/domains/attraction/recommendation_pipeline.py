@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from domains.attraction.answer_models import AttractionAnswerResult
-from domains.attraction.answer_generator import AttractionAnswerGenerator
+from application.recommendation.selection_models import CandidateSelectionResult
 from domains.attraction.congestion_reranker import AttractionCongestionReranker
 from domains.attraction.search_service import AttractionSearchService
+from domains.attraction.selection_service import AttractionSelectionService
 from domains.common.models import DomainSearchRequest, SearchCandidate
 from integrations.mcp.congestion_client import CongestionMCPProvider
 
@@ -19,7 +19,7 @@ _DEFAULT_CONGESTION_RERANKER = object()
 class AttractionRecommendationResult:
     """DSPy 답변과 그 답변이 선택한 원본 후보."""
 
-    answer: AttractionAnswerResult
+    answer: CandidateSelectionResult
     candidates: list[SearchCandidate]
 
 
@@ -32,6 +32,7 @@ class AttractionRecommendationPipeline:
         search_service=None,
         congestion_reranker=_DEFAULT_CONGESTION_RERANKER,
         answer_generator=None,
+        selection_service=None,
     ) -> None:
         self._search_service = search_service or AttractionSearchService()
         self._congestion_reranker = (
@@ -39,7 +40,13 @@ class AttractionRecommendationPipeline:
             if congestion_reranker is _DEFAULT_CONGESTION_RERANKER
             else congestion_reranker
         )
-        self._answer_generator = answer_generator or AttractionAnswerGenerator()
+        if selection_service is not None and answer_generator is not None:
+            raise ValueError(
+                "selection_service와 answer_generator는 동시에 지정할 수 없습니다."
+            )
+        self._selection_service = selection_service or AttractionSelectionService(
+            answer_generator=answer_generator,
+        )
 
     async def recommend(
         self,
@@ -61,13 +68,7 @@ class AttractionRecommendationPipeline:
                 request.search_query,
                 language=request.language,
             )
-        answer = await self._answer_generator.generate(
-            question=request.search_query,
-            language=request.language,
-            location=request.location or request.current_location_name,
-            themes=request.themes,
-            candidates=candidates,
-        )
+        answer = await self._selection_service.select(request, candidates)
         candidates_by_id = {
             candidate.place_id: candidate for candidate in candidates
         }

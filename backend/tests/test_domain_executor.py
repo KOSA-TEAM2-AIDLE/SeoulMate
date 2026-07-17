@@ -5,6 +5,10 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from application.recommendation.domain_executor import execute_domain_search
+from application.recommendation.selection_models import (
+    CandidateSelection,
+    CandidateSelectionResult,
+)
 from application.tool_policy import requested_contexts
 from domains.cafe.search_service import CafeSearchService
 from domains.common.mapper import search_candidate_to_place
@@ -109,23 +113,6 @@ class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
             "filters": {"location": "경복궁"},
         })
         body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
-        captured = {}
-
-        def choose_first(*args, **kwargs):
-            group = args[2][0]
-            captured["candidate"] = group["candidates"][0]["raw_candidate"]
-            return {
-                "answer": "한적한 문화시설 추천",
-                "task_results": [{
-                    "task_id": group["task_id"],
-                    "domain": group["domain"],
-                    "selections": [{
-                        "candidate": group["candidates"][0],
-                        "selection_reason": "혼잡도가 낮습니다.",
-                    }],
-                }],
-            }
-
         congestion = ContextResult(
             provider="congestion",
             available=True,
@@ -137,7 +124,23 @@ class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
         )
         with (
             patch("routers.chat.domain_registry", registry),
-            patch("routers.chat.generate_grouped_recommendation_result", choose_first),
+            patch(
+                "routers.chat.generate_grouped_recommendation_result",
+                side_effect=AssertionError(
+                    "관광 단일 추천은 공통 GPT를 호출하면 안 됩니다."
+                ),
+            ) as common_gpt,
+            patch(
+                "domains.attraction.selection_service."
+                "AttractionSelectionService.select",
+                return_value=CandidateSelectionResult(
+                    answer="한적한 문화시설 추천",
+                    selections=[CandidateSelection(
+                        place_id="ATTRACTION-101",
+                        selection_reason="혼잡도가 낮습니다.",
+                    )],
+                ),
+            ) as dspy_selector,
             patch(
                 "integrations.mcp.congestion_client.CongestionMCPProvider.get_context",
                 return_value=congestion,
@@ -146,9 +149,20 @@ class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
             events = [event async for event in _stream(body)]
 
         self.assertTrue(events)
+        common_gpt.assert_not_called()
+        dspy_selector.assert_awaited_once()
         get_context.assert_awaited_once()
-        self.assertGreater(captured["candidate"].final_score, 0.70)
-        self.assertEqual(captured["candidate"].signals["congestion_level"], "원활")
+        request, candidates = dspy_selector.await_args.args
+        self.assertEqual(request.task_id, "attraction-1")
+        self.assertEqual(request.location, "경복궁")
+        self.assertGreater(candidates[0].final_score, 0.70)
+        self.assertEqual(candidates[0].signals["congestion_level"], "원활")
+        meta = json.loads(events[0].removeprefix("data: "))
+        self.assertEqual(meta["places"][0]["source_id"], "ATTRACTION-101")
+        self.assertEqual(
+            meta["result"]["recommendList"][0]["selectionReason"],
+            "혼잡도가 낮습니다.",
+        )
 
     async def test_live_service_preserves_real_domain_id_and_verified_fields(self):
         registry = DomainSearchRegistry()

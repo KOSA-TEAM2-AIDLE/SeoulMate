@@ -7,6 +7,10 @@ from unittest.mock import patch
 
 from domains.attraction import AttractionAnswerGenerator, AttractionRecommendationPipeline
 from domains.attraction.answer_models import AttractionAnswerResult, AttractionSelection
+from application.recommendation.selection_models import (
+    CandidateSelection,
+    CandidateSelectionResult,
+)
 from domains.common.models import DomainSearchRequest, SearchCandidate
 from domains.attraction.answer_program import (
     AttractionProgramArtifactError,
@@ -161,6 +165,56 @@ class AttractionAnswerGeneratorTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AttractionRecommendationPipelineTests(unittest.IsolatedAsyncioTestCase):
+    async def test_pipeline_reuses_common_attraction_selection_service(self):
+        candidate = SearchCandidate(
+            domain="attraction",
+            place_id="palace-1",
+            task_id="task_1",
+            name="경복궁",
+            category="역사관광",
+            base_score=0.8,
+            final_score=0.9,
+        )
+
+        class Search:
+            async def search(self, request):
+                return [candidate]
+
+        class SelectionService:
+            def __init__(self):
+                self.calls = []
+
+            async def select(self, request, candidates):
+                self.calls.append((request, candidates))
+                return CandidateSelectionResult(
+                    answer="경복궁을 추천합니다.",
+                    selections=[CandidateSelection(
+                        place_id="palace-1",
+                        selection_reason="질문과 잘 맞습니다.",
+                    )],
+                )
+
+        selection_service = SelectionService()
+        pipeline = AttractionRecommendationPipeline(
+            search_service=Search(),
+            congestion_reranker=None,
+            selection_service=selection_service,
+        )
+        request = DomainSearchRequest(
+            task_id="task_1",
+            domain="attraction",
+            search_query="경복궁 근처 관광지",
+        )
+
+        result = await pipeline.recommend(request)
+
+        self.assertEqual(1, len(selection_service.calls))
+        called_request, called_candidates = selection_service.calls[0]
+        self.assertIs(request, called_request)
+        self.assertEqual(["palace-1"], [item.place_id for item in called_candidates])
+        self.assertEqual("경복궁을 추천합니다.", result.answer.answer)
+        self.assertEqual(["palace-1"], [item.place_id for item in result.candidates])
+
     async def test_pipeline_orders_search_congestion_then_answer(self):
         calls = []
         candidates = [
