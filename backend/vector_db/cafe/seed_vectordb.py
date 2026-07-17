@@ -46,6 +46,36 @@ CAFE_COLUMNS = (
     "link",
 )
 REVIEW_COLUMNS = ("restaurant_id", "rating", "content")
+DEFAULT_CAFE_DATA_DIR = DATA_DIR / "db_seed" / "cafe"
+
+
+@dataclass(frozen=True)
+class CafeSeedFiles:
+    """카페 적재에 필요한 네 CSV 경로 묶음."""
+
+    ko_cafe: Path
+    ko_reviews: Path
+    en_cafe: Path
+    en_reviews: Path
+
+    @classmethod
+    def from_directory(cls, directory: Path) -> "CafeSeedFiles":
+        directory = Path(directory)
+        return cls(
+            ko_cafe=directory / "ko_cafe.csv",
+            ko_reviews=directory / "ko_cafe_reviews.csv",
+            en_cafe=directory / "en_cafe.csv",
+            en_reviews=directory / "en_cafe_reviews.csv",
+        )
+
+    @property
+    def paths(self) -> tuple[Path, ...]:
+        return self.ko_cafe, self.ko_reviews, self.en_cafe, self.en_reviews
+
+    def validate(self) -> None:
+        missing = [str(path) for path in self.paths if not path.is_file()]
+        if missing:
+            raise FileNotFoundError("카페 CSV 파일을 찾을 수 없습니다: " + ", ".join(missing))
 
 
 @dataclass(frozen=True)
@@ -91,6 +121,7 @@ class CleaningReport:
     source_reviews: int
     cleaned_cafes: int
     cleaned_reviews: int
+    invalid_cafes: int
     orphan_reviews: int
     empty_reviews: int
     invalid_reviews: int
@@ -149,14 +180,43 @@ def _optional_rating(value: str | None) -> float | None:
     return rating if 0 <= rating <= 5 else None
 
 
-def _read_csv(path: Path, required_columns: Sequence[str]) -> list[dict[str, str]]:
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        columns = set(reader.fieldnames or ())
-        missing = set(required_columns) - columns
-        if missing:
-            raise ValueError(f"{path.name}에 필수 컬럼이 없습니다: {sorted(missing)}")
-        return list(reader)
+def _read_csv(path: Path) -> list[dict[str, str]]:
+    last_error: UnicodeDecodeError | None = None
+    for encoding in ("utf-8-sig", "cp949"):
+        try:
+            with path.open("r", encoding=encoding, newline="") as handle:
+                return list(csv.DictReader(handle))
+        except UnicodeDecodeError as exc:
+            last_error = exc
+    assert last_error is not None
+    raise last_error
+
+
+def _normalize_cafe_row(row: dict[str, str], language: Language) -> dict[str, str | None]:
+    if language == "ko":
+        return row
+    if row.get("description") is None and str(row.get("rating") or "").startswith("http"):
+        return {
+            "id": row.get("id"), "name": row.get("name"), "phone": row.get("link"),
+            "address": row.get("review_count"), "postal_code": row.get("image"),
+            "lat": row.get("cuisine"), "lng": row.get("price"),
+            "category": row.get("address"), "hours": row.get("latitude"),
+            "description": row.get("longitude"), "image": row.get("telephone"),
+            "link": row.get("rating"), "rating": None,
+        }
+    return {
+        **row,
+        "phone": row.get("phone") or row.get("telephone"),
+        "lat": row.get("lat") or row.get("latitude"),
+        "lng": row.get("lng") or row.get("longitude"),
+        "category": row.get("category") or row.get("cuisine"),
+    }
+
+
+def _normalize_review_row(row: dict[str, str], language: Language) -> dict[str, str | None]:
+    if language == "en":
+        return {**row, "content": row.get("content") or row.get("review_text")}
+    return row
 
 
 def clean_cafe_dataset(
@@ -166,23 +226,32 @@ def clean_cafe_dataset(
 ) -> CleanedCafeDataset:
     """원천 CSV를 검증하고 카페 테이블에 연결 가능한 리뷰만 남긴다."""
 
-    raw_cafes = _read_csv(cafe_path, CAFE_COLUMNS)
-    raw_reviews = _read_csv(review_path, REVIEW_COLUMNS)
+    raw_cafes = [_normalize_cafe_row(row, language) for row in _read_csv(cafe_path)]
+    raw_reviews = [_normalize_review_row(row, language) for row in _read_csv(review_path)]
 
     base_cafes: dict[int, dict[str, object]] = {}
+    base_ratings: dict[int, float] = {}
+    invalid_cafes = 0
     for source_row, row in enumerate(raw_cafes, start=2):
-        cafe_id = _parse_int(row.get("id"), column="id", row_number=source_row)
+        try:
+            cafe_id = _parse_int(row.get("id"), column="id", row_number=source_row)
+            lat = _parse_float(row.get("lat"), column="lat", row_number=source_row)
+            lng = _parse_float(row.get("lng"), column="lng", row_number=source_row)
+            name = _required_text(row, "name", source_row)
+            address = _required_text(row, "address", source_row)
+        except ValueError:
+            invalid_cafes += 1
+            continue
         if cafe_id in base_cafes:
             raise ValueError(f"{cafe_path.name}에 중복 카페 ID가 있습니다: {cafe_id}")
-        lat = _parse_float(row.get("lat"), column="lat", row_number=source_row)
-        lng = _parse_float(row.get("lng"), column="lng", row_number=source_row)
         if not -90 <= lat <= 90 or not -180 <= lng <= 180:
-            raise ValueError(f"{source_row}행의 좌표 범위가 올바르지 않습니다.")
+            invalid_cafes += 1
+            continue
         base_cafes[cafe_id] = {
             "id": cafe_id,
-            "name": _required_text(row, "name", source_row),
+            "name": name,
             "phone": _clean_text(row.get("phone")),
-            "address": _required_text(row, "address", source_row),
+            "address": address,
             "postal_code": _clean_text(row.get("postal_code")),
             "lat": lat,
             "lng": lng,
@@ -192,6 +261,9 @@ def clean_cafe_dataset(
             "image": _clean_text(row.get("image")),
             "link": _clean_text(row.get("link")),
         }
+        base_rating = _optional_rating(row.get("rating"))
+        if base_rating is not None:
+            base_ratings[cafe_id] = base_rating
 
     valid_reviews: list[ReviewRecord] = []
     ratings_by_cafe: dict[int, list[float]] = {}
@@ -237,7 +309,7 @@ def clean_cafe_dataset(
             rating=(
                 round(fmean(ratings_by_cafe[cafe_id]), 1)
                 if ratings_by_cafe.get(cafe_id)
-                else None
+                else base_ratings.get(cafe_id)
             ),
             review_count=review_counts.get(cafe_id, 0),
         )
@@ -250,6 +322,7 @@ def clean_cafe_dataset(
         source_reviews=len(raw_reviews),
         cleaned_cafes=len(cafes),
         cleaned_reviews=len(valid_reviews),
+        invalid_cafes=invalid_cafes,
         orphan_reviews=orphan_reviews,
         empty_reviews=empty_reviews,
         invalid_reviews=invalid_reviews,
@@ -264,19 +337,20 @@ def clean_cafe_dataset(
     )
 
 
-def load_default_datasets(data_dir: Path = DATA_DIR) -> tuple[CleanedCafeDataset, ...]:
+def load_cafe_datasets(files: CafeSeedFiles) -> tuple[CleanedCafeDataset, ...]:
+    """명시적으로 전달한 CSV 경로에서 한/영 카페 데이터셋을 만든다."""
+    files.validate()
     return (
-        clean_cafe_dataset(
-            data_dir / "ko_cafe.csv",
-            data_dir / "ko_cafe_reviews.csv",
-            "ko",
-        ),
-        clean_cafe_dataset(
-            data_dir / "en_cafes.csv",
-            data_dir / "en_cafe_reviews.csv",
-            "en",
-        ),
+        clean_cafe_dataset(files.ko_cafe, files.ko_reviews, "ko"),
+        clean_cafe_dataset(files.en_cafe, files.en_reviews, "en"),
     )
+
+
+def load_default_datasets(
+    data_dir: Path = DEFAULT_CAFE_DATA_DIR,
+) -> tuple[CleanedCafeDataset, ...]:
+    """기본 시드 디렉터리를 사용하는 하위 호환 래퍼."""
+    return load_cafe_datasets(CafeSeedFiles.from_directory(data_dir))
 
 
 def _table_names(language: Language) -> dict[str, str]:
@@ -536,6 +610,7 @@ def seed_datasets(
 def format_report(report: CleaningReport) -> str:
     return (
         f"[{report.language}] 카페 {report.cleaned_cafes}/{report.source_cafes}, "
+        f"제외 카페 {report.invalid_cafes}, "
         f"리뷰 {report.cleaned_reviews}/{report.source_reviews}, "
         f"orphan {report.orphan_reviews}, 빈 리뷰 {report.empty_reviews}, "
         f"잘못된 리뷰 {report.invalid_reviews}, "
@@ -549,9 +624,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default=DATA_DIR,
+        default=DEFAULT_CAFE_DATA_DIR,
         help="카페 CSV가 있는 디렉터리",
     )
+    parser.add_argument("--ko-cafe", type=Path, help="한국어 카페 CSV 경로")
+    parser.add_argument("--ko-reviews", type=Path, help="한국어 리뷰 CSV 경로")
+    parser.add_argument("--en-cafe", type=Path, help="영어 카페 CSV 경로")
+    parser.add_argument("--en-reviews", type=Path, help="영어 리뷰 CSV 경로")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -567,7 +646,15 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    datasets = load_default_datasets(args.data_dir)
+    defaults = CafeSeedFiles.from_directory(args.data_dir)
+    datasets = load_cafe_datasets(
+        CafeSeedFiles(
+            ko_cafe=args.ko_cafe or defaults.ko_cafe,
+            ko_reviews=args.ko_reviews or defaults.ko_reviews,
+            en_cafe=args.en_cafe or defaults.en_cafe,
+            en_reviews=args.en_reviews or defaults.en_reviews,
+        )
+    )
     for dataset in datasets:
         print(format_report(dataset.report))
     if args.dry_run:
