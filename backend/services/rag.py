@@ -834,10 +834,17 @@ def search_restaurants(
                 SELECT id, name, category, category_kakao, rating, review_count, hours,
                        description, description_kakao, address, image, lat, lng,
                        menu_price_min, menu_price_median,
+                       mp.menu_price_lo, mp.menu_price_hi,
                        has_parking, allows_pets, has_kids_menu,
                        has_group_seating, has_private_room, has_baby_chair,
                        has_disabled_access
                 FROM restaurant_{suffix}
+                LEFT JOIN LATERAL (
+                    SELECT MIN(price_value) AS menu_price_lo,
+                           MAX(price_value) AS menu_price_hi
+                    FROM restaurant_menu_{suffix} rm
+                    WHERE rm.restaurant_id = restaurant_{suffix}.id
+                ) mp ON TRUE
                 WHERE id = ANY(%s)
             """, (list(all_ids),))
             metadata = {row["id"]: row for row in cursor.fetchall()}
@@ -857,11 +864,26 @@ def search_restaurants(
             meta.get(field) is True for field in _structured_plan.excluded_feature_fields
         ):
             continue
-        if _structured_plan and _structured_plan.budget_min_krw is not None:
-            if meta.get("menu_price_median") is None or meta["menu_price_median"] < _structured_plan.budget_min_krw:
+        if _structured_plan and (
+            _structured_plan.budget_min_krw is not None
+            or _structured_plan.budget_max_krw is not None
+        ):
+            # menu_price_median은 사이드메뉴에 눌려 비싼 코스를 못 잡으므로, 실제
+            # 메뉴 가격 범위(최저~최고)와 예산 범위가 겹치는지로 판단한다.
+            # 가격 정보가 전혀 없는 식당은 예산 부합 여부를 추측하지 않고 제외한다.
+            price_lo = meta.get("menu_price_lo")
+            price_hi = meta.get("menu_price_hi")
+            if price_lo is None and price_hi is None:
                 continue
-        if _structured_plan and _structured_plan.budget_max_krw is not None:
-            if meta.get("menu_price_median") is None or meta["menu_price_median"] > _structured_plan.budget_max_krw:
+            rest_lo = price_lo if price_lo is not None else price_hi
+            rest_hi = price_hi if price_hi is not None else price_lo
+            budget_lo = _structured_plan.budget_min_krw or 0
+            budget_hi = (
+                _structured_plan.budget_max_krw
+                if _structured_plan.budget_max_krw is not None
+                else float("inf")
+            )
+            if rest_hi < budget_lo or rest_lo > budget_hi:
                 continue
         target_visit_at = _structured_plan.target_visit_at if _structured_plan else None
         open_status = is_open_at(meta["hours"], target_visit_at) if target_visit_at else is_open_now(meta["hours"])
@@ -930,6 +952,8 @@ def search_restaurants(
             "has_disabled_access": meta["has_disabled_access"],
             "menu_price_min": meta["menu_price_min"],
             "menu_price_median": meta["menu_price_median"],
+            "menu_price_lo": meta.get("menu_price_lo"),
+            "menu_price_hi": meta.get("menu_price_hi"),
             "score": score,
             "breakdown": {
                 "restaurant_rrf": rest_score,
