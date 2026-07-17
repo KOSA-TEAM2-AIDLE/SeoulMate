@@ -7,6 +7,8 @@ const PlaceItem = memo(({ place, onClick, t }) => {
     const image = getPlaceDisplayImage(place);
     const hasLink = !!place.link;
 
+    console.log("PlaceItem Render:", place.name, place);
+
     const categoryStyles = {
         '카페': 'text-orange-500 bg-orange-50',
         '맛집': 'text-green-500 bg-green-50',

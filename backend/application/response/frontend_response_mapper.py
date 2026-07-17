@@ -81,6 +81,10 @@ def frontend_place(place: Place, *, visit_time: str | None = None) -> FrontendPl
         time=visit_time,
         image=_optional_text(place.image),
         selectionReason=_optional_text(place.selection_reason or place.reason),
+        link=_optional_text(place.link),
+        price=_optional_text(place.price),
+        live_rating=_optional_text(place.live_rating),
+        features=_optional_text(place.features),
     )
 
 

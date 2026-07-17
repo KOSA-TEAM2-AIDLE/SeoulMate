@@ -322,6 +322,47 @@ def search_accommodations_structured(request):
     top_n = request.candidate_count
     
     intent = parse_user_intent_with_kakao(user_message)
+    
+    # LLM이 날짜를 추출해 task나 filters에 넣었을 수 있으므로 모든 곳에서 날짜를 찾아본다.
+    visit_date_val = request.visit_date
+    task = request.context.get("task")
+    parsed_query = request.context.get("parsed_query")
+
+    if task and not visit_date_val:
+        visit_date_val = task.get("visit_date") if isinstance(task, dict) else getattr(task, "visit_date", None)
+    if parsed_query and not visit_date_val:
+        filters = parsed_query.get("filters") if isinstance(parsed_query, dict) else getattr(parsed_query, "filters", None)
+        if filters:
+            visit_date_val = filters.get("start_date") if isinstance(filters, dict) else getattr(filters, "start_date", None)
+
+    end_date_val = None
+    if task:
+        end_date_val = task.get("end_date") if isinstance(task, dict) else getattr(task, "end_date", None)
+    if not end_date_val and parsed_query:
+        filters = parsed_query.get("filters") if isinstance(parsed_query, dict) else getattr(parsed_query, "filters", None)
+        if filters:
+            end_date_val = filters.get("end_date") if isinstance(filters, dict) else getattr(filters, "end_date", None)
+            
+    if visit_date_val:
+        # 문자열인 경우 그대로 사용, date 객체인 경우 isoformat() 호출
+        intent["checkin"] = visit_date_val if isinstance(visit_date_val, str) else visit_date_val.isoformat()
+        if end_date_val:
+            intent["checkout"] = end_date_val if isinstance(end_date_val, str) else end_date_val.isoformat()
+        else:
+            from datetime import timedelta, date
+            if isinstance(visit_date_val, str):
+                try:
+                    from datetime import datetime
+                    v_date = datetime.strptime(visit_date_val, "%Y-%m-%d").date()
+                    intent["checkout"] = (v_date + timedelta(days=1)).isoformat()
+                except ValueError:
+                    pass
+            else:
+                intent["checkout"] = (visit_date_val + timedelta(days=1)).isoformat()
+        
+        if intent.get("checkout"):
+            intent["is_live_booking"] = True
+
     is_valid_location = intent["location_type"] != "default"
 
     if not intent["is_live_booking"] and not is_valid_location:
@@ -332,15 +373,18 @@ def search_accommodations_structured(request):
     
     else:
         try:
+            print(f"[DEBUG AccommodationSearchService] Calling run_live_scraper with: location={intent['location']}, checkin={intent['checkin']}, checkout={intent['checkout']}")
             from mcp_server.booking_client import main as run_live_scraper
             scraped_result = run_live_scraper(
                 intent["location"], intent["checkin"], intent["checkout"]
             )
+            print(f"[DEBUG AccommodationSearchService] run_live_scraper result status: {scraped_result.get('status')}, data length: {len(scraped_result.get('data', []))}")
         except ImportError:
             print("Warning: booking 모듈 없음. RAG 모드로 Fallback")
             return run_local_rag(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
 
         if not scraped_result or scraped_result.get("status") != "success" or not scraped_result.get("data"):
+            print(f"[DEBUG AccommodationSearchService] Scraper failed or returned no data. Falling back to RAG.")
             return run_local_rag(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
 
         if is_valid_location:
@@ -353,7 +397,7 @@ def search_accommodations_structured(request):
             from domains.accommodation.vector_search import ACCOMMODATION_DB_CONFIG
             conn = psycopg2.connect(**ACCOMMODATION_DB_CONFIG)
             cur = conn.cursor(cursor_factory=RealDictCursor)
-            cur.execute("SELECT id, name, hotel_style, amenities, address, rating, lat, lng, 0.0 as distance FROM accommodation_ko;")
+            cur.execute("SELECT id, name, hotel_style, amenities, address, rating, lat, lng, image, review_count, 0.0 as distance FROM accommodation_ko;")
             db_hotels = cur.fetchall()
             cur.close()
             conn.close()

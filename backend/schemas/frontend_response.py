@@ -24,6 +24,10 @@ class FrontendPlace(BaseModel):
     time: str | None = None
     image: str | None = None
     selectionReason: str | None = None
+    link: str | None = None
+    price: str | None = None
+    live_rating: str | None = None
+    features: str | None = None
 
 
 FrontendResponseType = Literal[
