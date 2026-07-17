@@ -13,14 +13,32 @@ function parseServerEvent(eventText) {
   return JSON.parse(dataLines.join('\n'));
 }
 
-export async function streamChat({ message, history = [], lang = 'ko', travelQueryThreadId = null, onMeta, onToken, onDone, onError }) {
+export async function streamChat({
+  message,
+  history = [],
+  lang = 'ko',
+  parsedIntent,
+  sourceMode,
+  parsedQuery,
+  onMeta,
+  onToken,
+  onDone,
+  onError,
+}) {
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },
-    body: JSON.stringify({ message, history, lang, travel_query_thread_id: travelQueryThreadId }),
+    body: JSON.stringify({
+      message,
+      history,
+      lang,
+      parsed_intent: parsedIntent,
+      source_mode: sourceMode,
+      parsed_query: parsedQuery,
+    }),
   });
 
   if (!response.ok) {

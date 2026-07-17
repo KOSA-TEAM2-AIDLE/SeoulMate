@@ -84,6 +84,11 @@ EXTRACTION_PROMPT = ChatPromptTemplate.from_messages(
 장소를 추천하지 말고 사용자가 명시한 조건만 추출한다.
 제공되지 않은 값은 추측하지 말고 null로 둔다.
 사용자가 이전 조건을 명시적으로 변경하면 최신 답변을 우선한다.
+conversation_history와 previous_structured_query는 이전 추천 문맥이다.
+현재 질문에 '그중', '아까', '거기서', '같은 조건', '지역만 바꿔'처럼
+이전 요청을 가리키는 표현이 있을 때만 이전 조건 중 변경되지 않은 값을 상속한다.
+현재 질문이 독립적인 새 요청이면 이전 조건을 상속하지 않는다.
+후속 질문에서는 normalized_question을 이전 조건과 현재 변경사항을 합친 독립적인 요청으로 만든다.
 상대 날짜는 reference_at을 기준으로 Asia/Seoul 절대 날짜로 변환한다.
 기준 시각이 부족해 확정할 수 없을 때만 relative_date_ambiguous=true로 둔다.
 단일 추천에서 사용자가 한 곳을 말해도 장소 수 정책은 후속 단계가 처리한다.
@@ -108,6 +113,7 @@ current_location: {current_location}
 previously_collected: {collected}
 missing_fields: {missing_fields}
 conversation_history: {conversation_history}
+previous_structured_query: {previous_structured_query}
 latest_user_answer: {latest_user_answer}
 
 normalized_question은 최초 질문과 확정된 추가 답변을 모두 포함한 독립적인 요청이어야 한다.
@@ -262,6 +268,11 @@ class TravelIntentExtractor:
                 "missing_fields": json.dumps(missing_fields, ensure_ascii=False),
                 "conversation_history": json.dumps(
                     state.get("conversation_history", []),
+                    ensure_ascii=False,
+                    default=str,
+                ),
+                "previous_structured_query": json.dumps(
+                    state.get("previous_structured_query"),
                     ensure_ascii=False,
                     default=str,
                 ),
