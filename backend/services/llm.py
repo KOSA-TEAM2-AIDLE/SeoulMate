@@ -201,7 +201,6 @@ def _candidate_payload(candidates: list[dict], include_weather: bool = True) -> 
             "review_count": candidate.get("review_count"),
             "address": candidate.get("address"),
             "distance_km": candidate.get("distance_km"),
-            "menu_price_min_krw": candidate.get("menu_price_min"),
             "menu_price_median_krw": candidate.get("menu_price_median"),
             "confirmed_features": confirmed_features,
             "menus": [
