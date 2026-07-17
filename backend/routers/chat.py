@@ -262,8 +262,9 @@ async def _rerank_attraction_candidates(
     source_mode: str,
     request,
 ):
-    if normalize_source_mode(source_mode) != "rag_mcp":
-        return candidates, ()
+    # 식당·카페와 같이 검색 모드와 Context 정책을 분리한다.
+    # 날씨는 Enricher 내부 조건을 따르고, 관광 혼잡도는 좌표·위치·
+    # 명시적 한적함 요청이 있으면 rag_only에서도 보강한다.
     reranked = await attraction_context_enricher.enrich(
         request,
         candidates,
@@ -823,7 +824,7 @@ async def _multi_task_recommendation_stream(
                 parsed,
                 canonical_mode,
                 requests_by_task[str(task.task_id)],
-            ) if task.domain == "attraction" else (batch.candidates, False)
+            ) if task.domain == "attraction" else (batch.candidates, ())
             sources.extend(attraction_sources)
             group_candidates = [
                 {

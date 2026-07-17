@@ -7,6 +7,21 @@ from application.recommendation.location_resolution import (
 
 
 class SearchLocationResolverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_current_location_alias_keeps_browser_coordinates_without_lookup(self):
+        class Resolver:
+            async def resolve(self, **kwargs):
+                raise AssertionError(f"unexpected place lookup: {kwargs}")
+
+        result = await SearchLocationResolver(Resolver()).resolve(
+            location="현재 위치",
+            latitude=37.5665,
+            longitude=126.978,
+        )
+
+        self.assertEqual(37.5665, result.latitude)
+        self.assertEqual(126.978, result.longitude)
+        self.assertEqual("current_location", result.source)
+
     async def test_named_place_uses_exact_unbiased_lookup_before_current_center(self):
         selected = SimpleNamespace(
             place_name="경복궁",

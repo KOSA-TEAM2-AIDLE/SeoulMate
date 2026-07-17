@@ -18,7 +18,7 @@ class AttractionRecommendationResult:
 
 
 class AttractionRecommendationPipeline:
-    """카페형 SearchService 뒤에 관광 전용 확장 단계만 조합한다."""
+    """SearchService 뒤에 관광 전용 확장 단계만 조합한다."""
 
     def __init__(
         self,

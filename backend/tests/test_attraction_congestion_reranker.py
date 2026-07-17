@@ -1,11 +1,15 @@
 import unittest
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 from domains.attraction.congestion_reranker import (
     AttractionCongestionReranker,
 )
 from domains.common.models import SearchCandidate
+from domains.common.models import DomainSearchRequest
 from integrations.mcp.base_client import ContextResult
+from routers.chat import _rerank_attraction_candidates
 
 
 def _candidate() -> SearchCandidate:
@@ -23,6 +27,33 @@ def _candidate() -> SearchCandidate:
 
 
 class AttractionCongestionRerankerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rag_only_still_enriches_attraction_congestion_context(self):
+        enriched = _candidate().model_copy(update={
+            "signals": {"congestion_available": True},
+        })
+        request = DomainSearchRequest(
+            task_id="task_1",
+            domain="attraction",
+            search_query="현재 내 주변 추천",
+            latitude=37.5796,
+            longitude=126.977,
+        )
+
+        with patch(
+            "routers.chat.attraction_context_enricher.enrich",
+            new=AsyncMock(return_value=[enriched]),
+        ) as enrich:
+            result, sources = await _rerank_attraction_candidates(
+                [_candidate()],
+                SimpleNamespace(),
+                "rag_only",
+                request,
+            )
+
+        enrich.assert_awaited_once_with(request, [_candidate()])
+        self.assertEqual([enriched], result)
+        self.assertIn("Seoul-Congestion-MCP", sources)
+
     async def test_candidate_coordinates_are_sent_and_fresh_congestion_is_applied(self):
         class Provider:
             async def get_context(self, request):

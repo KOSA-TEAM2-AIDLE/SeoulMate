@@ -155,6 +155,21 @@ class AttractionAnswerValidationTests(unittest.TestCase):
             [item.place_id for item in result.selections],
         )
 
+    def test_answer_may_mention_only_part_of_valid_selection(self):
+        result = validate_attraction_prediction(
+            answer_input(),
+            prediction(
+                ["1", "2", "3"],
+                answer="후보 1은 산책하기 좋은 선택입니다.",
+            ),
+        )
+
+        self.assertFalse(result.used_fallback)
+        self.assertEqual(
+            ["1", "2", "3"],
+            [item.place_id for item in result.selections],
+        )
+
     def test_fallback_uses_available_count_and_requested_language(self):
         korean = fallback_attraction_answer(answer_input())
         english_input = answer_input(language="en").model_copy(

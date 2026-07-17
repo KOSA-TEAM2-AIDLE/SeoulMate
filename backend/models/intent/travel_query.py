@@ -382,8 +382,6 @@ def _apply_current_location_hint(
     state: TravelQueryGraphState,
     extracted: dict[str, Any],
 ) -> None:
-    if extracted.get("location"):
-        return
     if (
         state.get("current_latitude") is None
         or state.get("current_longitude") is None
@@ -399,6 +397,11 @@ def _apply_current_location_hint(
         if value
     )
     if CURRENT_LOCATION_HINT_RE.search(text):
+        # 상위 모델이 "현재"를 시설명으로 추출해도 명시적
+        # "내 주변/내 근처"는 프론트의 좌표를 사용하는 요청으로 우선한다.
+        # 기존 graph state의 잘못된 장소명도 dict.update에서 제거되도록
+        # key를 삭제하지 않고 None으로 명시적으로 덮어쓴다.
+        extracted["location"] = None
         extracted["use_current_location"] = True
 
 

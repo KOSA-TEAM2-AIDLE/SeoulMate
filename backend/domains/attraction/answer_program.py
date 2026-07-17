@@ -34,6 +34,11 @@ class AttractionSelectionAnswerSignature(dspy.Signature):
     모든 후보가 명시적 제외 조건에 충돌하거나 근거로 적합성을 판단할 수
     없으면 0개와 조건에 맞는 후보가 없다는 답변을 반환한다.
     selection_reasons_json은 선택한 ID를 key, 근거 기반 선정 이유를 value로 갖는 JSON object 문자열이어야 한다.
+    answer에는 selected_place_ids에 포함된 후보의 이름만 추천 대상으로 언급해야 하며,
+    선택하지 않은 후보의 이름·별칭을 추가로 언급하면 안 된다.
+    answer에는 선택한 모든 후보의 이름과 각 후보의 selection_reasons_json에 있는
+    선정 사유를 자연스러운 문장으로 포함해야 한다. 각 후보마다 이름 뒤에 검증된
+    근거 한 문장을 작성하고, 후보에 없는 사실은 추가하지 않는다.
     """
 
     language: str = dspy.InputField(desc="Answer language such as ko or en")
@@ -100,7 +105,12 @@ def load_attraction_program(
         raise AttractionProgramArtifactError(
             f"관광 DSPy artifact를 불러오지 못했습니다: {path}"
         ) from error
+    # 운영 로그에는 오래된 artifact임을 계속 남긴 뒤 실행 계약만 최신화한다.
     _warn_if_artifact_contract_mismatch(program)
+    # 과거 최적화 artifact는 Predict의 데모는 유효하지만, 당시 Signature 지시문도
+    # 함께 저장한다. 예전의 "정확히 N개" 지시문을 그대로 쓰면 현재의 0..N 안전
+    # 계약 및 답변-선택 일치 검증과 충돌하므로, 데모는 보존하고 실행 계약만 최신화한다.
+    program.generate.signature = AttractionSelectionAnswerSignature
     return program
 
 

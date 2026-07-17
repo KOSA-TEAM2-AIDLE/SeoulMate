@@ -48,19 +48,33 @@ def validate_attraction_prediction_or_raise(
 ) -> AttractionAnswerResult:
     """검증 실패 원인을 상위 생성기가 로깅할 수 있게 전달한다."""
 
+    candidates_by_id = {
+        candidate.place_id: candidate for candidate in answer_input.candidates
+    }
+    candidate_ids_by_name = _unique_candidate_ids_by_name(answer_input)
+
     try:
-        selected_ids = prediction.selected_place_ids
+        selected_references = prediction.selected_place_ids
     except AttributeError as error:
         raise AttractionPredictionValidationError(
             AttractionFallbackReason.INVALID_SELECTED_IDS
         ) from error
-    if not isinstance(selected_ids, list) or not all(
-        isinstance(place_id, str) and not is_nullish(place_id)
-        for place_id in selected_ids
+    if not isinstance(selected_references, list) or not all(
+        isinstance(reference, str) and not is_nullish(reference)
+        for reference in selected_references
     ):
         raise AttractionPredictionValidationError(
             AttractionFallbackReason.INVALID_SELECTED_IDS
         )
+    selected_ids = [
+        _resolve_candidate_id(reference, candidates_by_id, candidate_ids_by_name)
+        for reference in selected_references
+    ]
+    if any(place_id is None for place_id in selected_ids):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.UNKNOWN_SELECTED_ID
+        )
+    selected_ids = [place_id for place_id in selected_ids if place_id is not None]
 
     expected_count = min(
         settings.attraction_recommendation_limit,
@@ -75,21 +89,31 @@ def validate_attraction_prediction_or_raise(
             AttractionFallbackReason.DUPLICATE_SELECTED_IDS
         )
 
-    candidates_by_id = {
-        candidate.place_id: candidate for candidate in answer_input.candidates
-    }
-    if any(place_id not in candidates_by_id for place_id in selected_ids):
-        raise AttractionPredictionValidationError(
-            AttractionFallbackReason.UNKNOWN_SELECTED_ID
-        )
-
     try:
-        reasons = json.loads(prediction.selection_reasons_json)
+        raw_reasons = json.loads(prediction.selection_reasons_json)
     except (AttributeError, TypeError, json.JSONDecodeError) as error:
         raise AttractionPredictionValidationError(
             AttractionFallbackReason.INVALID_REASONS_JSON
         ) from error
-    if not isinstance(reasons, dict) or set(reasons) != set(selected_ids):
+    if not isinstance(raw_reasons, dict):
+        raise AttractionPredictionValidationError(
+            AttractionFallbackReason.REASONS_ID_MISMATCH
+        )
+    reasons: dict[str, Any] = {}
+    for reference, reason in raw_reasons.items():
+        if not isinstance(reference, str):
+            raise AttractionPredictionValidationError(
+                AttractionFallbackReason.REASONS_ID_MISMATCH
+            )
+        place_id = _resolve_candidate_id(
+            reference, candidates_by_id, candidate_ids_by_name
+        )
+        if place_id is None or place_id in reasons:
+            raise AttractionPredictionValidationError(
+                AttractionFallbackReason.REASONS_ID_MISMATCH
+            )
+        reasons[place_id] = reason
+    if set(reasons) != set(selected_ids):
         raise AttractionPredictionValidationError(
             AttractionFallbackReason.REASONS_ID_MISMATCH
         )
@@ -118,7 +142,9 @@ def validate_attraction_prediction_or_raise(
         for candidate in answer_input.candidates
         if candidate.name.casefold() in normalized_answer
     }
-    if mentioned_ids and mentioned_ids != set(selected_ids):
+    # 자연어 답변에서 선택 장소 일부를 생략하는 것은 허용하되,
+    # 선택하지 않은 후보를 추천하는 경우만 fallback 처리한다.
+    if mentioned_ids - set(selected_ids):
         raise AttractionPredictionValidationError(
             AttractionFallbackReason.ANSWER_CANDIDATE_MISMATCH
         )
@@ -195,6 +221,39 @@ def fallback_attraction_answer(
 def _mentions_quietness(text: str) -> bool:
     normalized = text.casefold()
     return any(term in normalized for term in _QUIETNESS_TERMS)
+
+
+def _unique_candidate_ids_by_name(
+    answer_input: AttractionAnswerInput,
+) -> dict[str, str]:
+    """DSPy가 ID 대신 정확한 후보명을 재출력한 경우만 안전하게 복구한다."""
+
+    grouped: dict[str, list[str]] = {}
+    for candidate in answer_input.candidates:
+        normalized = _normalize_reference(candidate.name)
+        if normalized:
+            grouped.setdefault(normalized, []).append(candidate.place_id)
+    return {
+        name: place_ids[0]
+        for name, place_ids in grouped.items()
+        if len(place_ids) == 1
+    }
+
+
+def _resolve_candidate_id(
+    reference: str,
+    candidates_by_id: dict[str, Any],
+    candidate_ids_by_name: dict[str, str],
+) -> str | None:
+    value = reference.strip()
+    if value in candidates_by_id:
+        return value
+    # 이름은 후보명과 완전히 같고, 그 이름이 후보 안에서 유일할 때만 허용한다.
+    return candidate_ids_by_name.get(_normalize_reference(value))
+
+
+def _normalize_reference(value: str) -> str:
+    return " ".join(value.casefold().split())
 
 
 __all__ = [

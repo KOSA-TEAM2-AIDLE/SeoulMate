@@ -19,6 +19,31 @@ GENERIC_TERMS = (
     "관광지", "명소", "추천", "갈만한", "가볼만한", "근처", "주변", "인근",
     "tourist attraction", "attraction", "recommend", "near", "nearby",
 )
+CURRENT_LOCATION_ALIASES = frozenset({
+    "현재 위치",
+    "내 위치",
+    "내 주변",
+    "여기",
+    "current location",
+    "my location",
+    "near me",
+})
+
+
+def should_geocode_location(request: DomainSearchRequest) -> bool:
+    """현재 위치 별칭은 시설명으로 지오코딩하지 않는다."""
+
+    if not request.location:
+        return False
+    target = request.location.strip().casefold()
+    if target in CURRENT_LOCATION_ALIASES:
+        return False
+    if (
+        request.current_location_name
+        and target == request.current_location_name.strip().casefold()
+    ):
+        return False
+    return True
 
 
 def build_attraction_semantic_query(request: DomainSearchRequest) -> str:
@@ -50,11 +75,7 @@ class AttractionSearchService:
             raise ValueError(f"AttractionSearchService에 {request.domain} 요청을 전달했습니다.")
         latitude = request.latitude
         longitude = request.longitude
-        if request.location and (
-            not request.current_location_name
-            or request.location.strip().casefold()
-            != request.current_location_name.strip().casefold()
-        ):
+        if should_geocode_location(request):
             geocoded = self.geocoder(request.location)
             if geocoded:
                 latitude, longitude, _ = geocoded
@@ -103,4 +124,8 @@ class AttractionSearchService:
         return await asyncio.to_thread(self._search_sync, request)
 
 
-__all__ = ["AttractionSearchService", "build_attraction_semantic_query"]
+__all__ = [
+    "AttractionSearchService",
+    "build_attraction_semantic_query",
+    "should_geocode_location",
+]

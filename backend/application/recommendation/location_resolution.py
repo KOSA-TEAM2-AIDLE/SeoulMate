@@ -7,6 +7,21 @@ from services.kakao_local import KakaoLocalServiceError
 from services.place_resolver import PlaceResolver
 
 
+# 프론트가 전달한 좌표가 있을 때만 사용자 현재 위치로 판단한다.
+# Kakao에 지오코딩하면 '현재'라는 상호명이 반환될 수 있다.
+CURRENT_LOCATION_ALIASES = frozenset({
+    "현재 위치",
+    "내 위치",
+    "내 주변",
+    "내 근처",
+    "여기",
+    "current location",
+    "my location",
+    "near me",
+    "around here",
+})
+
+
 @dataclass(frozen=True)
 class ResolvedSearchLocation:
     location_name: str | None
@@ -34,6 +49,12 @@ class SearchLocationResolver:
             raise ValueError("latitude와 longitude는 함께 입력해야 합니다.")
 
         target = (location or "").strip() or None
+        current_location_alias = bool(
+            target
+            and target.casefold() in CURRENT_LOCATION_ALIASES
+            and latitude is not None
+            and longitude is not None
+        )
         same_as_current = bool(
             target and current_location_name
             and target.casefold() == current_location_name.strip().casefold()
@@ -41,9 +62,13 @@ class SearchLocationResolver:
         broad_seoul = target is not None and target.casefold() in {
             "서울", "서울시", "서울특별시", "seoul",
         }
-        if target is None or same_as_current or broad_seoul:
+        if target is None or current_location_alias or same_as_current or broad_seoul:
             return ResolvedSearchLocation(
-                location_name=target or current_location_name,
+                location_name=(
+                    current_location_name
+                    if current_location_alias
+                    else target or current_location_name
+                ),
                 latitude=latitude,
                 longitude=longitude,
                 source="current_location" if latitude is not None else None,

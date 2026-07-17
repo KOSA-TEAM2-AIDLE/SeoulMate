@@ -12,10 +12,11 @@ from services.location import haversine_km
 
 
 RRF_K = 60
-PROFILE_WEIGHT = 1.0
-REVIEW_WEIGHT = 1.5
+PROFILE_WEIGHT = 1.5
+REVIEW_WEIGHT = 1.0
 CATEGORY_BOOST = 0.02
-DEFAULT_RADIUS_KM = 5.0
+# 사용자가 반경을 명시하면 그 값을 우선하며, 명시하지 않은 현재 위치 검색만 과도하게 넓어지는 것을 막는다.
+DEFAULT_RADIUS_KM = 2.0
 
 
 @dataclass(frozen=True)
@@ -50,11 +51,11 @@ class AttractionReranker:
             record = retrieval.attractions.get(attraction_id)
             if record is None:
                 continue
-            if record.kind == "event" and record.end_date is not None and record.end_date < as_of:
+            if record.kind == "event" and record.end_date is not None and record.end_date < as_of: # 종료된 행사 점검
                 continue
-            if plan.event_only and record.kind != "event":
+            if plan.event_only and record.kind != "event": # 이벤트 타입만 추천이 들어왔는데, 후보의 이벤트가 행사가 아닌경우 .. 
                 continue
-            if plan.secondary_categories and record.category_secondary not in plan.secondary_categories:
+            if plan.secondary_categories and record.category_secondary not in plan.secondary_categories: # 파싱된 결과 세컨더리 카테고리가 있으면서 선택된 카테고리가 있는데 파싱된 세컨더리 카테고리와 다르면
                 continue
             if not plan.secondary_categories and plan.primary_categories and record.category_primary not in plan.primary_categories:
                 continue
@@ -79,11 +80,46 @@ class AttractionReranker:
                     continue
 
             profile = profile_hits.get(attraction_id)
-            profile_score = PROFILE_WEIGHT / (RRF_K + profile.rank) if profile else 0.0
+            profile_score = (
+                PROFILE_WEIGHT / (RRF_K + profile.rank)
+                if profile
+                else 0.0
+            )
+
             reviews = retrieval.review_hits_by_place.get(attraction_id, ())
-            review_score = REVIEW_WEIGHT * sum(1 / (RRF_K + hit.rank) for hit in reviews)
-            category_score = CATEGORY_BOOST if (plan.primary_categories or plan.secondary_categories) else 0.0
-            ranked.append(RankedAttractionCandidate(record, profile_score + review_score + category_score, profile.rank if profile else None, profile.similarity if profile else None, reviews, profile_score, review_score, category_score, distance, assessments))
+
+            # 리뷰 수가 많은 장소가 단순히 리뷰 개수만으로 유리해지지 않도록
+            # 리뷰별 RRF 점수의 평균만 보조 점수로 사용한다.
+            review_score = (
+                REVIEW_WEIGHT
+                * sum(1 / (RRF_K + hit.rank) for hit in reviews)
+                / len(reviews)
+                if reviews
+                else 0.0
+            )
+
+            category_score = (
+                CATEGORY_BOOST
+                if (plan.primary_categories or plan.secondary_categories)
+                else 0.0
+            )
+
+            score = profile_score + review_score + category_score
+
+            ranked.append(
+                RankedAttractionCandidate(
+                    record,
+                    score,
+                    profile.rank if profile else None,
+                    profile.similarity if profile else None,
+                    reviews,
+                    profile_score,
+                    review_score,
+                    category_score,
+                    distance,
+                    assessments,
+                )
+            )
         ranked.sort(key=lambda item: (item.score, item.attraction.rating or -1, item.attraction.review_count), reverse=True)
         return ranked[:limit]
 
