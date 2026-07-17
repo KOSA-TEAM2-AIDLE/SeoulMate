@@ -101,7 +101,15 @@ conversation_history와 previous_structured_query는 이전 추천 문맥이다.
 당일 루트에서 방문 종류를 명시했다면 explicit_visit_count에 실제 슬롯 수를 넣는다.
 당일 루트의 강도 선택은 relaxed=3곳, normal=4곳, packed=5곳으로 매핑한다.
 다일 루트의 target_places_per_day는 정확한 전체 검증값으로 만들지 않는다.
-날씨를 requested_domains에 넣지 않는다.""",
+날씨를 requested_domains에 넣지 않는다.
+도메인 기준은 다음과 같다.
+- restaurant: 식당, 음식점, 맛집, 식사, 음식 종류나 메뉴
+- cafe: 카페, 커피, 디저트, 베이커리, 찻집
+- accommodation: 숙소, 호텔, 모텔, 게스트하우스, 호스텔, 숙박
+- attraction: 관광지, 명소, 문화시설, 전시, 미술관, 박물관, 공원, 역사 유적, 쇼핑 관광, 체험, 축제, 행사, 공연
+복합 질문에는 명시된 모든 requested_domains 또는 requested_slots를 만든다.
+'경복궁 근처/주변/에서 가까운'은 location='경복궁'으로 추출한다.
+'내 근처/내 주변/현재 위치에서'는 use_current_location=true로 추출한다.""",
         ),
         (
             "human",
@@ -181,6 +189,56 @@ ADDITIVE_CLARIFICATION_KEYS = {
     "adults",
     "children",
 }
+
+# 각 AGENTS 에서 Domain 분류를 위한 세부적인 키워드가 있다면 이곳에 추가하면 됩니다.
+# 시설을 제외한 나머지는 임의로 추가해두었습니다.
+DOMAIN_TERMS: dict[TaskDomain, tuple[str, ...]] = {
+    "restaurant": ("음식점", "맛집", "식당", "한식", "중식", "일식", "양식", "식사", "메뉴"),
+    "cafe": ("베이커리", "디저트", "카페", "커피", "찻집"),
+    "accommodation": ("게스트하우스", "호스텔", "리조트", "숙박", "숙소", "호텔", "모텔"),
+    "attraction": (
+        "문화시설", "문화 명소", "전시회", "미술관", "박물관", "관광지",
+        "역사 유적", "쇼핑 관광", "전시", "축제", "행사", "공연", "명소", "공원", "체험",
+    ),
+    "etc": (),
+}
+
+CURRENT_LOCATION_TERMS = ("내 근처", "내 주변", "현재 위치에서", "여기 근처", "여기 주변")
+LOCATION_RELATION_PATTERN = re.compile(
+    r"([0-9A-Za-z가-힣·]+(?:\s+[0-9A-Za-z가-힣·]+){0,2})\s*"
+    r"(?:근처|주변|인근|에서\s*가까운|이랑\s*가까운)"
+)
+
+
+def _apply_high_confidence_fallback(question: str, extracted: dict[str, Any]) -> None:
+    """명확한 표현만 보정하며 모델이 확정한 값은 덮어쓰지 않는다."""
+    normalized = re.sub(r"\s+", " ", question).strip().casefold()
+    if "use_current_location" not in extracted and any(term in normalized for term in CURRENT_LOCATION_TERMS):
+        extracted["use_current_location"] = True
+
+    if not extracted.get("location") and not extracted.get("use_current_location"):
+        match = LOCATION_RELATION_PATTERN.search(normalized)
+        if match:
+            extracted["location"] = match.group(1).strip()
+
+    if not extracted.get("requested_domains"):
+        matches: list[tuple[int, TaskDomain]] = []
+        for domain, terms in DOMAIN_TERMS.items():
+            positions = [(normalized.find(term), term) for term in terms if term in normalized]
+            if not positions:
+                continue
+            position, _ = min(positions)
+            matches.append((position, domain))
+        extracted["requested_domains"] = [
+            domain for _, domain in sorted(matches, key=lambda item: item[0])
+        ]
+
+    if "attraction" in (extracted.get("requested_domains") or []) and not extracted.get("themes"):
+        attraction_terms = [
+            term for term in DOMAIN_TERMS["attraction"] if term in normalized
+        ]
+        if attraction_terms:
+            extracted["themes"] = attraction_terms
 
 
 def create_intent_extraction_chain(
@@ -324,8 +382,6 @@ def _apply_current_location_hint(
     state: TravelQueryGraphState,
     extracted: dict[str, Any],
 ) -> None:
-    if extracted.get("location"):
-        return
     if (
         state.get("current_latitude") is None
         or state.get("current_longitude") is None
@@ -341,6 +397,11 @@ def _apply_current_location_hint(
         if value
     )
     if CURRENT_LOCATION_HINT_RE.search(text):
+        # 상위 모델이 "현재"를 시설명으로 추출해도 명시적
+        # "내 주변/내 근처"는 프론트의 좌표를 사용하는 요청으로 우선한다.
+        # 기존 graph state의 잘못된 장소명도 dict.update에서 제거되도록
+        # key를 삭제하지 않고 None으로 명시적으로 덮어쓴다.
+        extracted["location"] = None
         extracted["use_current_location"] = True
 
 
@@ -437,8 +498,10 @@ def _apply_deterministic_defaults(
     requested_slots = extracted.get("requested_slots") or []
     if requested_slots and extracted.get("explicit_visit_count") is None:
         extracted["explicit_visit_count"] = len(requested_slots)
-    if requested_slots and not extracted.get("requested_domains"):
-        extracted["requested_domains"] = [slot["domain"] for slot in requested_slots]
+    if requested_slots:
+        extracted["requested_domains"] = list(dict.fromkeys(
+            slot["domain"] for slot in requested_slots
+        ))
 
     if intent == "day_trip_route" and start_date_value:
         extracted["end_date"] = start_date_value

@@ -139,6 +139,10 @@ WEATHER_WORDS = {
     "날씨", "비", "눈", "기온", "온도", "더위", "추위", "바람", "강풍",
     "weather", "rain", "snow", "temperature", "hot", "cold", "wind",
 }
+LOW_CONGESTION_WORDS = {
+    "한적", "덜 붐", "붐비지", "혼잡하지",
+    "low congestion", "less crowded", "not crowded",
+}
 
 
 def _has_locative_marker(text: str, end: int) -> bool:
@@ -353,13 +357,21 @@ def derive_source_mode(parsed: StructuredTravelQuery) -> ExecutionMode:
         or parsed.filters.time_window
     )
     has_rag_tasks = bool(parsed.tasks)
+    has_attraction_congestion_signal = (
+        any(task.domain == "attraction" for task in parsed.tasks)
+        and any(word in text for word in LOW_CONGESTION_WORDS)
+    )
 
     # 상위 GPT가 명시적 날짜/날씨를 놓친 경우에만 안전하게 RAG_MCP로 올린다.
     if parsed.source_mode:
         if (
             parsed.source_mode == "rag_only"
             and has_rag_tasks
-            and (has_weather_signal or has_explicit_date_signal)
+            and (
+                has_weather_signal
+                or has_explicit_date_signal
+                or has_attraction_congestion_signal
+            )
         ):
             return "rag_mcp"
         return parsed.source_mode
@@ -369,7 +381,12 @@ def derive_source_mode(parsed: StructuredTravelQuery) -> ExecutionMode:
         # 빠뜨린 경우에도 RAG_MCP로 올린다. trusted_visit_date()는 어차피 원문에서
         # 날짜를 복구하므로, 여기서만 파서 필터를 믿으면 '미래 시각으로 영업시간은
         # 거르면서 그 시각 날씨는 보지 않는' 불일치가 생긴다.
-        if has_visit_time or has_weather_signal or has_explicit_date_signal:
+        if (
+            has_visit_time
+            or has_weather_signal
+            or has_explicit_date_signal
+            or has_attraction_congestion_signal
+        ):
             return "rag_mcp"
         return "rag_only"
     if has_weather_signal or parsed.intent == "weather_information":

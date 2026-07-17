@@ -33,6 +33,7 @@ class ChatRequest(BaseModel):
     source_mode: SourceMode | None = None
     parsed_intent: TravelIntent | None = None
     parsed_query: StructuredTravelQuery | None = None
+    travel_query_thread_id: str | None = None
     route_modification: RouteModificationRequest | None = None
 
     @model_validator(mode="after")
@@ -93,6 +94,7 @@ class ChatMetaPlaces(BaseModel):
     tool_results: list[ToolResult] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
     sources: list[str] = Field(default_factory=list)
+    continuation: dict[str, Any] | None = None
     result: Optional[FrontendResponse] = None
 
 

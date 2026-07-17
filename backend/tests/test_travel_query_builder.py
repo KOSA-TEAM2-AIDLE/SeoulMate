@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from application.travel_query.builder import build_structured_query
+from models.intent.travel_query import _apply_current_location_hint
 
 
 REFERENCE_AT = datetime(2026, 7, 15, 12, 0, tzinfo=ZoneInfo("Asia/Seoul"))
@@ -26,6 +27,37 @@ def _state(intent: str, **collected: object) -> dict:
 
 
 class StructuredTravelQueryBuilderTests(unittest.TestCase):
+    def test_explicit_near_me_overrides_misparsed_location_name(self) -> None:
+        extracted = {
+            "location": "현재",
+            "requested_domains": ["attraction"],
+        }
+
+        _apply_current_location_hint(
+            {
+                "original_question": (
+                    "현재 내 주변에서 산책하기 좋은 장소를 추천해줘"
+                ),
+                "latest_user_answer": None,
+                "current_latitude": 37.5665,
+                "current_longitude": 126.978,
+            },
+            extracted,
+        )
+
+        self.assertTrue(extracted["use_current_location"])
+        self.assertIn("location", extracted)
+        self.assertIsNone(extracted["location"])
+
+    def test_recommendation_without_domain_fails_instead_of_dispatching_etc(self) -> None:
+        result = build_structured_query(_state(
+            "single_place_recommendation", location="경복궁",
+        ))
+
+        self.assertEqual("failed", result["status"])
+        self.assertIsNone(result["structured_query"])
+        self.assertIn("검색 도메인", " ".join(result["validation_errors"]))
+
     def test_single_recommendation_builds_three_choice_task(self) -> None:
         result = build_structured_query(
             _state(
