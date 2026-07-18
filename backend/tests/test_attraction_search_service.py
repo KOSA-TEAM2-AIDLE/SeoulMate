@@ -29,6 +29,17 @@ class AttractionLocationPolicyTests(unittest.TestCase):
 
         self.assertTrue(should_geocode_location(request))
 
+    def test_named_current_location_without_coordinates_is_geocoded(self):
+        request = DomainSearchRequest(
+            task_id="task_1",
+            domain="attraction",
+            search_query="여의도 아이와 함께 가기 좋은 장소",
+            location="여의도",
+            current_location_name="여의도",
+        )
+
+        self.assertTrue(should_geocode_location(request))
+
 
 if __name__ == "__main__":
     unittest.main()

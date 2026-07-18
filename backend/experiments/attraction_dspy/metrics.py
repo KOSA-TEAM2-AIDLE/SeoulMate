@@ -127,7 +127,7 @@ def evaluate_attraction_prediction(
         for candidate in selected_candidates
     ):
         hard_fail_reasons.append("ended_event_selected")
-    if any(candidate.congestion is None for candidate in selected_candidates) and any(
+    if any(candidate.congestion.status != "available" for candidate in selected_candidates) and any(
         term in combined_text.casefold() for term in _QUIETNESS_TERMS
     ):
         hard_fail_reasons.append("missing_congestion_inference")
@@ -244,7 +244,7 @@ def _grounding_score(candidates, reasons: dict[str, Any]) -> float:
                     candidate.category,
                     candidate.description,
                     *candidate.reviews,
-                    candidate.congestion,
+                    candidate.congestion.value,
                 ],
             )
         )

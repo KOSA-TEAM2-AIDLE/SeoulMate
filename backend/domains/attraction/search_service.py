@@ -42,7 +42,10 @@ def should_geocode_location(request: DomainSearchRequest) -> bool:
         request.current_location_name
         and target == request.current_location_name.strip().casefold()
     ):
-        return False
+        # 이름만 같고 좌표가 없으면 거리 필터를 적용할 기준점이 없다.
+        # 이 경우에는 명시된 관광 지역을 지오코딩해야 서울 전체 검색으로
+        # 넓어지는 것을 막을 수 있다.
+        return request.latitude is None or request.longitude is None
     return True
 
 

@@ -1,0 +1,56 @@
+{
+  "generate": {
+    "traces": [],
+    "train": [],
+    "demos": [],
+    "signature": {
+      "instructions": "Choose only verified attraction candidates and return JSON-compatible IDs.",
+      "fields": [
+        {
+          "prefix": "Language:",
+          "description": "${language}"
+        },
+        {
+          "prefix": "Question:",
+          "description": "${question}"
+        },
+        {
+          "prefix": "Location:",
+          "description": "${location}"
+        },
+        {
+          "prefix": "Themes Json:",
+          "description": "${themes_json}"
+        },
+        {
+          "prefix": "Selection Count:",
+          "description": "${selection_count}"
+        },
+        {
+          "prefix": "Candidates Json:",
+          "description": "${candidates_json}"
+        },
+        {
+          "prefix": "Selected Place Ids:",
+          "description": "JSON list of unique selected candidate place_id values, at most selection_count"
+        },
+        {
+          "prefix": "Forbidden Place Ids:",
+          "description": "JSON list of candidate place_id values excluded by explicit constraints"
+        },
+        {
+          "prefix": "Selection Reasons Json:",
+          "description": "A valid JSON object string only: every selected place_id is a key and its grounded recommendation reason is the non-empty string value. Do not return prose, Markdown, or a JSON string."
+        }
+      ]
+    },
+    "lm": null
+  },
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.12",
+      "dspy": "3.2.1",
+      "cloudpickle": "3.1"
+    }
+  }
+}

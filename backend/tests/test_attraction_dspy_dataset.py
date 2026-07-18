@@ -17,6 +17,19 @@ from experiments.attraction_dspy.metrics import (
 )
 from experiments.attraction_dspy.evaluate import build_evaluation_plan
 from experiments.attraction_dspy.optimize import build_optimization_plan
+from experiments.attraction_dspy.optimize import build_production_optimization_plan
+from experiments.attraction_dspy.production_dataset import (
+    adapt_production_example,
+    load_production_splits,
+    to_answer_example,
+    to_selection_example,
+)
+from experiments.attraction_dspy.production_metrics import (
+    build_answer_metric,
+    build_selection_metric,
+)
+from experiments.attraction_dspy.build_augmentation_draft import build_augmentation_draft
+from experiments.attraction_dspy.review_augmentation_draft import source_cid_matches_place_id
 
 
 def case_payload(case_id: str, *, language: str = "ko") -> dict:
@@ -57,6 +70,131 @@ def case_payload(case_id: str, *, language: str = "ko") -> dict:
 
 
 class AttractionDspyDatasetTests(unittest.TestCase):
+    def test_db_source_cid_match_accepts_prefixed_attraction_ids(self):
+        self.assertTrue(source_cid_matches_place_id("KOPbo1j5m", "bo1j5m"))
+        self.assertTrue(source_cid_matches_place_id("bo1j5m", "bo1j5m"))
+        self.assertFalse(source_cid_matches_place_id("KOPbo1j5m", "different"))
+
+    def test_augmentation_draft_is_disjoint_from_existing_splits_and_gold(self):
+        dataset_root = Path(__file__).parents[1] / "data" / "attraction" / "DSPy"
+        rows = build_augmentation_draft(dataset_root)
+
+        self.assertEqual(32, len(rows))
+        self.assertEqual({"pending"}, {row["review_status"] for row in rows})
+        self.assertEqual({"train", "dev"}, {row["metadata"]["target_split"] for row in rows})
+
+        used_place_ids = set()
+        used_groups = set()
+        for kind in ("selection", "answer", "exception", "gold_test"):
+            paths = ([dataset_root / "gold_test" / "gold_test.jsonl"] if kind == "gold_test"
+                     else [dataset_root / kind / f"{split}.jsonl" for split in ("train", "dev", "test")])
+            for path in paths:
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    if not line.strip():
+                        continue
+                    row = json.loads(line)
+                    used_place_ids.update(row.get("metadata", {}).get("source_place_cids", []))
+                    used_groups.add(row.get("metadata", {}).get("split_group"))
+
+        draft_place_ids = {cid for row in rows for cid in row["metadata"]["source_place_cids"]}
+        draft_groups = {row["metadata"]["split_group"] for row in rows}
+        self.assertFalse(used_place_ids.intersection(draft_place_ids))
+        self.assertFalse(used_groups.intersection(draft_groups))
+
+    def test_production_example_adapter_uses_attraction_answer_input_contract(self):
+        adapted = adapt_production_example(
+            {
+                "example_id": "selection-ko-1",
+                "input": {
+                    "question": "전시 추천",
+                    "language": "ko",
+                    "location": "서울",
+                    "themes": ["전시"],
+                    "candidates": [{
+                        "place_id": "p1", "rank": 1, "name": "전시장",
+                        "category": "전시", "congestion": None, "weather": None,
+                    }],
+                },
+                "expected": {
+                    "selected_place_ids": ["p1"],
+                    "forbidden_place_ids": [],
+                    "selection_reasons": {"p1": "근거"},
+                },
+            }
+        )
+
+        self.assertEqual("selection-ko-1", adapted.case_id)
+        self.assertEqual("p1", adapted.answer_input.candidates[0].place_id)
+        self.assertEqual("unavailable", adapted.answer_input.candidates[0].congestion.status)
+        self.assertEqual(["p1"], adapted.selected_place_ids)
+        self.assertEqual(
+            set(to_selection_example(adapted).inputs()),
+            {"language", "question", "location", "themes_json", "selection_count", "candidates_json"},
+        )
+        self.assertEqual(
+            set(to_answer_example(adapted).inputs()),
+            {"language", "question", "selected_candidates_json", "selection_reasons_json"},
+        )
+
+    def test_production_split_loader_keeps_gold_out_of_training_splits(self):
+        dataset_root = Path(__file__).parents[1] / "data" / "attraction" / "DSPy"
+        splits = load_production_splits(dataset_root, "selection")
+
+        self.assertEqual(set(splits), {"train", "dev", "test"})
+        self.assertTrue(splits["train"])
+        self.assertTrue(splits["dev"])
+        self.assertTrue(splits["test"])
+        self.assertTrue(all(case.case_id not in {
+            gold.case_id
+            for gold in load_production_splits(dataset_root, "gold_test")["test"]
+        } for case in splits["train"]))
+
+    def test_production_optimization_plan_has_separate_programs(self):
+        dataset_root = Path(__file__).parents[1] / "data" / "attraction" / "DSPy"
+        plan = build_production_optimization_plan(dataset_root)
+
+        self.assertEqual(set(plan["programs"]), {"selection", "answer"})
+        self.assertEqual(plan["programs"]["selection"]["train_split"], "train")
+        self.assertEqual(plan["programs"]["answer"]["validation_split"], "dev")
+        self.assertNotIn("gold_test", plan["programs"]["selection"])
+
+    def test_production_metrics_reject_invalid_outputs_and_reward_gold_ids(self):
+        case = adapt_production_example(
+            {
+                "example_id": "answer-ko-1",
+                "input": {
+                    "question": "전시 추천", "language": "ko", "candidates": [{
+                        "place_id": "p1", "rank": 1, "name": "전시장", "category": "전시",
+                    }],
+                },
+                "expected": {
+                    "selected_place_ids": ["p1"],
+                    "selection_reasons": {"p1": "전시 근거"},
+                    "structured_answer": {
+                        "language": "ko", "recommendations": [{
+                            "place_id": "p1", "name": "전시장", "recommendation_reason": "전시 관람에 좋습니다.",
+                            "congestion": {"status": "unavailable"}, "weather": {"status": "unavailable"},
+                        }], "no_result_reason": None,
+                    },
+                },
+            }
+        )
+        example = to_selection_example(case)
+        selection_metric = build_selection_metric({case.case_id: case})
+        self.assertEqual(1.0, selection_metric(example, SimpleNamespace(
+            selected_place_ids=["p1"], forbidden_place_ids=[],
+            selection_reasons_json=json.dumps({"p1": "전시 근거"}),
+        )))
+        self.assertEqual(0.0, selection_metric(example, SimpleNamespace(
+            selected_place_ids=["other"], forbidden_place_ids=[],
+            selection_reasons_json=json.dumps({"other": "근거"}),
+        )))
+
+        answer_metric = build_answer_metric({case.case_id: case})
+        self.assertEqual(1.0, answer_metric(to_answer_example(case), SimpleNamespace(
+            structured_answer_json=json.dumps(case.structured_answer, ensure_ascii=False),
+        )))
+
     def _write_split(self, directory: Path, split: str, rows: list[dict]):
         (directory / f"{split}.jsonl").write_text(
             "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",

@@ -1,0 +1,22 @@
+{
+  "dspy_version": "3.2.1",
+  "model": "openai/gpt-4o-mini",
+  "temperature": 0.0,
+  "max_tokens": 900,
+  "programs": {
+    "selection": {
+      "train_cases": 126,
+      "dev_cases": 36,
+      "test_cases": 50,
+      "artifact": "experiments/attraction_dspy/candidate_artifacts/v2/selection_v1.json",
+      "elapsed_seconds": 140.06845712498762
+    },
+    "answer": {
+      "train_cases": 126,
+      "dev_cases": 36,
+      "test_cases": 50,
+      "artifact": "experiments/attraction_dspy/candidate_artifacts/v2/answer_v1.json",
+      "elapsed_seconds": 199.29898195900023
+    }
+  }
+}

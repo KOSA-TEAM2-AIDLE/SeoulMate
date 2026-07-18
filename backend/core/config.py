@@ -76,6 +76,27 @@ class Settings(BaseSettings):
         / "artifacts"
         / "optimized_program.json"
     )
+    attraction_dspy_selection_artifact_path: Path = (
+        BASE_DIR
+        / "domains"
+        / "attraction"
+        / "artifacts"
+        / "selection_v1.json"
+    )
+    attraction_dspy_answer_artifact_path: Path = (
+        BASE_DIR
+        / "domains"
+        / "attraction"
+        / "artifacts"
+        / "answer_v1.json"
+    )
+    attraction_dspy_metadata_path: Path = (
+        BASE_DIR
+        / "domains"
+        / "attraction"
+        / "artifacts"
+        / "metadata.json"
+    )
 
     db_host: str = "localhost"
     db_port: int = Field(default=5433, ge=1, le=65535)

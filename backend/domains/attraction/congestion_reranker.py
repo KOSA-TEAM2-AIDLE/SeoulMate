@@ -85,6 +85,10 @@ class AttractionCongestionReranker:
             "congestion_available": True,
             "congestion_level": congestion.get("congestion_level"),
             "congestion_score": score,
+            "congestion_basis": (
+                congestion.get("basis")
+                or "서울시 실시간 도시데이터 권역"
+            ),
             "congestion_observed_at": congestion.get("observed_at"),
             "congestion_fresh": fresh,
             "congestion_adjustment": adjustment,
