@@ -78,10 +78,11 @@ class AttractionSearchService:
             raise ValueError(f"AttractionSearchService에 {request.domain} 요청을 전달했습니다.")
         latitude = request.latitude
         longitude = request.longitude
+        resolved_location = request.location
         if should_geocode_location(request):
             geocoded = self.geocoder(request.location)
             if geocoded:
-                latitude, longitude, _ = geocoded
+                latitude, longitude, resolved_location = geocoded
             elif request.radius_km is not None:
                 raise ValueError("관광 검색 반경을 적용할 목적지 좌표를 확인하지 못했습니다.")
         effective_request = request.model_copy(update={
@@ -99,6 +100,7 @@ class AttractionSearchService:
             min_rating=request.min_rating,
             as_of=as_of,
             limit=request.candidate_count,
+            search_location=resolved_location,
         )
         supporting = self.repository.fetch_supporting_reviews(
             retrieval.query_vector,
