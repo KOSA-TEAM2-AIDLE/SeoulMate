@@ -766,6 +766,7 @@ def build_restaurant_search_plan(
         budget_min_krw=budget_min_krw,
         budget_max_krw=budget_max_krw,
         top_n=max(top_n, task.desired_count),
+        search_area_name=requested_location_term,
     )
 
 
@@ -1079,7 +1080,9 @@ def _passes_candidate_filters(
     open_now: bool,
 ) -> tuple[bool, bool | None, str | None]:
     """구조화 하드 필터를 한 후보에 적용하고 영업 판정 근거를 함께 반환한다."""
-    if plan and not address_matches_search_area(plan.location_name, meta.get("address")):
+    if plan and not address_matches_search_area(
+        plan.search_area_name or plan.location_name, meta.get("address")
+    ):
         return False, None, None
     if min_rating is not None and (
         meta.get("rating") is None or meta["rating"] < min_rating
