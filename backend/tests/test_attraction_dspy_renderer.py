@@ -28,7 +28,7 @@ class AttractionDspyRendererTests(unittest.TestCase):
                         observed_at="2026-07-18T15:55:00+09:00",
                     ),
                     weather=AttractionAnswerContext(
-                        status="available", value="condition=맑음; temperature_c=28",
+                        status="available", value="condition=clear; temperature_c=28",
                         basis="KMA-via-Weather-MCP",
                     ),
                 )
@@ -44,6 +44,8 @@ class AttractionDspyRendererTests(unittest.TestCase):
         self.assertNotIn("날씨:", sidebar_reason)
         self.assertIn("2026-07-18 15:55", sidebar_reason)
         self.assertNotIn("+09:00", sidebar_reason)
+        self.assertIn("현재 날씨는 맑음, 28°C입니다", sidebar_reason)
+        self.assertNotIn("condition=clear", sidebar_reason)
 
     def test_renderer_preserves_selection_reason_and_formats_answer(self):
         selection = AttractionSelectionPrediction(

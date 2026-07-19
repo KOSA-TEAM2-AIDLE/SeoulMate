@@ -73,6 +73,8 @@ def _korean_context_sentence(kind: str, context: AttractionAnswerContext) -> str
     label = "혼잡도" if kind == "congestion" else "날씨"
     if context.status == "unavailable":
         return f"{label} 정보는 확인되지 않았습니다."
+    if kind == "weather":
+        return f"현재 날씨는 {_weather_summary(context.value, english=False)}입니다{_provenance(context)}."
     level = " 수준" if kind == "congestion" else ""
     return f"현재 {label}는 {context.value}{level}입니다{_provenance(context)}."
 
@@ -81,6 +83,8 @@ def _english_context_sentence(kind: str, context: AttractionAnswerContext) -> st
     label = "congestion" if kind == "congestion" else "weather"
     if context.status == "unavailable":
         return f"{label.capitalize()} information is unavailable."
+    if kind == "weather":
+        return f"Current weather is {_weather_summary(context.value, english=True)}{_provenance(context, english=True)}."
     value = _english_context_value(kind, context.value)
     return f"Current {label} is {value}{_provenance(context, english=True)}."
 
@@ -95,6 +99,26 @@ def _english_context_value(kind: str, value: str | None) -> str | None:
         "붐빔": "Busy",
         "혼잡": "Crowded",
     }.get(value.strip(), value)
+
+
+def _weather_summary(value: str | None, *, english: bool) -> str:
+    fields = {}
+    for item in str(value or "").split(";"):
+        key, separator, raw = item.partition("=")
+        if separator:
+            fields[key.strip()] = raw.strip()
+    condition = fields.get("condition")
+    if condition:
+        condition = {
+            "clear": "Clear" if english else "맑음",
+            "cloudy": "Cloudy" if english else "흐림",
+            "partly_cloudy": "Partly cloudy" if english else "구름 조금",
+            "rain": "Rain" if english else "비",
+            "snow": "Snow" if english else "눈",
+        }.get(condition.casefold(), condition)
+    temperature = fields.get("temperature_c")
+    parts = [part for part in (condition, f"{temperature}°C" if temperature else None) if part]
+    return ", ".join(parts) or (value or "정보 없음")
 
 
 def _intro(question: str, language: str) -> str:
