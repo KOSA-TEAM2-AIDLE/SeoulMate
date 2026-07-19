@@ -195,7 +195,10 @@ class RoutePlannerInput(BaseModel):
             if slot.date != expected_date:
                 raise ValueError("슬롯의 date와 day_number가 여행 기간과 일치하지 않습니다.")
             if slot.end_date and slot.end_date > self.route_request.period.end_date:
-                raise ValueError("슬롯의 end_date가 여행 기간을 벗어났습니다.")
+                if slot.domain == "accommodation" and slot.end_date == self.route_request.period.end_date + timedelta(days=1):
+                    pass
+                else:
+                    raise ValueError("슬롯의 end_date가 여행 기간을 벗어났습니다.")
             counts[slot.day_number] = counts.get(slot.day_number, 0) + 1
             if counts[slot.day_number] > self.route_request.max_places_per_day:
                 raise ValueError("하루 슬롯이 max_places_per_day를 초과했습니다.")
