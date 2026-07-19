@@ -637,6 +637,33 @@ def _load_weather_menu_features(
     return _build_weather_menu_features(rows, restaurant_ids, table_suffix)
 
 
+# 지오코딩은 "강남"도 강남역 지점으로 수렴시키므로, 사용자가 지역(구/동네)을
+# 말했는지 특정 지점(역/랜드마크)을 말했는지에 따라 기본 반경을 달리한다.
+STATION_DEFAULT_RADIUS_KM = 2.0   # "강남역" 같은 특정 지점 → 역 근처만
+DISTRICT_DEFAULT_RADIUS_KM = 5.0  # "강남구" 같은 자치구 → 넓게
+AREA_DEFAULT_RADIUS_KM = 4.0      # "강남/홍대" 같은 동네 → 지역 전체를 아우름
+CITYWIDE_RADIUS_KM = 60.0         # "서울" → 도시 전역(사실상 반경 무제한)
+CITYWIDE_TERMS = {"서울", "서울시", "서울특별시", "seoul"}
+
+
+def _area_default_radius(location: str | None) -> float:
+    """지오코딩 전 사용자 원본 지명으로 기본 검색 반경을 정한다."""
+    if not location:
+        return STATION_DEFAULT_RADIUS_KM
+    text = location.strip().lower()
+    # 도시 전역
+    if text in CITYWIDE_TERMS:
+        return CITYWIDE_RADIUS_KM
+    # 지하철역/특정 지점: 역 근처만 좁게
+    if text.endswith("역") or text.endswith("station") or "번 출구" in text:
+        return STATION_DEFAULT_RADIUS_KM
+    # 자치구 단위: 가장 넓게
+    if text.endswith("구") or text.endswith("-gu"):
+        return DISTRICT_DEFAULT_RADIUS_KM
+    # 그 외 동네/지역명(강남, 홍대, 이태원 등)은 지역 전체를 아우른다.
+    return AREA_DEFAULT_RADIUS_KM
+
+
 def build_restaurant_search_plan(
     parsed_query: StructuredTravelQuery,
     task: StructuredQueryTask,
@@ -675,6 +702,14 @@ def build_restaurant_search_plan(
 
     source_mode = derive_source_mode(parsed_query)
     location_name = task_filters.location
+    # 반경 판정은 정규화 전 사용자 원본 지명으로 한다. effective_task_filters는
+    # "강남역"을 "강남"으로 정규화해 역 근처 의도를 잃을 수 있으므로, Task/전역
+    # 필터의 원본 location을 우선 사용한다. (지오코딩 좌표는 어차피 동일)
+    requested_location_term = (
+        (task.filters.location if task.filters else None)
+        or parsed_query.filters.location
+        or location_name
+    )
     origin_lat, origin_lng = current_lat, current_lng
     citywide_search = is_citywide_location(location_name)
     same_as_current = bool(
@@ -709,7 +744,9 @@ def build_restaurant_search_plan(
         location_name=location_name,
         origin_lat=origin_lat,
         origin_lng=origin_lng,
-        radius_km=None if citywide_search else trusted_radius_km(task_query),
+        radius_km=None if citywide_search else trusted_radius_km(
+            task_query, default=_area_default_radius(requested_location_term)
+        ),
         citywide_search=citywide_search,
         open_now=should_filter_open_now(task_query, task_filters),
         include_weather_features=source_mode == "rag_mcp",
@@ -899,10 +936,17 @@ def search_restaurants(
                 SELECT id, name, category, category_kakao, rating, review_count, hours,
                        description, description_kakao, address, image, lat, lng,
                        menu_price_min, menu_price_median,
+                       mp.menu_price_lo, mp.menu_price_hi,
                        has_parking, allows_pets, has_kids_menu,
                        has_group_seating, has_private_room, has_baby_chair,
                        has_disabled_access
                 FROM restaurant_{suffix}
+                LEFT JOIN LATERAL (
+                    SELECT MIN(price_value) AS menu_price_lo,
+                           MAX(price_value) AS menu_price_hi
+                    FROM restaurant_menu_{suffix} rm
+                    WHERE rm.restaurant_id = restaurant_{suffix}.id
+                ) mp ON TRUE
                 WHERE id = ANY(%s)
             """, (list(all_ids),))
             metadata = {row["id"]: row for row in cursor.fetchall()}
@@ -974,6 +1018,8 @@ def search_restaurants(
             "has_disabled_access": meta["has_disabled_access"],
             "menu_price_min": meta["menu_price_min"],
             "menu_price_median": meta["menu_price_median"],
+            "menu_price_lo": meta.get("menu_price_lo"),
+            "menu_price_hi": meta.get("menu_price_hi"),
             "score": score,
             "breakdown": {
                 "restaurant_rrf": rest_score,
@@ -1047,13 +1093,21 @@ def _passes_candidate_filters(
         meta.get(field) is True for field in plan.excluded_feature_fields
     ):
         return False, None, None
-    if plan and plan.budget_min_krw is not None:
-        price = meta.get("menu_price_median")
-        if price is None or price < plan.budget_min_krw:
+    if plan and (plan.budget_min_krw is not None or plan.budget_max_krw is not None):
+        # menu_price_median은 사이드메뉴에 눌려 비싼 코스를 못 잡으므로, 실제
+        # 메뉴 가격 범위(최저~최고)와 예산 범위가 겹치는지로 판단한다.
+        # 가격 정보가 전혀 없는 식당은 예산 부합 여부를 추측하지 않고 제외한다.
+        price_lo = meta.get("menu_price_lo")
+        price_hi = meta.get("menu_price_hi")
+        if price_lo is None and price_hi is None:
             return False, None, None
-    if plan and plan.budget_max_krw is not None:
-        price = meta.get("menu_price_median")
-        if price is None or price > plan.budget_max_krw:
+        rest_lo = price_lo if price_lo is not None else price_hi
+        rest_hi = price_hi if price_hi is not None else price_lo
+        budget_lo = plan.budget_min_krw or 0
+        budget_hi = (
+            plan.budget_max_krw if plan.budget_max_krw is not None else float("inf")
+        )
+        if rest_hi < budget_lo or rest_lo > budget_hi:
             return False, None, None
 
     target_visit_at = plan.target_visit_at if plan else None

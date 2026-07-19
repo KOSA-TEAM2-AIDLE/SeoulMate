@@ -103,10 +103,11 @@ conversation_history와 previous_structured_query는 이전 추천 문맥이다.
 다일 루트의 target_places_per_day는 정확한 전체 검증값으로 만들지 않는다.
 날씨를 requested_domains에 넣지 않는다.
 도메인 기준은 다음과 같다.
-- restaurant: 식당, 음식점, 맛집, 식사, 음식 종류나 메뉴
+- restaurant: 식당, 음식점, 맛집, 식사, 음식 종류나 메뉴, 그리고 술집·바·펍·포차·호프·이자카야·와인바·요리주점 등 음주와 식사를 함께 하는 업종
 - cafe: 카페, 커피, 디저트, 베이커리, 찻집
 - accommodation: 숙소, 호텔, 모텔, 게스트하우스, 호스텔, 숙박
 - attraction: 관광지, 명소, 문화시설, 전시, 미술관, 박물관, 공원, 역사 유적, 쇼핑 관광, 체험, 축제, 행사, 공연
+etc는 위 네 도메인에 도저히 해당하지 않을 때만 쓴다.
 복합 질문에는 명시된 모든 requested_domains 또는 requested_slots를 만든다.
 '경복궁 근처/주변/에서 가까운'은 location='경복궁'으로 추출한다.
 '내 근처/내 주변/현재 위치에서'는 use_current_location=true로 추출한다.""",

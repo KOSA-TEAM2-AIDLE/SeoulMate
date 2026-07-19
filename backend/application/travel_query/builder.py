@@ -287,9 +287,21 @@ def _build_weather_request(
     return None
 
 
+# 장소 종류를 명시하지 않은 요청의 기본 도메인.
+# etc로 두면 전부 임시 mock 후보가 되므로 실제 도메인으로 채운다.
+# 루트/일정은 "먹고·마시고·볼거리" 조합, 단일 추천은 식당을 기본으로 한다.
+DEFAULT_ROUTE_DOMAINS: list[TaskDomain] = ["restaurant", "cafe", "attraction"]
+DEFAULT_SINGLE_DOMAINS: list[TaskDomain] = ["restaurant"]
+ROUTE_INTENTS_FOR_DEFAULT = {"day_trip_route", "multi_day_route"}
+
+
 def _domains(collected: dict[str, Any]) -> list[TaskDomain]:
     domains = collected.get("requested_domains") or []
-    return domains or ["etc"]
+    if domains:
+        return domains
+    if collected.get("intent") in ROUTE_INTENTS_FOR_DEFAULT:
+        return list(DEFAULT_ROUTE_DOMAINS)
+    return list(DEFAULT_SINGLE_DOMAINS)
 
 
 def _domains_for_count(

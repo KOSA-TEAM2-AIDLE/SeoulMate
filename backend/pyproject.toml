@@ -21,3 +21,9 @@ dependencies = [
     "shapely>=2.1.2",
     "tzdata>=2025.3",
 ]
+
+[tool.uv]
+# litellm 1.9x는 네이티브 Rust 라이브러리(litellm-rust) 빌드가 필요해 Windows에서
+# prebuilt 휠 없이 설치가 실패한다. dspy는 litellm>=1.64.0만 요구하므로, Rust가
+# 필요 없는(순수 파이썬) 1.80 미만으로 고정한다.
+override-dependencies = ["litellm<1.80"]
