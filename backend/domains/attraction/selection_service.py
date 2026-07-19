@@ -11,6 +11,7 @@ from domains.attraction.answer_evidence import build_attraction_answer_input
 from domains.attraction.answer_generator import AttractionAnswerGenerator
 from domains.attraction.answer_models import AttractionAnswerResult
 from domains.attraction.answer_validation import fallback_attraction_answer
+from domains.attraction.dspy.service import load_split_attraction_runtime
 from domains.attraction.value_normalization import optional_text
 from domains.common.models import DomainSearchRequest, SearchCandidate
 
@@ -20,8 +21,9 @@ class AttractionSelectionService:
 
     domain = "attraction"
 
-    def __init__(self, *, answer_generator=None) -> None:
+    def __init__(self, *, answer_generator=None, dspy_runtime=None) -> None:
         self._answer_generator = answer_generator or AttractionAnswerGenerator()
+        self._dspy_runtime = dspy_runtime or _LazySplitRuntime()
 
     async def select(
         self,
@@ -39,6 +41,20 @@ class AttractionSelectionService:
             reverse=True,
         )[:10]
         question = _original_question(request)
+        if self._dspy_runtime is not None:
+            try:
+                answer_input = build_attraction_answer_input(
+                    question=question,
+                    language=request.language,
+                    location=request.location or request.current_location_name,
+                    themes=request.themes,
+                    candidates=ranked,
+                )
+                result = self._dspy_runtime.run(answer_input)
+                if isinstance(result, CandidateSelectionResult):
+                    return result
+            except Exception:
+                pass
         try:
             answer = await self._answer_generator.generate(
                 question=question,
@@ -158,3 +174,15 @@ def _original_question(request: DomainSearchRequest) -> str:
 
 
 __all__ = ["AttractionSelectionService"]
+
+
+class _LazySplitRuntime:
+    """Avoid artifact/LM work until a real attraction request reaches the selector."""
+
+    def __init__(self) -> None:
+        self._runtime = None
+
+    def run(self, answer_input):
+        if self._runtime is None:
+            self._runtime = load_split_attraction_runtime()
+        return self._runtime.run(answer_input)
