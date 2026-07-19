@@ -2,7 +2,9 @@
 
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from core.config import settings
 
@@ -19,6 +21,26 @@ class AttractionConstraintEvidence(BaseModel):
     evidence: list[str] = Field(default_factory=list)
 
 
+class AttractionContextEvidence(BaseModel):
+    """요청 시점 Context의 가용성과 출처를 손실 없이 전달한다."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["available", "unavailable"] = "unavailable"
+    value: str | None = None
+    basis: str | None = None
+    observed_at: str | None = None
+
+    @model_validator(mode="after")
+    def reject_values_when_unavailable(self) -> "AttractionContextEvidence":
+        if self.status == "unavailable" and any(
+            value is not None
+            for value in (self.value, self.basis, self.observed_at)
+        ):
+            raise ValueError("unavailable Context에는 값 또는 근거가 있을 수 없습니다.")
+        return self
+
+
 class AttractionEvidenceCandidate(BaseModel):
     """DSPy에 노출해도 되는 검증된 후보 근거."""
 
@@ -33,9 +55,16 @@ class AttractionEvidenceCandidate(BaseModel):
     reviews: list[str] = Field(default_factory=list, max_length=5)
     event_start_date: date | None = None
     event_end_date: date | None = None
-    congestion: str | None = None
-    weather: str | None = None
+    congestion: AttractionContextEvidence = Field(default_factory=AttractionContextEvidence)
+    weather: AttractionContextEvidence = Field(default_factory=AttractionContextEvidence)
     constraints: list[AttractionConstraintEvidence] = Field(default_factory=list)
+
+    @field_validator("congestion", "weather", mode="before")
+    @classmethod
+    def normalize_missing_context(cls, value):
+        """Accept legacy JSONL null as the explicit unavailable representation."""
+
+        return {} if value is None else value
 
 
 class AttractionAnswerInput(BaseModel):
@@ -97,6 +126,7 @@ __all__ = [
     "AttractionAnswerInput",
     "AttractionAnswerResult",
     "AttractionConstraintEvidence",
+    "AttractionContextEvidence",
     "AttractionEvidenceCandidate",
     "AttractionSelection",
 ]

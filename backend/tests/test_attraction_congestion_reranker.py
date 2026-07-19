@@ -85,6 +85,10 @@ class AttractionCongestionRerankerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result[0].signals["congestion_available"])
         self.assertEqual("여유", result[0].signals["congestion_level"])
         self.assertEqual(10, result[0].signals["congestion_score"])
+        self.assertEqual(
+            "서울시 실시간 도시데이터 권역",
+            result[0].signals["congestion_basis"],
+        )
 
     async def test_mcp_failure_preserves_candidate_and_score(self):
         class Provider:

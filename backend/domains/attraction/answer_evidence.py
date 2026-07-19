@@ -8,6 +8,7 @@ from typing import Any
 from domains.attraction.answer_models import (
     AttractionAnswerInput,
     AttractionConstraintEvidence,
+    AttractionContextEvidence,
     AttractionEvidenceCandidate,
 )
 from domains.attraction.value_normalization import (
@@ -118,19 +119,20 @@ def _distance_m(value: Any) -> float | None:
     return round(distance_km * 1000, 1)
 
 
-def _congestion_evidence(signals: dict[str, Any]) -> str | None:
+def _congestion_evidence(signals: dict[str, Any]) -> AttractionContextEvidence:
     if signals.get("congestion_available") is not True:
-        return None
-    parts = []
-    for label, key in (
-        ("level", "congestion_level"),
-        ("score", "congestion_score"),
-        ("observed_at", "congestion_observed_at"),
-    ):
-        value = optional_text(signals.get(key))
-        if value is not None:
-            parts.append(f"{label}={value}")
-    return "; ".join(parts) or None
+        return AttractionContextEvidence()
+    value = optional_text(signals.get("congestion_level"))
+    basis = optional_text(signals.get("congestion_basis"))
+    observed_at = optional_text(signals.get("congestion_observed_at"))
+    if value is None and basis is None and observed_at is None:
+        return AttractionContextEvidence()
+    return AttractionContextEvidence(
+        status="available",
+        value=value,
+        basis=basis,
+        observed_at=observed_at,
+    )
 
 
 def _constraint_evidence(
@@ -150,9 +152,9 @@ def _constraint_evidence(
     return constraints
 
 
-def _weather_evidence(signals: dict[str, Any]) -> str | None:
+def _weather_evidence(signals: dict[str, Any]) -> AttractionContextEvidence:
     if signals.get("weather_available") is not True:
-        return None
+        return AttractionContextEvidence()
     parts = []
     for label, key in (
         ("condition", "weather_condition"),
@@ -164,7 +166,15 @@ def _weather_evidence(signals: dict[str, Any]) -> str | None:
     reasons = signals.get("weather_reasons")
     if isinstance(reasons, list):
         parts.extend(str(reason) for reason in reasons if optional_text(reason))
-    return "; ".join(parts) or None
+    value = "; ".join(parts) or None
+    basis = optional_text(signals.get("weather_source"))
+    if value is None and basis is None:
+        return AttractionContextEvidence()
+    return AttractionContextEvidence(
+        status="available",
+        value=value,
+        basis=basis,
+    )
 
 
 __all__ = ["build_attraction_answer_input"]

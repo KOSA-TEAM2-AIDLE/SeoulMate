@@ -151,14 +151,14 @@ def validate_attraction_prediction_or_raise(
 
     for place_id in selected_ids:
         candidate = candidates_by_id[place_id]
-        if candidate.congestion is None and _mentions_quietness(
+        if candidate.congestion.status != "available" and _mentions_quietness(
             reasons[place_id]
         ):
             raise AttractionPredictionValidationError(
                 AttractionFallbackReason.UNSUPPORTED_QUIETNESS_CLAIM
             )
     if any(
-        candidates_by_id[place_id].congestion is None
+        candidates_by_id[place_id].congestion.status != "available"
         for place_id in selected_ids
     ) and _mentions_quietness(answer):
         raise AttractionPredictionValidationError(

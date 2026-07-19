@@ -28,6 +28,16 @@ class AttractionDspySettingsTests(unittest.TestCase):
                 "domains/attraction/artifacts/optimized_program.json"
             )
         )
+        self.assertTrue(
+            str(settings.attraction_dspy_selection_artifact_path).endswith(
+                "domains/attraction/artifacts/selection_v1.json"
+            )
+        )
+        self.assertTrue(
+            str(settings.attraction_dspy_answer_artifact_path).endswith(
+                "domains/attraction/artifacts/answer_v1.json"
+            )
+        )
 
 
 class AttractionAnswerModelTests(unittest.TestCase):
@@ -122,6 +132,7 @@ class AttractionAnswerEvidenceTests(unittest.TestCase):
                 "vector_similarity": 0.99,
                 "congestion_available": True,
                 "congestion_level": "보통",
+                "congestion_basis": "서울시 실시간 도시데이터 권역",
                 "congestion_observed_at": "2026-07-16T10:00:00+09:00",
             },
         )
@@ -141,7 +152,18 @@ class AttractionAnswerEvidenceTests(unittest.TestCase):
         self.assertEqual(evidence.distance_m, 1250.0)
         self.assertEqual(evidence.description, "검증된 장소 설명")
         self.assertEqual(evidence.reviews, [f"리뷰 {index}" for index in range(1, 6)])
-        self.assertIn("보통", evidence.congestion or "")
+        self.assertEqual(evidence.congestion.status, "available")
+        self.assertEqual(evidence.congestion.value, "보통")
+        self.assertEqual(
+            evidence.congestion.basis,
+            "서울시 실시간 도시데이터 권역",
+        )
+        self.assertEqual(
+            evidence.congestion.observed_at,
+            "2026-07-16T10:00:00+09:00",
+        )
+        self.assertEqual(evidence.weather.status, "unavailable")
+        self.assertIsNone(evidence.weather.value)
         self.assertNotIn("vector_similarity", evidence.model_dump())
 
     def test_rejects_ended_event_but_keeps_event_without_end_date(self):
@@ -204,7 +226,8 @@ class AttractionAnswerEvidenceTests(unittest.TestCase):
         self.assertIsNone(evidence.distance_m)
         self.assertIsNone(evidence.event_start_date)
         self.assertIsNone(evidence.event_end_date)
-        self.assertIsNone(evidence.congestion)
+        self.assertEqual(evidence.congestion.status, "unavailable")
+        self.assertIsNone(evidence.congestion.value)
 
     def test_string_null_is_rejected_for_required_candidate_fields(self):
         for field in ("place_id", "name", "category"):

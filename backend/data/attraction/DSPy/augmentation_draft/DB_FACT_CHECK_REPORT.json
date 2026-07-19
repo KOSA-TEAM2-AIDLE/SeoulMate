@@ -1,0 +1,354 @@
+[
+  {
+    "example_id": "augmentation-v1-001",
+    "decision": "reviewed",
+    "reason": "The expected place '오자크래프트' is uniquely supported by the provided evidence, which describes it as a place where functional and sculptural ceramics can be found.",
+    "matched_place_ids": [
+      "5y94vy",
+      "bo1j5m",
+      "q52hjp"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-002",
+    "decision": "reviewed",
+    "reason": "The expected place 'My Favorite' is uniquely supported by the provided evidence, which describes it as a specialty store for movie-related items, including rare posters and collectibles.",
+    "matched_place_ids": [
+      "lh08xy",
+      "ln64kv",
+      "nx3r6c"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-003",
+    "decision": "reviewed",
+    "reason": "The expected place '케이팝 스퀘어 홍대' is uniquely supported by the provided evidence, which describes it as a specialized K-POP store where fans can experience their favorite artists' worldviews.",
+    "matched_place_ids": [
+      "6ptemj",
+      "7c8tmq",
+      "et9p1i"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-004",
+    "decision": "reviewed",
+    "reason": "The expected selection of NEOTERIA is uniquely supported by the provided evidence, highlighting its futuristic design, innovative lens technology, and reasonable prices.",
+    "matched_place_ids": [
+      "0nu1y0",
+      "8692xd",
+      "vvfz6r"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-005",
+    "decision": "reviewed",
+    "reason": "The expected place ID '1fhege' is uniquely supported by the evidence, which states it offers food made with Korean ingredients without seasoning and features K-Handmade works.",
+    "matched_place_ids": [
+      "1fhege",
+      "54zrmq",
+      "azp76o"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-006",
+    "decision": "reviewed",
+    "reason": "The expected selection is uniquely supported by the DB evidence, which describes Granhand's personalized label engraving service and its brand philosophy.",
+    "matched_place_ids": [
+      "42q156",
+      "4rundc",
+      "6x3iur"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-007",
+    "decision": "reviewed",
+    "reason": "The expected place ID '7u7jrk' is uniquely supported by the provided evidence, describing a cultural street that aligns with the question.",
+    "matched_place_ids": [
+      "7u7jrk",
+      "rqbz6d",
+      "vxxkpq"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-008",
+    "decision": "reviewed",
+    "reason": "The expected place '스틸북스 회현' is uniquely supported by the evidence, highlighting its blend of historical significance and modern creativity, along with a co-working area.",
+    "matched_place_ids": [
+      "0kjpgo",
+      "ia9uar",
+      "slqc0j"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-009",
+    "decision": "reviewed",
+    "reason": "The expected place ID 'sy91f2' is uniquely supported by the provided evidence, which describes the penpal service and letter-related products offered at '글월 연희점'.",
+    "matched_place_ids": [
+      "8jtjh5",
+      "g9q2f1",
+      "sy91f2"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-010",
+    "decision": "reviewed",
+    "reason": "The expected place ID 'nh3bjr' is uniquely supported by the DB evidence, which describes its unique architectural design, high ceiling, signature sneaker zone, and pop-up stores.",
+    "matched_place_ids": [
+      "1ny5i7",
+      "nh3bjr",
+      "qyg4ls"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-011",
+    "decision": "reviewed",
+    "reason": "The expected place ID 'k0r1d9' is uniquely supported by the evidence, which describes the store as a place to create DIY items and experience various stationery products.",
+    "matched_place_ids": [
+      "k0r1d9",
+      "xq6vzf",
+      "yd4kmy"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-012",
+    "decision": "reviewed",
+    "reason": "The expected place ID corresponds uniquely to Calvin Klein, which offers the specified products and multilingual staff.",
+    "matched_place_ids": [
+      "4o6xl3",
+      "tw1dyr",
+      "v9kv5b"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-013",
+    "decision": "reviewed",
+    "reason": "The expected place ID 'ennz8o' is uniquely supported by the provided evidence, which describes the Calvin Klein Myeongdong store as a place to experience and shop for various Calvin Klein products.",
+    "matched_place_ids": [
+      "ennz8o",
+      "h102m6",
+      "jxvczp"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-014",
+    "decision": "reviewed",
+    "reason": "The expected place 'wnlgos' is uniquely supported by the evidence as a literature-focused bookstore that hosts events related to reading and writing.",
+    "matched_place_ids": [
+      "27a0mo",
+      "4g7mm3",
+      "wnlgos"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-015",
+    "decision": "reviewed",
+    "reason": "The expected place ID 'lm37m4' is uniquely supported by the evidence, which describes a children's clothing store offering affordable prices and the ability to inspect items in person.",
+    "matched_place_ids": [
+      "l4du7k",
+      "lm37m4",
+      "rrfib6"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-016",
+    "decision": "reviewed",
+    "reason": "The expected place ID '0gxkdq' is uniquely supported by the evidence, which describes a lifestyle beauty brand flagship store offering perfumes and body care products with excellent customer service.",
+    "matched_place_ids": [
+      "0gxkdq",
+      "43to2h",
+      "z1lgm9"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-017",
+    "decision": "reviewed",
+    "reason": "The expected place '리뉴드 성수' is uniquely supported by the provided evidence, which describes it as a vintage shop with a variety of secondhand clothing and vintage items.",
+    "matched_place_ids": [
+      "64f1uy",
+      "g1mnzj",
+      "rzx6dz"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-018",
+    "decision": "reviewed",
+    "reason": "The expected place ID 'c8w958' is uniquely supported by the evidence, which describes it as a fashion and shopping hub popular for trends like Y2K fashion and balletcore.",
+    "matched_place_ids": [
+      "c8w958",
+      "ue1dn6",
+      "veuat2"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-019",
+    "decision": "reviewed",
+    "reason": "The expected place '포카부' is uniquely supported by the evidence, describing it as a must-visit for K-POP fans with photocard vending machines.",
+    "matched_place_ids": [
+      "038195",
+      "7xadww",
+      "di0px1"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-020",
+    "decision": "reviewed",
+    "reason": "The expected place ID 037951 is uniquely supported by the evidence, which describes Shinheung Market established in 1953, known for its diverse food options including chicken, sushi, and Thai cuisine.",
+    "matched_place_ids": [
+      "031944",
+      "031984",
+      "037951"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-021",
+    "decision": "reviewed",
+    "reason": "The expected place ID 028335 is uniquely supported by the evidence, confirming Gongdeok Market's fame for Jokbal and its variety of eateries.",
+    "matched_place_ids": [
+      "000281",
+      "001356",
+      "028335"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-022",
+    "decision": "reviewed",
+    "reason": "The expected place ID '000170' corresponds to Dongdaemun Shopping Complex, which is uniquely supported by the provided evidence as a market known for selling a large variety of fabrics, accessories, and handmade items.",
+    "matched_place_ids": [
+      "000085",
+      "000170",
+      "009646"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-023",
+    "decision": "reviewed",
+    "reason": "Expected place is uniquely supported by the evidence.",
+    "matched_place_ids": [
+      "009505",
+      "009547",
+      "v4bofj"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-024",
+    "decision": "reviewed",
+    "reason": "The expected place ID 'fk9nxi' is uniquely supported by the evidence, which describes its historical use as a library and a venue for receiving foreign envoys, and confirms its opening to the public as a library in 2016.",
+    "matched_place_ids": [
+      "fk9nxi",
+      "jkm9y3",
+      "ldz98j"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-025",
+    "decision": "reviewed",
+    "reason": "The expected place ID 041904 is uniquely supported by the provided evidence, which describes the space dedicated to honoring independence activists and mentions its management and exhibition buildings.",
+    "matched_place_ids": [
+      "023758",
+      "039629",
+      "041904"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-026",
+    "decision": "reviewed",
+    "reason": "The expected place ID 023605 corresponds to Gwanghuimun Gate, which was built in 1719 and is known for its unique architecture and historical significance.",
+    "matched_place_ids": [
+      "015109",
+      "022888",
+      "023605"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-027",
+    "decision": "reviewed",
+    "reason": "The expected place ID '001999' (흥인지문) is uniquely supported by the provided evidence, which describes its historical significance, completion date, and the beauty of its night illumination.",
+    "matched_place_ids": [
+      "000507",
+      "001159",
+      "001999"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-028",
+    "decision": "reviewed",
+    "reason": "The expected place ID '000471' corresponds to Unhyeongung Palace, which is accurately described as the residence of Heungseon Daewongun and the birthplace of Emperor Gojong, where significant reforms were initiated.",
+    "matched_place_ids": [
+      "000295",
+      "000297",
+      "000471"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-029",
+    "decision": "reviewed",
+    "reason": "All candidates exist in DB and each has an explicit conflict constraint.",
+    "matched_place_ids": [
+      "000072",
+      "029394",
+      "kxi16h"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-030",
+    "decision": "reviewed",
+    "reason": "All candidates exist in DB and each has an explicit conflict constraint.",
+    "matched_place_ids": [
+      "001153",
+      "004863",
+      "028339"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-031",
+    "decision": "reviewed",
+    "reason": "All candidates exist in DB and each has an explicit conflict constraint.",
+    "matched_place_ids": [
+      "001862",
+      "002010",
+      "004036"
+    ],
+    "missing_place_ids": []
+  },
+  {
+    "example_id": "augmentation-v1-032",
+    "decision": "reviewed",
+    "reason": "All candidates exist in DB and each has an explicit conflict constraint.",
+    "matched_place_ids": [
+      "001776",
+      "002586",
+      "003255"
+    ],
+    "missing_place_ids": []
+  }
+]
