@@ -81,7 +81,20 @@ def _english_context_sentence(kind: str, context: AttractionAnswerContext) -> st
     label = "congestion" if kind == "congestion" else "weather"
     if context.status == "unavailable":
         return f"{label.capitalize()} information is unavailable."
-    return f"Current {label} is {context.value}{_provenance(context, english=True)}."
+    value = _english_context_value(kind, context.value)
+    return f"Current {label} is {value}{_provenance(context, english=True)}."
+
+
+def _english_context_value(kind: str, value: str | None) -> str | None:
+    if kind != "congestion" or value is None:
+        return value
+    return {
+        "여유": "Low",
+        "보통": "Moderate",
+        "약간 붐빔": "Slightly busy",
+        "붐빔": "Busy",
+        "혼잡": "Crowded",
+    }.get(value.strip(), value)
 
 
 def _intro(question: str, language: str) -> str:
@@ -138,7 +151,12 @@ def _natural_recommendation_en(
 
 
 def _provenance(context: AttractionAnswerContext, *, english: bool = False) -> str:
-    values = [value for value in (context.basis, _format_observed_at(context.observed_at)) if value]
+    observed_at = (
+        _format_observed_at_english(context.observed_at)
+        if english
+        else _format_observed_at(context.observed_at)
+    )
+    values = [value for value in (context.basis, observed_at) if value]
     if not values:
         return ""
     label = " (source: " if english else " (기준: "
@@ -152,6 +170,17 @@ def _format_observed_at(value: str | None) -> str | None:
         return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M")
     except ValueError:
         return None
+
+
+def _format_observed_at_english(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    hour = parsed.strftime("%I").lstrip("0") or "0"
+    return f"{parsed.strftime('%b')} {parsed.day}, {parsed.year}, {hour}:{parsed.strftime('%M %p')}"
 
 
 __all__ = ["render_selection_result"]

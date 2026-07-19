@@ -148,6 +148,36 @@ class AttractionDspyRendererTests(unittest.TestCase):
         self.assertIn("Congestion information is unavailable.", result.selections[0].selection_reason)
         self.assertNotIn("질의 적합성", result.selections[0].selection_reason)
 
+    def test_renderer_localizes_english_congestion_value_and_observed_time(self):
+        selection = AttractionSelectionPrediction(
+            selected_place_ids=["p1"],
+            forbidden_place_ids=[],
+            selection_reasons={"p1": "It fits a relaxed visit."},
+        )
+        answer = AttractionStructuredAnswer(
+            language="en",
+            recommendations=[
+                AttractionStructuredRecommendation(
+                    place_id="p1",
+                    name="Gyeongbokgung Palace",
+                    recommendation_reason="It fits a relaxed visit.",
+                    congestion=AttractionAnswerContext(
+                        status="available",
+                        value="여유",
+                        observed_at="2026-07-18T15:55:00+09:00",
+                    ),
+                    weather=AttractionAnswerContext(status="unavailable"),
+                )
+            ],
+        )
+
+        result = render_selection_result(selection, answer)
+
+        self.assertIn("Current congestion is Low", result.selections[0].selection_reason)
+        self.assertIn("Jul 18, 2026, 3:55 PM", result.selections[0].selection_reason)
+        self.assertNotIn("여유", result.selections[0].selection_reason)
+        self.assertNotIn("2026-07-18", result.selections[0].selection_reason)
+
 
 if __name__ == "__main__":
     unittest.main()
