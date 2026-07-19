@@ -97,21 +97,17 @@ function createOverlayContent(place, onClose) {
   return content;
 }
 
-export function createPlaceOverlay({ kakao, map, place, onClose }) {
-  if (!kakao || !map || !place) {
+export function createPlaceOverlay({ naver, map, place, onClose }) {
+  if (!naver || !map || !place) {
     return null;
   }
 
-  const position = new kakao.maps.LatLng(place.lat, place.lng);
+  const position = new naver.maps.LatLng(place.lat, place.lng);
   const content = createOverlayContent(place, onClose);
 
-  return new kakao.maps.CustomOverlay({
-    map,
-    position,
-    content,
-    yAnchor: 1.35,
-    zIndex: 30,
-  });
+  const infoWindow = new naver.maps.InfoWindow({ content, borderWidth: 0, backgroundColor: 'transparent', disableAnchor: true, pixelOffset: new naver.maps.Point(0, -28) });
+  infoWindow.open(map, position);
+  return infoWindow;
 }
 
 export function clearPlaceOverlay(overlay) {
