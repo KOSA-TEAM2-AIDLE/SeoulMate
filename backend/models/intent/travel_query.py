@@ -27,6 +27,7 @@ class RequestedVisitSlot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     domain: TaskDomain
+    location: str | None = None
     search_query: str | None = None
     themes: list[str] | None = None
     notes: str | None = None
@@ -109,6 +110,10 @@ conversation_history와 previous_structured_query는 이전 추천 문맥이다.
 - attraction: 관광지, 명소, 문화시설, 전시, 미술관, 박물관, 공원, 역사 유적, 쇼핑 관광, 체험, 축제, 행사, 공연
 etc는 위 네 도메인에 도저히 해당하지 않을 때만 쓴다.
 복합 질문에는 명시된 모든 requested_domains 또는 requested_slots를 만든다.
+방문지마다 지역이 다르면(예: '강남 파스타랑 홍대 라멘 둘 다') 각 방문을
+requested_slots로 만들고 그 슬롯의 location에 해당 지역을 넣는다. 이때 공통
+지역이 없으면 최상위 location은 null로 둔다. 모든 방문지가 같은 지역이면
+슬롯 location은 비우고 최상위 location만 채운다.
 '경복궁 근처/주변/에서 가까운'은 location='경복궁'으로 추출한다.
 '내 근처/내 주변/현재 위치에서'는 use_current_location=true로 추출한다.""",
         ),

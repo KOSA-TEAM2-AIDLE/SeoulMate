@@ -118,11 +118,37 @@ def _build_filters(
     )
 
 
+def _slot_filters(location: str | None) -> QueryFilters | None:
+    """슬롯 고유 지역이 있으면 그 지역을 담은 Task 필터를 만든다."""
+    return QueryFilters(location=location) if location else None
+
+
 def _build_single_tasks(
     collected: dict[str, Any],
     location: str | None,
     language: str,
 ) -> list[TravelTask]:
+    slots = collected.get("requested_slots") or []
+    # 방문지별 지역이 다른 멀티지역 요청(예: '강남 파스타랑 홍대 라멘')은
+    # 슬롯 단위로 각자 지역을 반영한다.
+    if slots and any(slot.get("location") for slot in slots):
+        tasks: list[TravelTask] = []
+        for index, slot in enumerate(slots, start=1):
+            slot_location = slot.get("location") or location
+            domain = slot["domain"]
+            tasks.append(
+                TravelTask(
+                    task_id=f"task_{index}",
+                    domain=domain,
+                    search_query=slot.get("search_query")
+                    or _search_query(slot_location, domain, collected, language),
+                    themes=slot.get("themes") or collected.get("themes") or [],
+                    desired_count=3,
+                    filters=_slot_filters(slot_location),
+                )
+            )
+        return tasks
+
     if not collected.get("requested_domains"):
         raise ValueError("단일 장소 추천에는 검색 도메인이 필요합니다.")
     domains = _domains(collected)
@@ -210,12 +236,13 @@ def _build_route_tasks_for_day(
         domain: TaskDomain = slot["domain"]
         domain_counts[domain] = domain_counts.get(domain, 0) + 1
         themes = slot.get("themes") or collected.get("themes") or []
+        slot_location = slot.get("location") or location
         tasks.append(
             TravelTask(
                 task_id=f"task_{task_start + offset}",
                 domain=domain,
                 search_query=slot.get("search_query")
-                or _search_query(location, domain, {**collected, "themes": themes}, language),
+                or _search_query(slot_location, domain, {**collected, "themes": themes}, language),
                 themes=themes,
                 desired_count=1,
                 notes=slot.get("notes"),
@@ -225,7 +252,7 @@ def _build_route_tasks_for_day(
                 start_time=slot.get("start_time"),
                 end_date=slot.get("end_date"),
                 end_time=slot.get("end_time"),
-                filters=None,
+                filters=_slot_filters(slot.get("location")),
             )
         )
     return tasks
@@ -237,8 +264,15 @@ def _build_route_request(
     *,
     multi_day: bool,
 ) -> dict[str, Any]:
+    destination = location
+    if not destination:
+        # 전역 지역이 없는 멀티지역 루트는 첫 슬롯 지역을 대표 목적지로 쓴다.
+        for slot in collected.get("requested_slots") or []:
+            if slot.get("location"):
+                destination = slot["location"]
+                break
     return {
-        "destination": location,
+        "destination": destination,
         "period": {
             "start_date": collected["start_date"],
             "end_date": collected["end_date"],
