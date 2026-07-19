@@ -165,7 +165,7 @@ class GroupSelectionTests(unittest.IsolatedAsyncioTestCase):
             ["task-r", "task-c"],
         )
 
-    async def test_mixed_groups_merge_in_task_order_and_repair_custom_ids(self):
+    async def test_mixed_groups_keep_only_valid_attraction_selector_ids(self):
         selector = StubDomainSelector(
             "attraction",
             CandidateSelectionResult(
@@ -227,7 +227,7 @@ class GroupSelectionTests(unittest.IsolatedAsyncioTestCase):
                 item["candidate"]["place_id"]
                 for item in result["task_results"][0]["selections"]
             ],
-            ["a2", "a1", "a3"],
+            ["a2"],
         )
         self.assertEqual(result["answer"], "관광 답변\n\n카페 답변")
         self.assertTrue(result["llm_fallback_used"])
