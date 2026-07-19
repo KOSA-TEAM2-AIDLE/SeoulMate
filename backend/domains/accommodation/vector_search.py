@@ -124,7 +124,7 @@ def search_by_review(q_vec, options, pool=REVIEW_POOL, top_n=REVIEW_TOP_N):
         if len(lst) < top_n:
             word_count = len(str(content).split())
             lf = 0.3 if word_count < 4 else (0.8 if word_count < 7 else 1.0)
-            lst.append((i + 1, lf))
+            lst.append((i + 1, lf, content))
 
     cur.close()
     conn.close()
@@ -142,7 +142,7 @@ def fuse_and_rank(acc_ranks, review_ranks_by_acc, options, top_k=20):
         review_part = 0.0
         if aid in review_ranks_by_acc:
             review_part = REVIEW_WEIGHT * sum(
-                lf / (RRF_K + rank) for rank, lf in review_ranks_by_acc[aid]
+                lf / (RRF_K + rank) for rank, lf, _ in review_ranks_by_acc[aid]
             )
         base_scores[aid] = (acc_part, review_part)
 
@@ -150,7 +150,7 @@ def fuse_and_rank(acc_ranks, review_ranks_by_acc, options, top_k=20):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
         """
-        SELECT id, name, hotel_style, rating, review_count, address, amenities, room_features, room_types, lat, lng, image
+        SELECT id, name, hotel_style, rating, review_count, address, amenities, room_features, room_types, lat, lng, image, description
         FROM accommodation_ko WHERE id = ANY(%s)
     """,
         (list(all_ids),),
@@ -236,6 +236,7 @@ def fuse_and_rank(acc_ranks, review_ranks_by_acc, options, top_k=20):
                 + style_part
                 + popularity_part
                 + rating_part,
+                "best_review": review_ranks_by_acc[aid][0][2] if aid in review_ranks_by_acc and review_ranks_by_acc[aid] else None
             }
         )
         results.append(a)
@@ -249,7 +250,7 @@ def query_hotels_by_radius(target_lat, target_lng, radius_km=5.0):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         query = """
-            SELECT id, name, hotel_style, amenities, address, rating, lat, lng, image, review_count,
+            SELECT id, name, hotel_style, amenities, address, rating, lat, lng, image, review_count, description,
                    (6371 * acos(
                         cos(radians(%s)) * cos(radians(lat)) * 
                         cos(radians(lng) - radians(%s)) + 
@@ -303,6 +304,27 @@ def get_direct_semantic_similarity(q_vec, accommodation_ids):
     except Exception as e:
         print(f"시맨틱 유사도 강제 조인 쿼리 실패: {e}")
         return {}
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_best_reviews_for_hotels(q_vec, accommodation_ids):
+    if not accommodation_ids:
+        return {}
+
+    conn = psycopg2.connect(**ACCOMMODATION_DB_CONFIG)
+    cur = conn.cursor()
+
+    sql = """
+        SELECT DISTINCT ON (accommodation_id) accommodation_id, content
+        FROM acc_review_embedding_ko
+        WHERE accommodation_id = ANY(%s)
+        ORDER BY accommodation_id, embedding <=> %s::vector
+    """
+    try:
+        cur.execute(sql, (accommodation_ids, str(q_vec)))
+        return {row[0]: row[1] for row in cur.fetchall()}
     finally:
         cur.close()
         conn.close()

@@ -401,6 +401,27 @@ def search_by_accommodation(q_vec, options, top_n=ACC_TOP_N):
     return ranks
 
 
+def get_best_reviews_for_hotels(q_vec, accommodation_ids):
+    if not accommodation_ids:
+        return {}
+
+    conn = psycopg2.connect(**DB_PARAMS)
+    cur = conn.cursor()
+
+    sql = """
+        SELECT DISTINCT ON (accommodation_id) accommodation_id, content
+        FROM acc_review_embedding_en
+        WHERE accommodation_id = ANY(%s)
+        ORDER BY accommodation_id, embedding <=> %s::vector
+    """
+    try:
+        cur.execute(sql, (accommodation_ids, str(q_vec)))
+        return {row[0]: row[1] for row in cur.fetchall()}
+    finally:
+        cur.close()
+        conn.close()
+
+
 def search_by_review(q_vec, options, pool=REVIEW_POOL, top_n=REVIEW_TOP_N):
     clauses, params = build_sql_filters(options, "a")
     where = "WHERE " + " AND ".join(clauses) if clauses else ""
@@ -422,7 +443,7 @@ def search_by_review(q_vec, options, pool=REVIEW_POOL, top_n=REVIEW_TOP_N):
         if len(lst) < top_n:
             word_count = len(str(content).split())
             lf = 0.3 if word_count < 4 else (0.8 if word_count < 7 else 1.0)
-            lst.append((i + 1, lf))
+            lst.append((i + 1, lf, content))
 
     cur.close()
     conn.close()
@@ -440,7 +461,7 @@ def fuse_and_rank(acc_ranks, review_ranks_by_acc, options, top_k=20):
         review_part = 0.0
         if aid in review_ranks_by_acc:
             review_part = REVIEW_WEIGHT * sum(
-                lf / (RRF_K + rank) for rank, lf in review_ranks_by_acc[aid]
+                lf / (RRF_K + rank) for rank, lf, _ in review_ranks_by_acc[aid]
             )
         base_scores[aid] = (acc_part, review_part)
 
@@ -448,7 +469,7 @@ def fuse_and_rank(acc_ranks, review_ranks_by_acc, options, top_k=20):
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT id, name, hotel_style, rating, review_count, address, amenities, room_features, room_types, lat, lng, image, link
+        SELECT id, name, hotel_style, rating, review_count, address, amenities, room_features, room_types, lat, lng, image, description
         FROM accommodation_en WHERE id = ANY(%s)
     """,
         (list(all_ids),),
@@ -535,6 +556,7 @@ def fuse_and_rank(acc_ranks, review_ranks_by_acc, options, top_k=20):
                 + style_part
                 + popularity_part
                 + rating_part,
+                "best_review": review_ranks_by_acc[aid][0][2] if aid in review_ranks_by_acc and review_ranks_by_acc[aid] else None
             }
         )
         results.append(a)
