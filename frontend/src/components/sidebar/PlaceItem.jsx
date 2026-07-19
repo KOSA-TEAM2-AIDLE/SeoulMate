@@ -1,8 +1,12 @@
 import { memo } from 'react';
 import { getPlaceDisplaySubCategory, getPlaceDisplayRating, getPlaceDisplayImage } from '../../services/map/placeDisplayAdapter';
+import { getLocalizedPlaceSubCategory } from '../../services/display/localizedPlaceDisplay';
 
-const PlaceItem = memo(({ place, onClick, t }) => {
-    const subCategory = getPlaceDisplaySubCategory(place);
+const PlaceItem = memo(({ place, onClick, t, lang }) => {
+    const subCategory = getLocalizedPlaceSubCategory(
+        { ...place, subCategory: place.subCategory || getPlaceDisplaySubCategory(place) },
+        lang,
+    );
     const rating = getPlaceDisplayRating(place);
     const image = getPlaceDisplayImage(place);
     const hasLink = !!place.link;

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { clearPlaceOverlay, createPlaceOverlay } from '../../services/map/overlayService';
 
 export function usePlaceOverlay({
-  kakao,
+  naver,
   map,
   place,
   onClose,
@@ -13,12 +13,12 @@ export function usePlaceOverlay({
     clearPlaceOverlay(overlayRef.current);
     overlayRef.current = null;
 
-    if (!kakao || !map || !place) {
+    if (!naver || !map || !place) {
       return;
     }
 
     overlayRef.current = createPlaceOverlay({
-      kakao,
+      naver,
       map,
       place,
       onClose,
@@ -28,7 +28,7 @@ export function usePlaceOverlay({
       clearPlaceOverlay(overlayRef.current);
       overlayRef.current = null;
     };
-  }, [kakao, map, place, onClose]);
+  }, [naver, map, place, onClose]);
 
   return {
     overlayRef,

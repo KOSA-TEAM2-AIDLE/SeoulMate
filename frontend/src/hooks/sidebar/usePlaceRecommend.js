@@ -48,6 +48,7 @@ export default function usePlaceRecommend(showToast) {
 
     return {
         t,
+        lang,
         filterTranslations,
         handlePlaceClick
     };

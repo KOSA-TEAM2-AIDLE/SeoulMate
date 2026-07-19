@@ -4,7 +4,7 @@ import PlaceItem from './PlaceItem';
 const PLACE_FILTERS = ['전체', '명소', '맛집', '카페', '숙소', '보관소'];
 
 export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filteredPlaces, showToast }) {
-    const { t, filterTranslations, handlePlaceClick } = usePlaceRecommend(showToast);
+    const { t, filterTranslations, handlePlaceClick, lang } = usePlaceRecommend(showToast);
 
     return (
         <div className="flex-1 flex flex-col min-h-0">
@@ -46,6 +46,7 @@ export default function PlaceRecommendTab({ activeFilter, setActiveFilter, filte
                             place={place}
                             onClick={handlePlaceClick}
                             t={t}
+                            lang={lang}
                         />
                     ))
                 ) : (

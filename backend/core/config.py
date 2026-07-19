@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     congestion_mcp_log_level: str = "info"
 
     kakao_rest_api_key: SecretStr | None = None
+    odsay_api_key: SecretStr | None = None
+    odsay_api_base_url: str = "https://api.odsay.com/v1/api"
+    odsay_timeout_seconds: float = Field(default=8.0, gt=0)
     kakao_local_api_base_url: str = "https://dapi.kakao.com"
     kakao_local_api_timeout_seconds: float = Field(
         default=5.0,
@@ -135,6 +138,10 @@ class Settings(BaseSettings):
         return bool(
             self.kakao_rest_api_key.get_secret_value().strip()
         )
+
+    @property
+    def odsay_enabled(self) -> bool:
+        return self.odsay_api_key is not None and bool(self.odsay_api_key.get_secret_value().strip())
 
 
 @lru_cache

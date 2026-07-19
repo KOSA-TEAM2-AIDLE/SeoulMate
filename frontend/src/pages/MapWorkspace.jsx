@@ -1,23 +1,38 @@
-import KakaoMap from '../components/map/KakaoMap';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import NaverMap from '../components/map/NaverMap';
 import LocationStatus from '../components/location/LocationStatus';
 import useTravelStore from '../stores/useTravelStore';
+import { useLangStore } from '../stores/useLangStore';
+import { useTransitRoutes } from '../hooks/map/useTransitRoutes';
+import TransitRouteCard from '../components/map/TransitRouteCard';
+import RouteSegmentNavigator from '../components/map/RouteSegmentNavigator';
+import { useTransitGeometry } from '../hooks/map/useTransitGeometry';
+import { extractGeometryPaths } from '../services/map/transitGeometryService';
 
 export default function MapWorkspace() {
     const selectedDay = useTravelStore((state) => state.selectedDay);
     const travelPath = useTravelStore((state) => state.travelPath);
 
-    const routePlaces = travelPath[selectedDay] || [];
+    const routePlaces = useMemo(() => travelPath[selectedDay] ?? [], [travelPath, selectedDay]);
+    const routeKey = routePlaces.map((place) => `${place.id}:${place.lat}:${place.lng}`).join('|');
+    const language = useLangStore((state) => state.lang);
+    const segments = useTransitRoutes(routePlaces, language);
+    const [selectedSegment, setSelectedSegment] = useState(null);
+    useEffect(() => setSelectedSegment(null), [selectedDay, routeKey]);
+    const activeSegment = selectedSegment ?? segments[0] ?? null;
+    const transitGeometry = useTransitGeometry(activeSegment);
+    const activeSegmentIndex = activeSegment ? segments.indexOf(activeSegment) : -1;
+    const hasTransitGeometry = extractGeometryPaths(transitGeometry).length > 0;
+    const hiddenSegmentIndex = hasTransitGeometry && activeSegment?.route?.mode === 'transit' ? activeSegmentIndex : null;
+    const handleSegmentSelect = useCallback((index) => setSelectedSegment(segments[index] ?? null), [segments]);
 
     return (
         <section className="relative min-h-[460px] overflow-hidden bg-blue-50">
-            <KakaoMap places={routePlaces} />
+            {/* NAVER SDK applies its base-map language when a map instance is created. */}
+            <NaverMap key={`naver-map-${language}`} places={routePlaces} segments={segments} selectedSegment={activeSegment} selectedSegmentIndex={activeSegmentIndex} hiddenSegmentIndex={hiddenSegmentIndex} language={language} transitGeometry={transitGeometry} onSegmentSelect={handleSegmentSelect} />
             <LocationStatus />
-            <div className="absolute z-10 bottom-5 left-1/2 w-[min(520px,calc(100%-40px))] -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
-                <p className="text-sm font-semibold text-blue-600">선택된 장소 정보 카드</p>
-                <p className="mt-1 text-sm text-slate-500">
-                    현재 표시 중인 장소 수: {routePlaces.length}
-                </p>
-            </div>
+            <RouteSegmentNavigator places={routePlaces} activeIndex={activeSegmentIndex} language={language} onSelect={handleSegmentSelect} />
+            <TransitRouteCard segment={activeSegment} />
         </section>
     );
 }
