@@ -106,6 +106,10 @@ class ChatMetaRoute(BaseModel):
     total_days: int
     total_places: int
     route_id: Optional[str] = None
+    route_optimized: bool = False
+    travel_distance_km: float | None = Field(default=None, ge=0)
+    distance_method: Literal["haversine"] | None = None
+    coordinate_coverage: float = Field(default=0.0, ge=0, le=1)
     result: Optional[FrontendResponse] = None
 
 

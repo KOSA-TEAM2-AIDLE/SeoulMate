@@ -31,6 +31,7 @@ _CITYWIDE_LOCATION_PHRASES = frozenset({
     "서울이면어디든", "서울이라면어디든",
     "아무데나", "아무데든", "아무곳이나", "아무곳이든", "아무지역이나",
     "아무지역이든", "아무동네나", "아무동네든", "아무장소나", "아무장소든",
+    "아무데", "아무곳", "아무지역", "아무동네",
     "어디든", "어디든지", "어디나", "어디라도", "어디여도", "어디라도괜찮아",
     "어디든괜찮아", "어디든좋아", "어느곳이든", "어느지역이든", "어느동네든",
     "지역상관없어", "지역상관없어요", "지역상관없습니다", "지역상관없음",
@@ -51,6 +52,7 @@ _CITYWIDE_EXPLICIT_MARKERS = (
     "서울내어디든", "서울안이면어디든", "서울이면어디든", "서울이라면어디든",
     "아무데나", "아무데든", "아무곳이나", "아무곳이든", "아무지역이나",
     "아무지역이든", "아무동네나", "아무동네든", "어디든", "어디든지",
+    "아무데", "아무곳", "아무지역", "아무동네",
     "어디라도", "어디여도", "어느곳이든", "어느지역이든", "어느동네든",
     "anywhere", "anyarea", "anylocation", "anyplace", "wherever", "allofseoul",
     "seoulwide", "acrossseoul",
@@ -68,6 +70,18 @@ _CITYWIDE_GENERIC_MARKERS = (
 # 자주 쓰는 서울 권역은 외부 API보다 이 대표 좌표를 우선한다.
 SEOUL_AREA_COORDINATES: dict[str, tuple[float, float, str]] = {
     "서울": (*SEOUL_CENTER, "서울"),
+    # 서울 전역 다일 일정은 구청 중심이 아니라 실제 하루 코스를 만들기 좋은
+    # 대표 상권을 각 자치구의 안정 좌표로 사용한다.
+    "종로구": (37.5716, 126.9769, "광화문역"),
+    "마포구": (37.5572, 126.9254, "홍대입구역"),
+    "성동구": (37.5446, 127.0559, "성수역"),
+    "강남구": (37.4979, 127.0276, "강남역"),
+    "송파구": (37.5133, 127.1002, "잠실역"),
+    "용산구": (37.5345, 126.9946, "이태원역"),
+    "중구": (37.5609, 126.9863, "명동역"),
+    "서초구": (37.4919, 127.0079, "교대역"),
+    "영등포구": (37.5216, 126.9243, "여의도역"),
+    "광진구": (37.5404, 127.0692, "건대입구역"),
     "강남": (37.4979, 127.0276, "강남역"),
     "강남역": (37.4979, 127.0276, "강남역"),
     "홍대": (37.5572, 126.9254, "홍대입구역"),
@@ -189,17 +203,66 @@ def _compact_preference_text(value: str) -> str:
     return re.sub(r"[^0-9a-z가-힣]+", "", value.strip().lower())
 
 
+# 서울 25개 자치구(한글 → 로마자). ko/en 주소·지명을 canonical 한글 구로 통일해
+# 비교하기 위한 테이블. 사용자가 특정 구를 지정하면 그 구로 결과를 제한한다.
+_SEOUL_DISTRICT_EN: dict[str, str] = {
+    "강남구": "gangnam-gu", "강동구": "gangdong-gu", "강북구": "gangbuk-gu",
+    "강서구": "gangseo-gu", "관악구": "gwanak-gu", "광진구": "gwangjin-gu",
+    "구로구": "guro-gu", "금천구": "geumcheon-gu", "노원구": "nowon-gu",
+    "도봉구": "dobong-gu", "동대문구": "dongdaemun-gu", "동작구": "dongjak-gu",
+    "마포구": "mapo-gu", "서대문구": "seodaemun-gu", "서초구": "seocho-gu",
+    "성동구": "seongdong-gu", "성북구": "seongbuk-gu", "송파구": "songpa-gu",
+    "양천구": "yangcheon-gu", "영등포구": "yeongdeungpo-gu", "용산구": "yongsan-gu",
+    "은평구": "eunpyeong-gu", "종로구": "jongno-gu", "중구": "jung-gu",
+    "중랑구": "jungnang-gu",
+}
+# 지명 토큰(정규화) → canonical 한글 구. 완전형/생략형, 한글/로마자를 모두 담는다.
+_DISTRICT_LOOKUP: dict[str, str] = {}
+for _ko, _en in _SEOUL_DISTRICT_EN.items():
+    for _tok in (_ko, _ko[:-1], _en, _en[: -len("-gu")]):
+        _DISTRICT_LOOKUP.setdefault(_tok.lower(), _ko)
+
+
+def _resolve_explicit_district(location_name: str) -> frozenset[str] | None:
+    """지명이 특정 자치구를 가리키면 {canonical 한글 구}, 아니면 None."""
+    key = _normalized_area_key(location_name)
+    if key in _DISTRICT_LOOKUP:
+        return frozenset({_DISTRICT_LOOKUP[key]})
+    match = re.search(r"([가-힣]{1,6}구)|([a-z]+-gu)", key)
+    if match:
+        token = (match.group(1) or match.group(2)).lower()
+        if token in _DISTRICT_LOOKUP:
+            return frozenset({_DISTRICT_LOOKUP[token]})
+    return None
+
+
+def _address_districts(address: str) -> set[str]:
+    """주소에서 자치구를 canonical 한글 구 집합으로 뽑는다(ko·en 주소 모두)."""
+    found: set[str] = set()
+    for match in re.finditer(r"([가-힣]{1,6}구)", address):
+        found.add(match.group(1))
+    for match in re.finditer(r"([A-Za-z]+-gu)", address):
+        canonical = _DISTRICT_LOOKUP.get(match.group(1).lower())
+        if canonical:
+            found.add(canonical)
+    return found
+
+
 def address_matches_search_area(location_name: str | None, address: str | None) -> bool:
-    """대표 권역과 주소의 자치구가 명백히 충돌할 때만 False를 반환한다."""
+    """대표 권역/특정 구와 주소의 자치구가 명백히 충돌할 때만 False를 반환한다."""
     if not location_name or not address:
         return True
     allowed = SEOUL_AREA_ALLOWED_DISTRICTS.get(_normalized_area_key(location_name))
     if not allowed:
+        # 콜로퀴얼 권역 맵에 없으면, 사용자가 특정 자치구(용산구/Yongsan-gu 등)를
+        # 지정했는지 판정해 그 구로 제한한다. (ko/en 공통)
+        allowed = _resolve_explicit_district(location_name)
+    if not allowed:
         return True
-    match = re.search(r"(?:서울(?:특별시)?\s+)?([가-힣]+구)(?:\s|$)", address)
-    if not match:
+    found = _address_districts(address)
+    if not found:
         return True
-    return match.group(1) in allowed
+    return bool(found & allowed)
 
 
 def is_citywide_location(value: str | None) -> bool:

@@ -103,11 +103,17 @@ def _has_location(
 ) -> bool:
     if collected.get("location"):
         return True
-    return bool(
+    if collected.get("preferred_areas"):
+        return True
+    if (
         collected.get("use_current_location")
         and state.get("current_latitude") is not None
         and state.get("current_longitude") is not None
-    )
+    ):
+        return True
+    # 전역 지역이 없어도, 방문 슬롯마다 각자 지역이 있으면(멀티지역 요청) 충족으로 본다.
+    slots = collected.get("requested_slots") or []
+    return bool(slots and all(slot.get("location") for slot in slots))
 
 
 def _route_period_is_complete(collected: dict[str, Any]) -> bool:

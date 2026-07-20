@@ -30,13 +30,15 @@ class AttractionContextEnricher:
         self,
         request: DomainSearchRequest,
         candidates: list[SearchCandidate],
+        *,
+        include_congestion: bool = True,
     ) -> list[SearchCandidate]:
         if not candidates:
             return []
         question = _original_question(request)
         enriched = candidates
 
-        if self._should_use_congestion(request, question):
+        if include_congestion and self._should_use_congestion(request, question):
             enriched = await self._congestion.rerank(
                 enriched,
                 question,

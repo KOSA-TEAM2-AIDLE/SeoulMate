@@ -103,6 +103,13 @@ class RouteRequest(BaseModel):
             raise ValueError(
                 "target_places_per_day는 max_places_per_day를 초과할 수 없습니다."
             )
+        if (
+            self.period.days == 1
+            and self.arrival_at is not None
+            and self.departure_at is not None
+            and self.arrival_at >= self.departure_at
+        ):
+            raise ValueError("당일 일정의 arrival_at은 departure_at보다 빨라야 합니다.")
         return self
 
 
@@ -114,7 +121,15 @@ class RouteCandidate(BaseModel):
     place_id: str = Field(min_length=1)
     restaurant_id: str | None = None
     name: str = Field(min_length=1)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     payload: dict = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_coordinates(self):
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("후보의 latitude와 longitude는 함께 제공해야 합니다.")
+        return self
 
 
 class RouteSlotCandidates(BaseModel):
@@ -179,9 +194,13 @@ class RoutePlannerInput(BaseModel):
     route_request: RouteRequest
     slots: list[RouteSlotCandidates] = Field(min_length=1, max_length=MAX_ROUTE_SLOTS)
     weather_by_day: list[dict] = Field(default_factory=list)
+    origin_latitude: float | None = Field(default=None, ge=-90, le=90)
+    origin_longitude: float | None = Field(default=None, ge=-180, le=180)
 
     @model_validator(mode="after")
     def validate_slot_limits(self):
+        if (self.origin_latitude is None) != (self.origin_longitude is None):
+            raise ValueError("출발점의 latitude와 longitude는 함께 제공해야 합니다.")
         slot_ids = [slot.slot_id for slot in self.slots]
         if len(slot_ids) != len(set(slot_ids)):
             raise ValueError("slot_id는 중복될 수 없습니다.")
@@ -195,10 +214,33 @@ class RoutePlannerInput(BaseModel):
             if slot.date != expected_date:
                 raise ValueError("슬롯의 date와 day_number가 여행 기간과 일치하지 않습니다.")
             if slot.end_date and slot.end_date > self.route_request.period.end_date:
-                if slot.domain == "accommodation" and slot.end_date == self.route_request.period.end_date + timedelta(days=1):
-                    pass
-                else:
+                is_final_overnight_stay = (
+                    slot.domain == "accommodation"
+                    and slot.end_date
+                    == self.route_request.period.end_date + timedelta(days=1)
+                )
+                if not is_final_overnight_stay:
                     raise ValueError("슬롯의 end_date가 여행 기간을 벗어났습니다.")
+            start_time = time.fromisoformat(slot.start_time)
+            if (
+                slot.day_number == 1
+                and self.route_request.arrival_at is not None
+                and start_time < self.route_request.arrival_at
+            ):
+                raise ValueError("첫날 슬롯은 arrival_at보다 빠를 수 없습니다.")
+            if (
+                slot.day_number == self.route_request.period.days
+                and self.route_request.departure_at is not None
+            ):
+                if start_time >= self.route_request.departure_at:
+                    raise ValueError("마지막 날 슬롯은 departure_at 전에 시작해야 합니다.")
+                effective_end_date = slot.end_date or slot.date
+                if (
+                    slot.end_time is not None
+                    and effective_end_date == self.route_request.period.end_date
+                    and time.fromisoformat(slot.end_time) > self.route_request.departure_at
+                ):
+                    raise ValueError("마지막 날 슬롯은 departure_at까지 끝나야 합니다.")
             counts[slot.day_number] = counts.get(slot.day_number, 0) + 1
             if counts[slot.day_number] > self.route_request.max_places_per_day:
                 raise ValueError("하루 슬롯이 max_places_per_day를 초과했습니다.")
@@ -265,6 +307,10 @@ class ConfirmedRoutePlan(BaseModel):
     slots: list[ConfirmedRouteSlot]
     warnings: list[str] = Field(default_factory=list)
     repaired: bool = False
+    route_optimized: bool = False
+    travel_distance_km: float | None = Field(default=None, ge=0)
+    distance_method: Literal["haversine"] | None = None
+    coordinate_coverage: float = Field(default=0.0, ge=0, le=1)
     alternative_routes: list[dict] = Field(default_factory=list, max_length=0)
 
 

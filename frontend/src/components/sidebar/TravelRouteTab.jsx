@@ -7,8 +7,12 @@ export default function TravelRouteTab({ showToast }) {
     days,
     currentDay,
     currentRoute,
+    currentAccommodation,
     setSelectedDay,
     handleDeleteItem,
+    handleCycleCandidate,
+    handleCycleAccommodation,
+    handleDeleteAccommodation,
     handleSavePDF,
     handleSharePDF
   } = useTravelRoute(showToast);
@@ -61,10 +65,11 @@ export default function TravelRouteTab({ showToast }) {
           {currentRoute.length > 0 ? (
               currentRoute.map((place, index) => (
                   <RouteItem
-                      key={place.id}
+                      key={place.slotId ?? `${currentDay}:${place.id}:${place.time ?? index}`}
                       place={place}
                       index={index}
                       onDelete={handleDeleteItem}
+                      onCycleCandidate={handleCycleCandidate}
                       t={t}
                   />
               ))
@@ -78,6 +83,18 @@ export default function TravelRouteTab({ showToast }) {
                   {t.noRouteDesc}
                 </p>
               </div>
+          )}
+          {currentAccommodation && (
+              <section className="space-y-2 border-t border-dashed border-purple-200 pt-4 mt-4">
+                <RouteItem
+                    key={`accommodation:${currentAccommodation.id}`}
+                    place={currentAccommodation}
+                    isAccommodation={true}
+                    onDelete={handleDeleteAccommodation}
+                    onCycleCandidate={handleCycleAccommodation}
+                    t={t}
+                />
+              </section>
           )}
         </div>
       </div>

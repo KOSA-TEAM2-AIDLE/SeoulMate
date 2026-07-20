@@ -410,6 +410,24 @@ class RequiredInformationTests(unittest.TestCase):
 
         self.assertEqual([], find_missing_fields(state))
 
+    def test_multi_day_preferred_areas_satisfy_destination(self) -> None:
+        state = _base_state()
+        state.update(
+            {
+                "intent": "multi_day_route",
+                "collected": {
+                    "preferred_areas": ["강남", "홍대"],
+                    "start_date": "2026-08-01",
+                    "end_date": "2026-08-05",
+                    "days": 5,
+                    "nights": 4,
+                    "pace": "normal",
+                },
+            }
+        )
+
+        self.assertEqual([], find_missing_fields(state))
+
     def test_generic_day_route_asks_for_target_place_count(self) -> None:
         state = _base_state()
         state.update(

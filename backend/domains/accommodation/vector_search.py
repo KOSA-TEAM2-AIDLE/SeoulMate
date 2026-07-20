@@ -25,13 +25,9 @@ RATING_BOOST = 0.010
 MAX_RAG_DISTANCE_KM = 5.0
 WALK_KM_PER_MIN = 0.07
 
-ACCOMMODATION_DB_CONFIG = {
-    "host": "localhost",
-    "port": 5432,
-    "user": "edu",
-    "password": "1234",
-    "dbname": "edudb",
-}
+# 다른 도메인과 동일한 애플리케이션 DB를 사용한다. 별도 로컬 DB를
+# 하드코딩하면 실제 accommodation 테이블이 있어도 연결 실패 후 mock으로 빠진다.
+ACCOMMODATION_DB_CONFIG = DB_CONFIG
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -150,7 +146,7 @@ def fuse_and_rank(acc_ranks, review_ranks_by_acc, options, top_k=20):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
         """
-        SELECT id, name, hotel_style, rating, review_count, address, amenities, room_features, room_types, lat, lng, image, description
+        SELECT id, name, hotel_style, rating, review_count, address, amenities, room_features, room_types, lat, lng, image, description, link
         FROM accommodation_ko WHERE id = ANY(%s)
     """,
         (list(all_ids),),

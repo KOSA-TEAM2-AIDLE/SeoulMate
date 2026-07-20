@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from domains.cafe.repository import (
     CafeRecord,
@@ -45,6 +46,12 @@ class RecordingRepository:
                 ),
             )
         }
+
+
+class RecordingReranker:
+    def rerank(self, retrieval, **options):
+        self.options = options
+        return []
 
 
 def retrieval() -> CafeRetrievalResult:
@@ -134,6 +141,27 @@ class CafeSearchServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertLess(candidates[0].signals["distance_km"], 1)
         self.assertGreater(candidates[0].signals["category_boost"], 0)
+
+    async def test_route_search_uses_broader_default_pool_for_neighbor_reranking(self):
+        reranker = RecordingReranker()
+        service = CafeSearchService(
+            repository=RecordingRepository(retrieval()),
+            reranker=reranker,
+            geocoder=lambda location: (37.5444, 127.0558, location),
+        )
+        request = DomainSearchRequest(
+            task_id="cafe-1",
+            domain="cafe",
+            search_query="성수 카페",
+            location="성수",
+            context={
+                "parsed_query": SimpleNamespace(intent="multi_day_route"),
+            },
+        )
+
+        await service.search(request)
+
+        self.assertEqual(5.0, reranker.options["radius_km"])
 
     async def test_same_current_location_reuses_coordinates_without_geocoding(self):
         repository = RecordingRepository(retrieval())
