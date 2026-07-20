@@ -64,6 +64,7 @@ class FrontendResponseTests(unittest.TestCase):
                 end_time="13:00",
                 category="식당",
                 place=place("r1"),
+                alternatives=[place("r2"), place("r3")],
             )]),
             DayPlan(day=2, theme="둘째 날", slots=[TimeSlot(
                 slot_id="d2-a1",
@@ -71,6 +72,10 @@ class FrontendResponseTests(unittest.TestCase):
                 time="14:00",
                 category="문화시설",
                 place=place("a1", source_type="attraction"),
+                alternatives=[
+                    place("a2", source_type="attraction"),
+                    place("a3", source_type="attraction"),
+                ],
             )]),
         ]
 
@@ -81,8 +86,18 @@ class FrontendResponseTests(unittest.TestCase):
         self.assertEqual(result.allDay, 2)
         self.assertIsNone(result.recommendList)
         self.assertEqual(list(result.travelPath), ["1", "2"])
+        self.assertEqual(result.travelPath["1"][0].slotId, "d1-r1")
+        self.assertEqual(result.travelPath["2"][0].slotId, "d2-a1")
         self.assertEqual(result.travelPath["1"][0].time, "12:00 - 13:00")
+        self.assertEqual(
+            [item.id for item in result.travelPath["1"][0].alternatives],
+            ["r2", "r3"],
+        )
         self.assertEqual(result.travelPath["2"][0].category, "관광지")
+        self.assertEqual(
+            [item.id for item in result.travelPath["2"][0].alternatives],
+            ["a2", "a3"],
+        )
 
     def test_route_rejects_all_day_mismatch(self):
         with self.assertRaises(ValidationError):
@@ -93,6 +108,31 @@ class FrontendResponseTests(unittest.TestCase):
                 travelPath={"1": [], "2": []},
                 recommendList=None,
             )
+
+    def test_multi_day_route_exposes_shared_accommodation_outside_travel_path(self):
+        days = [
+            DayPlan(day=1, theme="첫날", slots=[]),
+            DayPlan(day=2, theme="둘째 날", slots=[]),
+        ]
+        hotel = place("hotel-1", source_type="accommodation")
+        alternatives = [
+            place("hotel-2", source_type="accommodation"),
+            place("hotel-3", source_type="accommodation"),
+        ]
+
+        result = route_frontend_response(
+            days,
+            accommodation=hotel,
+            accommodation_alternatives=alternatives,
+        )
+
+        self.assertEqual(result.accommodation.id, "hotel-1")
+        self.assertEqual(result.accommodation.category, "숙소")
+        self.assertEqual(
+            [item.id for item in result.accommodation.alternatives],
+            ["hotel-2", "hotel-3"],
+        )
+        self.assertEqual(result.travelPath, {"1": [], "2": []})
 
     def test_route_rejects_non_contiguous_days(self):
         with self.assertRaises(ValidationError):

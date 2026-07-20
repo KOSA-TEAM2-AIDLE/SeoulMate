@@ -6,12 +6,16 @@ import {
     getPlaceDisplayImage,
 } from '../../services/map/placeDisplayAdapter';
 
-const RouteItem = memo(({ place, index, onDelete, t }) => {
+const RouteItem = memo(({ place, index, onDelete, onCycleCandidate, t }) => {
     const category = getPlaceDisplayCategory(place);
     const subCategory = getPlaceDisplaySubCategory(place);
     const rating = getPlaceDisplayRating(place);
     const image = getPlaceDisplayImage(place);
     const hasLink = !!place.link;
+    const linkLabel = place.link?.toLowerCase().includes('tripadvisor.')
+        ? t.travelerReviews
+        : t.moreInfo;
+    const canCycleCandidate = place.alternatives?.length > 0;
 
     const categoryStyles = {
         '카페': 'text-orange-500 bg-orange-50',
@@ -51,23 +55,38 @@ const RouteItem = memo(({ place, index, onDelete, t }) => {
 
                     <p className="text-sm text-slate-400 break-keep">{place.address}</p>
 
-                    <div className="flex items-center justify-between mt-1 min-h-[24px]">
+                    <div className="mt-1 min-h-[24px]">
                         <p className="text-sm text-amber-500 font-semibold flex items-center gap-1">
                             ★ {rating}
                         </p>
+                    </div>
 
+                    {(canCycleCandidate || hasLink) && (
+                        <div className="mt-2 flex items-center gap-2">
+                        {canCycleCandidate && (
+                            <button
+                                type="button"
+                                onClick={() => onCycleCandidate(place)}
+                                className="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-100 border border-blue-100 transition-colors"
+                            >
+                                {t.changeCandidate}
+                            </button>
+                        )}
                         {hasLink && (
                             <a
                                 href={place.link}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 border border-slate-200 transition-colors"
+                                aria-label={linkLabel}
+                                title={linkLabel}
+                                className="inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 border border-slate-200 transition-colors"
                             >
-                                🔗 {t.moreInfo}
+                                🔗 {place.link?.toLowerCase().includes('tripadvisor.') ? t.reviewButton : linkLabel}
                             </a>
                         )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

@@ -8,6 +8,7 @@ from difflib import SequenceMatcher
 import psycopg2
 from openai import OpenAI
 from dotenv import load_dotenv
+from core.config import DB_CONFIG
 
 load_dotenv()
 
@@ -37,14 +38,8 @@ WALK_KM_PER_MIN = 0.07
 # 🛡️ [Global Safeguard] Max distance allowed for RAG search from a landmark/coordinates (5.0km)
 MAX_RAG_DISTANCE_KM = 5.0
 
-# Database connection info
-DB_PARAMS = {
-    "host": "localhost",
-    "port": 5432,
-    "user": "edu",
-    "password": "1234",
-    "database": "edudb",
-}
+# 한국어 검색기 및 다른 도메인과 같은 애플리케이션 DB를 사용한다.
+DB_PARAMS = DB_CONFIG
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 SEOUL_TZ = ZoneInfo("Asia/Seoul")

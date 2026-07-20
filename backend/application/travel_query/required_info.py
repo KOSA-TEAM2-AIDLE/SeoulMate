@@ -61,6 +61,8 @@ def _has_location(
 ) -> bool:
     if collected.get("location"):
         return True
+    if collected.get("preferred_areas"):
+        return True
     if (
         collected.get("use_current_location")
         and state.get("current_latitude") is not None

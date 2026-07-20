@@ -17,7 +17,11 @@ const UI_TEXT = {
         toastDelete: (name) => `${name}이 루트에서 삭제되었습니다.`,
         noRouteTitle: (day) => `${day}일차는 아직 루트가 없습니다`,
         noRouteDesc: '장소 검색 탭에서 갈 곳들을 추가해보세요!',
-        moreInfo: '바로가기'
+        changeCandidate: '변경',
+        reviewButton: '리뷰',
+        moreInfo: '바로가기',
+        travelerReviews: '여행자 리뷰',
+        accommodation: '숙소'
     },
     en: {
         title: 'My Travel Route',
@@ -32,14 +36,22 @@ const UI_TEXT = {
         toastDelete: (name) => `'${name}' has been deleted from the route.`,
         noRouteTitle: (day) => `No route for Day ${day} yet`,
         noRouteDesc: 'Try adding places from the Search tab!',
-        moreInfo: 'Link'
+        changeCandidate: 'Change',
+        reviewButton: 'Reviews',
+        moreInfo: 'Link',
+        travelerReviews: 'Traveler reviews',
+        accommodation: 'Accommodation'
     }
 };
 
 export default function useTravelRoute(showToast) {
     const allDay = useTravelStore((state) => state.all_day);
     const travelPath = useTravelStore((state) => state.travelPath);
+    const accommodation = useTravelStore((state) => state.accommodation);
     const removePathItem = useTravelStore((state) => state.removePathItem);
+    const cycleRouteCandidate = useTravelStore((state) => state.cycleRouteCandidate);
+    const cycleAccommodationCandidate = useTravelStore((state) => state.cycleAccommodationCandidate);
+    const clearAccommodation = useTravelStore((state) => state.clearAccommodation);
     const selectedDay = useTravelStore((state) => state.selectedDay);
     const setSelectedDay = useTravelStore((state) => state.setSelectedDay);
 
@@ -56,12 +68,23 @@ export default function useTravelRoute(showToast) {
 
     const currentDay = selectedDay > allDay ? 1 : selectedDay;
     const currentRoute = travelPath[currentDay] || [];
+    const currentAccommodation = currentDay < allDay ? accommodation : null;
 
     const { savePDF, sharePDF } = usePdfGenerator(t);
 
     const handleDeleteItem = (place) => {
-        removePathItem(place.id);
+        removePathItem(place.slotId ?? place.id);
         showToast(t.toastDelete(place.name));
+    };
+
+    const handleCycleCandidate = (place) => {
+        cycleRouteCandidate(place.slotId ?? place.id);
+    };
+
+    const handleDeleteAccommodation = () => {
+        if (!accommodation) return;
+        clearAccommodation();
+        showToast(t.toastDelete(accommodation.name));
     };
 
     const handleSavePDF = () => savePDF(showToast);
@@ -72,8 +95,12 @@ export default function useTravelRoute(showToast) {
         days,
         currentDay,
         currentRoute,
+        currentAccommodation,
         setSelectedDay,
         handleDeleteItem,
+        handleCycleCandidate,
+        handleCycleAccommodation: cycleAccommodationCandidate,
+        handleDeleteAccommodation,
         handleSavePDF,
         handleSharePDF
     };

@@ -935,7 +935,7 @@ def search_restaurants(
 
             cursor.execute(f"""
                 SELECT id, name, category, category_kakao, rating, review_count, hours,
-                       description, description_kakao, address, image, lat, lng,
+                       description, description_kakao, address, image, link, lat, lng,
                        menu_price_min, menu_price_median,
                        mp.menu_price_lo, mp.menu_price_hi,
                        has_parking, allows_pets, has_kids_menu,
@@ -1007,6 +1007,7 @@ def search_restaurants(
             "open_status_basis": open_status_basis,
             "address": _normalize_unicode_text(meta["address"]),
             "image": meta["image"],
+            "link": meta.get("link"),
             "lat": meta["lat"],
             "lng": meta["lng"],
             "distance_km": distance,

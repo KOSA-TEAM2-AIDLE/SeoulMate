@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 import re
 from typing import Any, Literal, Self
 
@@ -343,6 +343,7 @@ class StructuredTravelQuery(BaseModel):
             previous_domain = task.domain
 
         self.tasks = normalized_tasks
+        self._validate_route_time_bounds()
         counts = Counter(task.day_number or 1 for task in self.tasks)
         if any(count > self.route_request.max_places_per_day for count in counts.values()):
             raise ValueError("하루 Task 수가 max_places_per_day를 초과했습니다.")
@@ -363,6 +364,29 @@ class StructuredTravelQuery(BaseModel):
                     "multi_day_route에는 모든 여행 일차의 Task가 필요합니다: "
                     f"누락 Day {missing_days}"
                 )
+
+    def _validate_route_time_bounds(self) -> None:
+        assert self.route_request is not None
+        period = self.route_request.period
+        arrival_at = self.route_request.arrival_at
+        departure_at = self.route_request.departure_at
+        for task in self.tasks:
+            if task.start_time is None or task.day_number is None:
+                continue
+            start_time = time.fromisoformat(task.start_time)
+            if task.day_number == 1 and arrival_at is not None and start_time < arrival_at:
+                raise ValueError("첫날 Task는 arrival_at보다 빠를 수 없습니다.")
+            if task.day_number != period.days or departure_at is None:
+                continue
+            if start_time >= departure_at:
+                raise ValueError("마지막 날 Task는 departure_at 전에 시작해야 합니다.")
+            effective_end_date = task.end_date or task.visit_date
+            if (
+                task.end_time is not None
+                and effective_end_date == period.end_date
+                and time.fromisoformat(task.end_time) > departure_at
+            ):
+                raise ValueError("마지막 날 Task는 departure_at까지 끝나야 합니다.")
 
     def _normalize_legacy_route_tasks(self) -> None:
         """route_request 도입 전 요청은 라우터의 기간 보완 로직에 맡긴다."""
