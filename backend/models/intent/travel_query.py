@@ -204,17 +204,6 @@ DOMAIN_TERMS: dict[TaskDomain, tuple[str, ...]] = {
     "etc": (),
 }
 
-CURRENT_LOCATION_TERMS = (
-    "내 근처",
-    "내 주변",
-    "현재 위치에서",
-    "여기 근처",
-    "여기 주변",
-    "around here",
-    "near me",
-    "my location",
-    "current location",
-)
 LOCATION_RELATION_PATTERN = re.compile(
     r"([0-9A-Za-z가-힣·]+(?:\s+[0-9A-Za-z가-힣·]+){0,2})\s*"
     r"(?:근처|주변|인근|에서\s*가까운|이랑\s*가까운)"
@@ -224,9 +213,6 @@ LOCATION_RELATION_PATTERN = re.compile(
 def _apply_high_confidence_fallback(question: str, extracted: dict[str, Any]) -> None:
     """명확한 표현만 보정하며 모델이 확정한 값은 덮어쓰지 않는다."""
     normalized = re.sub(r"\s+", " ", question).strip().casefold()
-    if any(term in normalized for term in CURRENT_LOCATION_TERMS):
-        extracted["use_current_location"] = True
-
     if not extracted.get("location") and not extracted.get("use_current_location"):
         match = LOCATION_RELATION_PATTERN.search(normalized)
         if match:
@@ -352,9 +338,9 @@ class TravelIntentExtractor:
             and state.get("intent") is not None
             else extracted_intent
         )
+        _apply_available_current_location_default(state, intent, extracted)
         _apply_high_confidence_fallback(state["original_question"], extracted)
         _apply_deterministic_defaults(intent, extracted)
-        _apply_current_location_hint(state, extracted)
 
         collected = dict(state.get("collected", {}))
         if latest_answer is not None and missing_fields:
@@ -383,38 +369,20 @@ class TravelIntentExtractor:
         }
 
 
-CURRENT_LOCATION_HINT_RE = re.compile(
-    r"(?:여기|이곳|현재\s*위치|내\s*위치|내\s*(?:주변|근처)|"
-    r"around\s+here|near\s+me|my\s+location|current\s+location)",
-    re.IGNORECASE,
-)
-
-
-def _apply_current_location_hint(
+def _apply_available_current_location_default(
     state: TravelQueryGraphState,
+    intent: TravelIntent,
     extracted: dict[str, Any],
 ) -> None:
     if (
-        state.get("current_latitude") is None
+        intent != "single_place_recommendation"
+        or extracted.get("location")
+        or state.get("current_latitude") is None
         or state.get("current_longitude") is None
     ):
         return
 
-    text = " ".join(
-        str(value)
-        for value in (
-            state.get("original_question"),
-            state.get("latest_user_answer"),
-        )
-        if value
-    )
-    if CURRENT_LOCATION_HINT_RE.search(text):
-        # 상위 모델이 "현재"를 시설명으로 추출해도 명시적
-        # "내 주변/내 근처"는 프론트의 좌표를 사용하는 요청으로 우선한다.
-        # 기존 graph state의 잘못된 장소명도 dict.update에서 제거되도록
-        # key를 삭제하지 않고 None으로 명시적으로 덮어쓴다.
-        extracted["location"] = None
-        extracted["use_current_location"] = True
+    extracted["use_current_location"] = True
 
 
 def _clarification_patch(

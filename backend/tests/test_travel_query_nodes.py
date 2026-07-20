@@ -129,6 +129,31 @@ class TravelIntentExtractorTests(unittest.TestCase):
         self.assertTrue(result["collected"]["use_current_location"])
         self.assertEqual([], find_missing_fields(state | result))
 
+    def test_explicit_location_is_preferred_over_available_coordinates(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "en",
+                "intent": "single_place_recommendation",
+                "normalized_question": "Recommend a cafe in Gangnam",
+                "location": "Gangnam",
+                "requested_domains": ["cafe"],
+            }
+        )
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "Recommend a cafe in Gangnam.",
+                "language": "en",
+                "current_latitude": 37.485,
+                "current_longitude": 127.12,
+            }
+        )
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertEqual("Gangnam", result["collected"]["location"])
+        self.assertFalse(result["collected"].get("use_current_location", False))
+
     def test_nearby_expression_uses_available_current_coordinates(self) -> None:
         chain = RunnableLambda(
             lambda _: {
