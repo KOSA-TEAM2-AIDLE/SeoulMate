@@ -1,0 +1,1 @@
+{"type":"object","required":["example_id","input","expected","metadata"],"properties":{"expected":{"type":"object","required":["selected_place_ids","structured_answer"],"properties":{"structured_answer":{"type":"object","required":["language","recommendations","no_result_reason"]}}}}}

@@ -1,0 +1,25 @@
+{
+  "restaurant_ko": 1000,
+  "restaurant_en": 1000,
+  "restaurant_review_ko": 14996,
+  "restaurant_review_en": 9745,
+  "restaurant_menu_ko": 10003,
+  "restaurant_menu_en_all_translated": 10003,
+  "restaurant_menu_en": 9697,
+  "restaurant_menu_en_rejected": 306,
+  "rejection_reasons": {
+    "missing_restaurant_en": 306
+  },
+  "checks": {
+    "restaurant_ko_duplicate_id": 0,
+    "restaurant_en_duplicate_id": 0,
+    "menu_ko_duplicate_id": 0,
+    "menu_en_duplicate_id": 0,
+    "menu_en_unresolved_translation": 0,
+    "review_ko_duplicate_id": 0,
+    "review_en_duplicate_id": 0,
+    "menu_ko_invalid_fk": 0,
+    "menu_en_invalid_fk": 0,
+    "restaurant_en_missing_name": 0
+  }
+}

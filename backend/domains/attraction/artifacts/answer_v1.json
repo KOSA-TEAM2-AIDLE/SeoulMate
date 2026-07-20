@@ -1,0 +1,40 @@
+{
+  "generate": {
+    "traces": [],
+    "train": [],
+    "demos": [],
+    "signature": {
+      "instructions": "Write a structured, evidence-grounded answer for validated selected candidates.",
+      "fields": [
+        {
+          "prefix": "Language:",
+          "description": "${language}"
+        },
+        {
+          "prefix": "Question:",
+          "description": "${question}"
+        },
+        {
+          "prefix": "Selected Candidates Json:",
+          "description": "${selected_candidates_json}"
+        },
+        {
+          "prefix": "Selection Reasons Json:",
+          "description": "${selection_reasons_json}"
+        },
+        {
+          "prefix": "Structured Answer Json:",
+          "description": "A valid JSON object string only, with exactly language, recommendations, and no_result_reason keys. recommendations is a list (at most 3) whose items contain place_id, name, recommendation_reason, description_evidence, review_evidence, congestion, weather, and optional visitor_note. Each congestion/weather object must have status available|unavailable; unavailable must contain no value/basis/observed_at. Use only selected candidate evidence. Do not return prose, Markdown, or another JSON shape."
+        }
+      ]
+    },
+    "lm": null
+  },
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.12",
+      "dspy": "3.2.1",
+      "cloudpickle": "3.1"
+    }
+  }
+}
