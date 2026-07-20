@@ -1234,12 +1234,20 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                 )
                 place = _place(raw, task_id=task.task_id)
                 place_lookup[candidate_id] = place
+                open_at_visit_time = _restaurant_open_at(raw, visit_date, slot_time)
                 reason_facts[candidate_id] = {
                     "domain": "restaurant",
-                    "open_at_visit_time": _restaurant_open_at(raw, visit_date, slot_time),
+                    "rating": place.rating,
+                    "review_count": place.review_count,
+                    "open_at_visit_time": open_at_visit_time,
                     "visit_time": slot_time,
                 }
                 wrapped = _restaurant_group_candidate(raw, include_weather)
+                # 슬롯 시각 기준 영업 여부는 검색 후에만 판정되므로 여기서 넣는다.
+                if open_at_visit_time:
+                    wrapped["payload"]["open_at_visit_time"] = True
+                if place.review_count is not None:
+                    wrapped["payload"]["review_count"] = place.review_count
                 candidates.append(RouteCandidate(
                     candidate_id=candidate_id,
                     domain="restaurant",
@@ -1314,6 +1322,8 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                 place_lookup[candidate_id] = place
                 reason_facts[candidate_id] = {
                     "domain": task.domain,
+                    "rating": place.rating,
+                    "review_count": place.review_count,
                     "weather_condition": candidate.signals.get("weather_condition"),
                     "weather_indoor_evidence": bool(
                         candidate.signals.get("weather_indoor_evidence")
@@ -1331,6 +1341,9 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     longitude=candidate.longitude,
                     payload={
                         "category": candidate.category,
+                        # GPT 이유 작성에 쓸 검증된 근거. 없는 값은 넣지 않는다.
+                        "rating": place.rating,
+                        "review_count": place.review_count,
                         "evidence": candidate.evidence[:3],
                         "fallback_reason": place.reason,
                     },
@@ -1369,11 +1382,16 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
             key=lambda slot: (slot.start_time, slot.slot_id),
         ):
             selected = place_lookup[confirmed.selected.candidate_id].model_copy(deep=True)
-            selected.selection_reason = _route_place_reason(
-                selected,
-                reason_facts.get(confirmed.selected.candidate_id, {}),
-                previous_place,
-                route_language,
+            # 대표 장소는 GPT가 쓴 이유를 우선하고, 누락·실패한 슬롯만
+            # 검증된 사실로 만든 결정론적 문장으로 채운다.
+            selected.selection_reason = (
+                plan.llm_selection_reasons.get(confirmed.slot_id)
+                or _route_place_reason(
+                    selected,
+                    reason_facts.get(confirmed.selected.candidate_id, {}),
+                    previous_place,
+                    route_language,
+                )
             )
             selected.reason = selected.selection_reason
             alternatives: list[Place] = []
