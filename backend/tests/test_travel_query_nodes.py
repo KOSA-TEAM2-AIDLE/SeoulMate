@@ -104,6 +104,31 @@ class TravelIntentExtractorTests(unittest.TestCase):
         self.assertEqual("en", result["language"])
         self.assertEqual("en", result["collected"]["language"])
 
+    def test_english_my_location_overrides_false_model_extraction(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "en",
+                "intent": "single_place_recommendation",
+                "normalized_question": "Recommend a cafe near my location",
+                "use_current_location": False,
+                "requested_domains": ["cafe"],
+            }
+        )
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "Recommend a cafe near my location.",
+                "language": "en",
+                "current_latitude": 37.485,
+                "current_longitude": 127.12,
+            }
+        )
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertTrue(result["collected"]["use_current_location"])
+        self.assertEqual([], find_missing_fields(state | result))
+
     def test_nearby_expression_uses_available_current_coordinates(self) -> None:
         chain = RunnableLambda(
             lambda _: {

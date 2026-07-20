@@ -204,7 +204,17 @@ DOMAIN_TERMS: dict[TaskDomain, tuple[str, ...]] = {
     "etc": (),
 }
 
-CURRENT_LOCATION_TERMS = ("내 근처", "내 주변", "현재 위치에서", "여기 근처", "여기 주변")
+CURRENT_LOCATION_TERMS = (
+    "내 근처",
+    "내 주변",
+    "현재 위치에서",
+    "여기 근처",
+    "여기 주변",
+    "around here",
+    "near me",
+    "my location",
+    "current location",
+)
 LOCATION_RELATION_PATTERN = re.compile(
     r"([0-9A-Za-z가-힣·]+(?:\s+[0-9A-Za-z가-힣·]+){0,2})\s*"
     r"(?:근처|주변|인근|에서\s*가까운|이랑\s*가까운)"
@@ -214,7 +224,7 @@ LOCATION_RELATION_PATTERN = re.compile(
 def _apply_high_confidence_fallback(question: str, extracted: dict[str, Any]) -> None:
     """명확한 표현만 보정하며 모델이 확정한 값은 덮어쓰지 않는다."""
     normalized = re.sub(r"\s+", " ", question).strip().casefold()
-    if "use_current_location" not in extracted and any(term in normalized for term in CURRENT_LOCATION_TERMS):
+    if any(term in normalized for term in CURRENT_LOCATION_TERMS):
         extracted["use_current_location"] = True
 
     if not extracted.get("location") and not extracted.get("use_current_location"):
@@ -342,6 +352,7 @@ class TravelIntentExtractor:
             and state.get("intent") is not None
             else extracted_intent
         )
+        _apply_high_confidence_fallback(state["original_question"], extracted)
         _apply_deterministic_defaults(intent, extracted)
         _apply_current_location_hint(state, extracted)
 

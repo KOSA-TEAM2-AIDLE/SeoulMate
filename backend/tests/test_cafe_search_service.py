@@ -183,6 +183,43 @@ class CafeSearchServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, len(candidates))
         self.assertLess(candidates[0].signals["distance_km"], 1)
 
+    async def test_implicit_nearby_radius_expands_when_two_km_has_no_results(self):
+        repository = RecordingRepository(retrieval())
+        service = CafeSearchService(repository=repository)
+        request = DomainSearchRequest(
+            task_id="cafe-en-1",
+            domain="cafe",
+            language="en",
+            search_query="Recommend a cafe near my location",
+            location="my location",
+            latitude=37.5245,
+            longitude=127.0560,
+        )
+
+        candidates = await service.search(request)
+
+        self.assertEqual(1, len(candidates))
+        self.assertGreater(candidates[0].signals["distance_km"], 2)
+        self.assertLess(candidates[0].signals["distance_km"], 5)
+
+    async def test_explicit_radius_is_not_automatically_expanded(self):
+        repository = RecordingRepository(retrieval())
+        service = CafeSearchService(repository=repository)
+        request = DomainSearchRequest(
+            task_id="cafe-en-1",
+            domain="cafe",
+            language="en",
+            search_query="Recommend a cafe within two kilometers",
+            location="my location",
+            latitude=37.5245,
+            longitude=127.0560,
+            radius_km=2.0,
+        )
+
+        candidates = await service.search(request)
+
+        self.assertEqual([], candidates)
+
     async def test_explicit_radius_without_resolved_coordinates_fails(self):
         service = CafeSearchService(
             repository=RecordingRepository(retrieval()),
