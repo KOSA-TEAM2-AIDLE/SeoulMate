@@ -9,7 +9,8 @@ from application.travel_query.builder import (
     _area_weight,
     build_structured_query,
 )
-from models.intent.travel_query import _apply_current_location_hint
+from models.intent.travel_query import _apply_location_scope_default
+from services.location import CITYWIDE_LOCATION_NAME
 
 
 REFERENCE_AT = datetime(2026, 7, 15, 12, 0, tzinfo=ZoneInfo("Asia/Seoul"))
@@ -33,27 +34,17 @@ def _state(intent: str, **collected: object) -> dict:
 
 
 class StructuredTravelQueryBuilderTests(unittest.TestCase):
-    def test_explicit_near_me_overrides_misparsed_location_name(self) -> None:
+    def test_unspecified_location_defaults_to_citywide_search(self) -> None:
         extracted = {
-            "location": "현재",
             "requested_domains": ["attraction"],
         }
 
-        _apply_current_location_hint(
-            {
-                "original_question": (
-                    "현재 내 주변에서 산책하기 좋은 장소를 추천해줘"
-                ),
-                "latest_user_answer": None,
-                "current_latitude": 37.5665,
-                "current_longitude": 126.978,
-            },
+        _apply_location_scope_default(
+            "single_place_recommendation",
             extracted,
         )
 
-        self.assertTrue(extracted["use_current_location"])
-        self.assertIn("location", extracted)
-        self.assertIsNone(extracted["location"])
+        self.assertEqual(CITYWIDE_LOCATION_NAME, extracted["location"])
 
     def test_recommendation_without_domain_fails_instead_of_dispatching_etc(self) -> None:
         result = build_structured_query(_state(

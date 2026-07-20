@@ -16,7 +16,8 @@ const UI_TEXT = {
         toastDuplicate: (name) => `'${name}'은(는) 이미 해당 일차 루트에 존재합니다.`,
         aiReason: '추천 이유',
         moreInfo: '바로가기',
-        travelerReviews: '여행자 리뷰'
+        travelerReviews: '리뷰',
+        reservation: '예약'
     },
     en: {
         searchResult: 'Search Results',
@@ -27,7 +28,8 @@ const UI_TEXT = {
         toastDuplicate: (name) => `'${name}' is already in this day's path.`,
         aiReason: 'Why we recommend',
         moreInfo: 'Link',
-        travelerReviews: 'Traveler reviews'
+        travelerReviews: 'Reviews',
+        reservation: 'Reservation'
     }
 };
 

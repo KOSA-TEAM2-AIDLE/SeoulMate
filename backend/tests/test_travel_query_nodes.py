@@ -161,12 +161,64 @@ class TravelIntentExtractorTests(unittest.TestCase):
         self.assertEqual("en", result["language"])
         self.assertEqual("en", result["collected"]["language"])
 
+    def test_unspecified_location_uses_citywide_search_even_with_coordinates(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "en",
+                "intent": "single_place_recommendation",
+                "normalized_question": "Recommend a cafe",
+                "use_current_location": False,
+                "requested_domains": ["cafe"],
+            }
+        )
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "Recommend a cafe.",
+                "language": "en",
+                "current_latitude": 37.485,
+                "current_longitude": 127.12,
+            }
+        )
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertEqual(CITYWIDE_LOCATION_NAME, result["collected"]["location"])
+        self.assertFalse(result["collected"].get("use_current_location", False))
+        self.assertEqual([], find_missing_fields(state | result))
+
+    def test_explicit_location_is_preferred_over_available_coordinates(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "en",
+                "intent": "single_place_recommendation",
+                "normalized_question": "Recommend a cafe in Gangnam",
+                "location": "Gangnam",
+                "requested_domains": ["cafe"],
+            }
+        )
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "Recommend a cafe in Gangnam.",
+                "language": "en",
+                "current_latitude": 37.485,
+                "current_longitude": 127.12,
+            }
+        )
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertEqual("Gangnam", result["collected"]["location"])
+        self.assertFalse(result["collected"].get("use_current_location", False))
+
     def test_nearby_expression_uses_available_current_coordinates(self) -> None:
         chain = RunnableLambda(
             lambda _: {
                 "language": "ko",
                 "intent": "single_place_recommendation",
                 "normalized_question": "여기 주변 카페 추천",
+                "use_current_location": True,
                 "requested_domains": ["cafe"],
             }
         )
@@ -355,6 +407,46 @@ class TravelIntentExtractorTests(unittest.TestCase):
 
 
 class RequiredInformationTests(unittest.TestCase):
+    def test_english_query_uses_english_clarification(self) -> None:
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "Recommend a quiet cafe",
+                "language": "en",
+                "intent": "single_place_recommendation",
+                "collected": {"language": "en"},
+            }
+        )
+
+        result = check_required_information(state)
+
+        self.assertEqual(["filters.location"], result["missing_fields"])
+        self.assertEqual(
+            "Which area should I search around? "
+            "You can also use your current location.",
+            result["assistant_message"],
+        )
+
+    def test_english_route_questions_remain_english_on_next_hitl_turn(self) -> None:
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "Plan a day trip to Hongdae",
+                "language": "en",
+                "intent": "day_trip_route",
+                "collected": {"language": "en", "location": "Hongdae"},
+            }
+        )
+
+        result = check_required_information(state)
+
+        self.assertEqual(
+            ["route_request.period", "route_request.target_places_per_day"],
+            result["missing_fields"],
+        )
+        self.assertIn("start and end dates", result["assistant_message"])
+        self.assertIn("How many places", result["assistant_message"])
+
     def test_single_recommendation_requires_location(self) -> None:
         state = _base_state()
         state["intent"] = "single_place_recommendation"
