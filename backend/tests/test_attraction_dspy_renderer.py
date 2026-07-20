@@ -10,7 +10,7 @@ from domains.attraction.dspy.renderer import render_selection_result
 
 
 class AttractionDspyRendererTests(unittest.TestCase):
-    def test_renderer_exposes_query_congestion_and_weather_reasons(self):
+    def test_renderer_reuses_natural_place_reason_for_sidebar_and_chat(self):
         selection = AttractionSelectionPrediction(
             selected_place_ids=["p1"],
             forbidden_place_ids=[],
@@ -28,7 +28,7 @@ class AttractionDspyRendererTests(unittest.TestCase):
                         observed_at="2026-07-18T15:55:00+09:00",
                     ),
                     weather=AttractionAnswerContext(
-                        status="available", value="condition=맑음; temperature_c=28",
+                        status="available", value="condition=clear; temperature_c=28",
                         basis="KMA-via-Weather-MCP",
                     ),
                 )
@@ -37,11 +37,15 @@ class AttractionDspyRendererTests(unittest.TestCase):
 
         result = render_selection_result(selection, answer, question="아이와 함께 갈 전시 추천")
 
-        self.assertIn("질의 적합성", result.selections[0].selection_reason)
-        self.assertIn("혼잡도: 여유", result.selections[0].selection_reason)
-        self.assertIn("날씨: condition=맑음", result.selections[0].selection_reason)
-        self.assertIn("서울시 실시간 도시데이터 권역", result.answer)
-        self.assertIn("KMA-via-Weather-MCP", result.answer)
+        sidebar_reason = result.selections[0].selection_reason
+        self.assertIn(sidebar_reason, result.answer)
+        self.assertNotIn("질의 적합성:", sidebar_reason)
+        self.assertNotIn("혼잡도:", sidebar_reason)
+        self.assertNotIn("날씨:", sidebar_reason)
+        self.assertIn("2026-07-18 15:55", sidebar_reason)
+        self.assertNotIn("+09:00", sidebar_reason)
+        self.assertIn("현재 날씨는 맑음, 28°C입니다", sidebar_reason)
+        self.assertNotIn("condition=clear", sidebar_reason)
 
     def test_renderer_preserves_selection_reason_and_formats_answer(self):
         selection = AttractionSelectionPrediction(
@@ -66,9 +70,9 @@ class AttractionDspyRendererTests(unittest.TestCase):
         result = render_selection_result(selection, answer)
 
         self.assertEqual("p1", result.selections[0].place_id)
-        self.assertIn("질의 적합성: 전시 주제와 맞습니다.", result.selections[0].selection_reason)
-        self.assertIn("혼잡도: 현재 관측 정보 없음", result.selections[0].selection_reason)
-        self.assertIn("날씨: 현재 관측 정보 없음", result.selections[0].selection_reason)
+        self.assertIn("전시 주제와 맞습니다.", result.selections[0].selection_reason)
+        self.assertIn("혼잡도 정보는 확인되지 않았습니다.", result.selections[0].selection_reason)
+        self.assertIn("날씨 정보는 확인되지 않았습니다.", result.selections[0].selection_reason)
         self.assertIn("테스트 전시장", result.answer)
         self.assertIn("현대미술 전시", result.answer)
         self.assertIn("추천드릴게요", result.answer)
@@ -97,7 +101,7 @@ class AttractionDspyRendererTests(unittest.TestCase):
 
         self.assertIn("여의도에서 아이와 함께 갈 곳", result.answer)
         self.assertIn("현재 혼잡도는 여유 수준", result.answer)
-        self.assertIn("현재 날씨 정보는 확인되지 않아", result.answer)
+        self.assertIn("날씨 정보는 확인되지 않았습니다.", result.answer)
         self.assertNotIn("은(는)", result.answer)
         self.assertIn("1. 여의도 공원\n", result.answer)
         self.assertNotIn("1. 여의도 공원 여의도 공원", result.answer)
@@ -118,8 +122,63 @@ class AttractionDspyRendererTests(unittest.TestCase):
 
         result = render_selection_result(selection, answer)
 
-        self.assertIn("\n   더현대 서울의 크리스마스 빌리지는", result.answer)
+        self.assertIn("\n   가족 방문에 적합합니다.", result.answer)
         self.assertNotIn("H-Village'은 더현대 서울의", result.answer)
+
+    def test_renderer_uses_english_place_reason_for_english_answer(self):
+        selection = AttractionSelectionPrediction(
+            selected_place_ids=["p1"],
+            forbidden_place_ids=[],
+            selection_reasons={"p1": "It fits an art-focused visit."},
+        )
+        answer = AttractionStructuredAnswer(
+            language="en",
+            recommendations=[
+                AttractionStructuredRecommendation(
+                    place_id="p1",
+                    name="Gyeongbokgung Palace",
+                    recommendation_reason="It fits an art-focused visit.",
+                    congestion=AttractionAnswerContext(status="unavailable"),
+                    weather=AttractionAnswerContext(status="unavailable"),
+                )
+            ],
+        )
+
+        result = render_selection_result(selection, answer)
+
+        self.assertIn("It fits an art-focused visit.", result.selections[0].selection_reason)
+        self.assertIn("Congestion information is unavailable.", result.selections[0].selection_reason)
+        self.assertNotIn("질의 적합성", result.selections[0].selection_reason)
+
+    def test_renderer_localizes_english_congestion_value_and_observed_time(self):
+        selection = AttractionSelectionPrediction(
+            selected_place_ids=["p1"],
+            forbidden_place_ids=[],
+            selection_reasons={"p1": "It fits a relaxed visit."},
+        )
+        answer = AttractionStructuredAnswer(
+            language="en",
+            recommendations=[
+                AttractionStructuredRecommendation(
+                    place_id="p1",
+                    name="Gyeongbokgung Palace",
+                    recommendation_reason="It fits a relaxed visit.",
+                    congestion=AttractionAnswerContext(
+                        status="available",
+                        value="여유",
+                        observed_at="2026-07-18T15:55:00+09:00",
+                    ),
+                    weather=AttractionAnswerContext(status="unavailable"),
+                )
+            ],
+        )
+
+        result = render_selection_result(selection, answer)
+
+        self.assertIn("Current congestion is Low", result.selections[0].selection_reason)
+        self.assertIn("Jul 18, 2026, 3:55 PM", result.selections[0].selection_reason)
+        self.assertNotIn("여유", result.selections[0].selection_reason)
+        self.assertNotIn("2026-07-18", result.selections[0].selection_reason)
 
 
 if __name__ == "__main__":

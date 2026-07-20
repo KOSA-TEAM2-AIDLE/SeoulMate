@@ -581,7 +581,7 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     f"{task.slot_id or task.task_id}:{task.domain}:{candidate.place_id}"
                 )
                 place_lookup[candidate_id] = place
-                wrapped = _accommodation_group_candidate(candidate)
+                wrapped = _accommodation_group_candidate(candidate, place)
                 candidates.append(RouteCandidate(
                     candidate_id=candidate_id,
                     domain=task.domain,
@@ -734,7 +734,7 @@ def _restaurant_group_candidate(candidate: dict, include_weather: bool) -> dict:
     }
 
 
-def _accommodation_group_candidate(candidate) -> dict:
+def _accommodation_group_candidate(candidate, place) -> dict:
     payload = {
         "category": candidate.category,
         "price": candidate.attributes.get("price"),
@@ -744,6 +744,7 @@ def _accommodation_group_candidate(candidate) -> dict:
         "features": candidate.attributes.get("features"),
         "url": candidate.attributes.get("url"),
         "evidence": candidate.evidence[:3] if candidate.evidence else [],
+        "fallback_reason": place.reason,
     }
     return {
         "place_id": candidate.place_id,

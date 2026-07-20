@@ -8,6 +8,7 @@ from domains.accommodation.vector_search import (
     fuse_and_rank,
     query_hotels_by_radius,
     get_direct_semantic_similarity,
+    get_best_reviews_for_hotels,
     ACC_TOP_N,
     REVIEW_POOL
 )
@@ -291,6 +292,19 @@ def run_local_rag(user_question, user_lat=None, user_lng=None, top_n=30):
     
     formatted_candidates = []
     for c in candidates:
+        amenities = c.get('amenities', '')
+        if amenities:
+            features_list = [f.strip() for f in amenities.split(',') if f.strip()]
+            best_feature = features_list[0] if features_list else '다양한 편의시설'
+        else:
+            best_feature = '편안한 객실'
+        
+        description = c.get('description')
+        if description and len(description) >= 10:
+            reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+        else:
+            reason_text = f"{c['name']}은(는) {best_feature} 등을 갖추고 있어 일정 중 머무르기 좋은 추천 숙소입니다."
+
         formatted_candidates.append({
             "accommodation_id": str(c["id"]),
             "name": c["name"],
@@ -302,8 +316,8 @@ def run_local_rag(user_question, user_lat=None, user_lng=None, top_n=30):
             "image": c.get("image"),
             "lat": c.get("lat"),
             "lng": c.get("lng"),
-            "reason": f"RAG 기반 융합 추천 (점수: {c['score']:.2f})",
-            "features": f"편의시설: {c.get('amenities', '')} / 특징: {c.get('room_features', '')}"
+            "reason": reason_text,
+            "features": f"편의시설: {amenities} / 특징: {c.get('room_features', '')}"
         })
         
     return {
@@ -379,8 +393,8 @@ def search_accommodations_structured(request):
                 intent["location"], intent["checkin"], intent["checkout"]
             )
             print(f"[DEBUG AccommodationSearchService] run_live_scraper result status: {scraped_result.get('status')}, data length: {len(scraped_result.get('data', []))}")
-        except ImportError:
-            print("Warning: booking 모듈 없음. RAG 모드로 Fallback")
+        except Exception as e:
+            print(f"Warning: booking 모듈 불러오기 실패 ({e}). RAG 모드로 Fallback")
             return run_local_rag(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
 
         if not scraped_result or scraped_result.get("status") != "success" or not scraped_result.get("data"):
@@ -392,15 +406,19 @@ def search_accommodations_structured(request):
                 intent["lat"], intent["lng"], radius_km=MAX_ALLOWABLE_DISTANCE_KM
             )
         else:
-            import psycopg2
-            from psycopg2.extras import RealDictCursor
-            from domains.accommodation.vector_search import ACCOMMODATION_DB_CONFIG
-            conn = psycopg2.connect(**ACCOMMODATION_DB_CONFIG)
-            cur = conn.cursor(cursor_factory=RealDictCursor)
-            cur.execute("SELECT id, name, hotel_style, amenities, address, rating, lat, lng, image, review_count, 0.0 as distance FROM accommodation_ko;")
-            db_hotels = cur.fetchall()
-            cur.close()
-            conn.close()
+            try:
+                import psycopg2
+                from psycopg2.extras import RealDictCursor
+                from domains.accommodation.vector_search import ACCOMMODATION_DB_CONFIG
+                conn = psycopg2.connect(**ACCOMMODATION_DB_CONFIG)
+                cur = conn.cursor(cursor_factory=RealDictCursor)
+                cur.execute("SELECT id, name, hotel_style, amenities, address, rating, lat, lng, image, review_count, 0.0 as distance FROM accommodation_ko;")
+                db_hotels = cur.fetchall()
+                cur.close()
+                conn.close()
+            except Exception as e:
+                print(f"DB fallback fetch failed: {e}")
+                db_hotels = []
 
         semantic_query = user_message
         semantic_query = re.sub(r"\d{4}-\d{2}-\d{2}", " ", semantic_query)
@@ -421,12 +439,14 @@ def search_accommodations_structured(request):
 
         candidates_map = {}
         used_db_ids = set()
+        fallback_counter = 1
 
         for item in scraped_result["data"]:
             raw_title = item.get("hotel_name", "이름 없음")
             live_price = item.get("live_price", "가격 정보 없음")
             live_rating_str = item.get("live_rating", "0.0")
             booking_url = item.get("booking_url", "#")
+            image_url = item.get("image", "")
 
             cleaned_title = clean_hotel_name_pure(raw_title)
             matched_db, sim_score = find_best_db_match_pure(cleaned_title, db_hotels)
@@ -447,9 +467,33 @@ def search_accommodations_structured(request):
                     "booking_url": booking_url,
                     "actual_distance": actual_distance,
                 }
+            else:
+                hotel_id = f"live_{fallback_counter}"
+                fallback_counter += 1
+                candidates_map[hotel_id] = {
+                    "matched_db": {
+                        "name": raw_title,
+                        "hotel_style": "숙박시설",
+                        "address": "서울특별시",
+                        "rating": float(live_rating_str) if live_rating_str and live_rating_str != "0.0" else 0.0,
+                        "review_count": 0,
+                        "image": image_url,
+                        "lat": intent["lat"],
+                        "lng": intent["lng"],
+                        "amenities": "",
+                        "room_features": "",
+                    },
+                    "sim_score": 0.5,
+                    "live_price": live_price,
+                    "live_rating_str": live_rating_str,
+                    "booking_url": booking_url,
+                    "actual_distance": 0.0,
+                }
 
         q_vec = get_embedding(semantic_query)
-        rag_similarity_scores = get_direct_semantic_similarity(q_vec, list(candidates_map.keys()))
+        db_only_ids = [k for k in candidates_map.keys() if str(k).isdigit()]
+        rag_similarity_scores = get_direct_semantic_similarity(q_vec, db_only_ids) if db_only_ids else {}
+        best_reviews = get_best_reviews_for_hotels(q_vec, db_only_ids) if db_only_ids else {}
 
         valid_scores = list(rag_similarity_scores.values())
         max_sim = max(valid_scores) if valid_scores else 1.0
@@ -471,6 +515,19 @@ def search_accommodations_structured(request):
             distance_penalty = c_data["actual_distance"] if is_valid_location else 0.0
             rank_score = normalized_live_rating - (distance_penalty * 0.3) + (norm_rag_score * 5.0)
 
+            amenities = matched_db.get('amenities', '')
+            if amenities:
+                features_list = [f.strip() for f in amenities.split(',') if f.strip()]
+                best_feature = features_list[0] if features_list else '다양한 편의시설'
+            else:
+                best_feature = '편안한 객실'
+                
+            description = matched_db.get('description')
+            if description and len(description) >= 10:
+                reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+            else:
+                reason_text = f"{matched_db['name']}은(는) {best_feature} 등을 갖추고 있어 여행 중 편안하게 휴식하기 좋은 곳입니다."
+
             final_processed_list.append({
                 "accommodation_id": str(hotel_id),
                 "name": matched_db["name"],
@@ -485,8 +542,8 @@ def search_accommodations_structured(request):
                 "price": c_data["live_price"],
                 "live_rating": c_data["live_rating_str"],
                 "url": c_data["booking_url"],
-                "reason": f"실시간 예약 가능. 융합 점수: {rank_score:.2f} (라이브: {c_data['live_rating_str']})",
-                "features": f"편의시설: {matched_db.get('amenities', '')} / 특징: {matched_db.get('room_features', '')}"
+                "reason": reason_text,
+                "features": f"편의시설: {amenities} / 특징: {matched_db.get('room_features', '')}"
             })
 
         final_processed_list.sort(key=lambda x: x["score"], reverse=True)

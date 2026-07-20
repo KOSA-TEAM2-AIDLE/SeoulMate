@@ -7,6 +7,7 @@ from schemas.structured_query import StructuredQueryTask
 
 
 MOCK_DOMAIN_LABELS = {
+    "restaurant": ("임시 식당 후보", "식당"),
     "cafe": ("임시 카페 후보", "카페"),
     "attraction": ("임시 문화시설 후보", "문화시설"),
     "etc": ("임시 기타 장소 후보", "기타"),
@@ -21,8 +22,7 @@ def mock_places_for_task(
     candidate_count: int | None = None,
 ) -> list[Place]:
     """Domain Agent가 연결될 때까지 Task당 최대 3개의 명시적 임시 후보를 반환한다."""
-    if task.domain == "restaurant":
-        raise ValueError("restaurant Task는 실제 RestaurantAgent를 사용해야 합니다.")
+
 
     base_name, category = MOCK_DOMAIN_LABELS[task.domain]
     count = (

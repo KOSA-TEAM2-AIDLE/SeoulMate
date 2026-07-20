@@ -131,6 +131,7 @@ SEOUL_AREA_SEARCH_ALIASES = {
 # 대표 권역 좌표와 DB 주소가 서로 다른 잘못된 행을 검색 단계에서 거르기 위한
 # 최소 안전장치다. 주소에 자치구가 명시된 경우에만 검사한다.
 SEOUL_AREA_ALLOWED_DISTRICTS: dict[str, frozenset[str]] = {
+    "경복궁": frozenset({"종로구"}),
     "강남": frozenset({"강남구", "서초구"}),
     "강남역": frozenset({"강남구", "서초구"}),
     "홍대": frozenset({"마포구", "서대문구"}),

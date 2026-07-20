@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from core.config import DATA_DIR
 from vector_db.cafe.seed_vectordb import (
+    CafeSeedFiles,
     clean_cafe_dataset,
     load_default_datasets,
 )
@@ -11,16 +11,29 @@ from vector_db.cafe.seed_vectordb import (
 
 class CafeVectorDbSeedTests(unittest.TestCase):
     def test_default_csvs_are_cleaned_with_expected_relationship_counts(self):
-        ko, en = load_default_datasets(DATA_DIR)
+        default_files = CafeSeedFiles.from_directory(
+            Path(__file__).parents[1] / "data" / "db_seed" / "cafe"
+        )
+        if not all(path.is_file() for path in default_files.paths):
+            self.skipTest("기본 카페 CSV가 로컬에 없습니다.")
+        ko, en = load_default_datasets()
 
-        self.assertEqual((617, 2396), (len(ko.cafes), len(ko.reviews)))
-        self.assertEqual(2403, ko.report.orphan_reviews)
-        self.assertEqual(196, ko.report.cafes_without_reviews)
+        self.assertEqual((617, 2454), (len(ko.cafes), len(ko.reviews)))
+        self.assertEqual(396, ko.report.invalid_cafes)
+        self.assertEqual(2465, ko.report.orphan_reviews)
+        self.assertEqual(189, ko.report.cafes_without_reviews)
 
-        self.assertEqual((559, 1672), (len(en.cafes), len(en.reviews)))
-        self.assertEqual(726, en.report.orphan_reviews)
-        self.assertEqual(174, en.report.empty_reviews)
-        self.assertEqual(174, en.report.cafes_without_reviews)
+        self.assertEqual((406, 607), (len(en.cafes), len(en.reviews)))
+        self.assertEqual(11, en.report.invalid_cafes)
+        self.assertEqual(85, en.report.orphan_reviews)
+        self.assertEqual(3629, en.report.empty_reviews)
+        self.assertEqual(275, en.report.cafes_without_reviews)
+
+    def test_explicit_file_paths_are_reusable(self):
+        files = CafeSeedFiles.from_directory(Path("custom/cafe-data"))
+
+        self.assertEqual(Path("custom/cafe-data/ko_cafe.csv"), files.ko_cafe)
+        self.assertEqual(Path("custom/cafe-data/en_cafe.csv"), files.en_cafe)
 
     def test_rating_and_review_count_use_only_valid_matching_reviews(self):
         with tempfile.TemporaryDirectory() as directory:

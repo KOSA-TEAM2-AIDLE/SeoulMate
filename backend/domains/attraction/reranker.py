@@ -8,7 +8,7 @@ from datetime import date
 from domains.attraction.constraint_evaluator import ConstraintAssessment, evaluate_constraints
 from domains.attraction.repository import AttractionRecord, AttractionRetrievalResult, ReviewVectorHit
 from domains.attraction.search_plan import AttractionSearchPlan
-from services.location import haversine_km
+from services.location import address_matches_search_area, haversine_km
 
 
 RRF_K = 60
@@ -43,7 +43,7 @@ def _target_matches(record: AttractionRecord, query: str) -> bool:
 class AttractionReranker:
     implemented = True
 
-    def rerank(self, retrieval: AttractionRetrievalResult, *, plan: AttractionSearchPlan, required_features: list[str], excluded_features: list[str], min_rating: float | None, as_of: date, limit: int) -> list[RankedAttractionCandidate]:
+    def rerank(self, retrieval: AttractionRetrievalResult, *, plan: AttractionSearchPlan, required_features: list[str], excluded_features: list[str], min_rating: float | None, as_of: date, limit: int, search_location: str | None = None) -> list[RankedAttractionCandidate]:
         profile_hits = {hit.attraction_id: hit for hit in retrieval.profile_hits}
         ids = set(profile_hits) | set(retrieval.review_hits_by_place)
         ranked: list[RankedAttractionCandidate] = []
@@ -60,6 +60,8 @@ class AttractionReranker:
             if not plan.secondary_categories and plan.primary_categories and record.category_primary not in plan.primary_categories:
                 continue
             if not _target_matches(record, plan.query_text):
+                continue
+            if not address_matches_search_area(search_location, record.address):
                 continue
             assessments = evaluate_constraints(
                 record,

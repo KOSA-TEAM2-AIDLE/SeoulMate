@@ -18,6 +18,8 @@ from domains.accommodation.search_accommodation_rrf_en import (
     search_by_accommodation,
     search_by_review,
     fuse_and_rank,
+    get_direct_semantic_similarity,
+    get_best_reviews_for_hotels,
     ACC_TOP_N,
     REVIEW_POOL,
     STYLE_TERMS,
@@ -251,6 +253,14 @@ def run_local_rag_en(user_question, user_lat=None, user_lng=None, top_n=30):
     
     formatted_candidates = []
     for c in candidates:
+        amenities = c.get('amenities', '')
+        amenities_sample = amenities.split(',')[0].strip() if amenities else 'Basic amenities'
+        description = c.get('description')
+        if description and len(description) >= 10:
+            reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+        else:
+            reason_text = f"Highly relevant to your preferences. (Features {amenities_sample} etc.)"
+
         formatted_candidates.append({
             "accommodation_id": str(c["id"]),
             "name": c["name"],
@@ -262,8 +272,8 @@ def run_local_rag_en(user_question, user_lat=None, user_lng=None, top_n=30):
             "image": c.get("image"),
             "lat": c.get("lat"),
             "lng": c.get("lng"),
-            "reason": f"RAG-based Recommendation (Score: {c['score']:.2f})",
-            "features": f"Amenities: {c.get('amenities', '')} / Features: {c.get('room_features', '')}"
+            "reason": reason_text,
+            "features": f"Amenities: {amenities} / Features: {c.get('room_features', '')}"
         })
         
     return {
@@ -375,9 +385,9 @@ def search_accommodations_structured_en(request):
                 }
 
         q_vec = get_embedding(semantic_query)
-        rag_similarity_scores = get_direct_semantic_similarity(
-            q_vec, list(candidates_map.keys())
-        )
+        db_only_ids = [k for k in candidates_map.keys() if str(k).isdigit()]
+        rag_similarity_scores = get_direct_semantic_similarity(q_vec, db_only_ids) if db_only_ids else {}
+        best_reviews = get_best_reviews_for_hotels(q_vec, db_only_ids) if db_only_ids else {}
 
         valid_scores = list(rag_similarity_scores.values())
         max_sim = max(valid_scores) if valid_scores else 1.0
@@ -408,6 +418,15 @@ def search_accommodations_structured_en(request):
                 + (norm_rag_score * 5.0)
             )
 
+            amenities = matched_db.get('amenities', '')
+            amenities_sample = amenities.split(',')[0].strip() if amenities else 'Basic amenities'
+            
+            description = matched_db.get('description')
+            if description and len(description) >= 10:
+                reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+            else:
+                reason_text = f"Recommended accommodation with live availability. (Features {amenities_sample} etc.)"
+
             final_processed_list.append({
                 "accommodation_id": str(hotel_id),
                 "name": matched_db["name"],
@@ -422,8 +441,8 @@ def search_accommodations_structured_en(request):
                 "price": c_data["live_price"],
                 "live_rating": c_data["live_rating_str"],
                 "url": c_data["booking_url"],
-                "reason": f"Live availability. Fusion Score: {rank_score:.2f} (Live rating: {c_data['live_rating_str']})",
-                "features": f"Amenities: {matched_db.get('amenities', '')} / Features: {matched_db.get('room_features', '')}"
+                "reason": reason_text,
+                "features": f"Amenities: {amenities} / Features: {matched_db.get('room_features', '')}"
             })
 
         final_processed_list.sort(key=lambda x: x["score"], reverse=True)
