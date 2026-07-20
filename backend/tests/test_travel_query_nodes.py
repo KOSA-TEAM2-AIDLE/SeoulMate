@@ -104,12 +104,12 @@ class TravelIntentExtractorTests(unittest.TestCase):
         self.assertEqual("en", result["language"])
         self.assertEqual("en", result["collected"]["language"])
 
-    def test_english_my_location_overrides_false_model_extraction(self) -> None:
+    def test_unspecified_location_uses_citywide_search_even_with_coordinates(self) -> None:
         chain = RunnableLambda(
             lambda _: {
                 "language": "en",
                 "intent": "single_place_recommendation",
-                "normalized_question": "Recommend a cafe near my location",
+                "normalized_question": "Recommend a cafe",
                 "use_current_location": False,
                 "requested_domains": ["cafe"],
             }
@@ -117,7 +117,7 @@ class TravelIntentExtractorTests(unittest.TestCase):
         state = _base_state()
         state.update(
             {
-                "original_question": "Recommend a cafe near my location.",
+                "original_question": "Recommend a cafe.",
                 "language": "en",
                 "current_latitude": 37.485,
                 "current_longitude": 127.12,
@@ -126,7 +126,8 @@ class TravelIntentExtractorTests(unittest.TestCase):
 
         result = asyncio.run(TravelIntentExtractor(chain)(state))
 
-        self.assertTrue(result["collected"]["use_current_location"])
+        self.assertEqual(CITYWIDE_LOCATION_NAME, result["collected"]["location"])
+        self.assertFalse(result["collected"].get("use_current_location", False))
         self.assertEqual([], find_missing_fields(state | result))
 
     def test_explicit_location_is_preferred_over_available_coordinates(self) -> None:
@@ -160,6 +161,7 @@ class TravelIntentExtractorTests(unittest.TestCase):
                 "language": "ko",
                 "intent": "single_place_recommendation",
                 "normalized_question": "여기 주변 카페 추천",
+                "use_current_location": True,
                 "requested_domains": ["cafe"],
             }
         )

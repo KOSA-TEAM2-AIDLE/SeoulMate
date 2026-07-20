@@ -347,8 +347,8 @@ class TravelIntentExtractor:
             and state.get("intent") is not None
             else extracted_intent
         )
-        _apply_available_current_location_default(state, intent, extracted)
         _apply_high_confidence_fallback(state["original_question"], extracted)
+        _apply_location_scope_default(intent, extracted)
         _apply_deterministic_defaults(intent, extracted)
 
         collected = dict(state.get("collected", {}))
@@ -378,20 +378,18 @@ class TravelIntentExtractor:
         }
 
 
-def _apply_available_current_location_default(
-    state: TravelQueryGraphState,
+def _apply_location_scope_default(
     intent: TravelIntent,
     extracted: dict[str, Any],
 ) -> None:
     if (
         intent != "single_place_recommendation"
         or extracted.get("location")
-        or state.get("current_latitude") is None
-        or state.get("current_longitude") is None
+        or extracted.get("use_current_location")
     ):
         return
 
-    extracted["use_current_location"] = True
+    extracted["location"] = CITYWIDE_LOCATION_NAME
 
 
 def _clarification_patch(
