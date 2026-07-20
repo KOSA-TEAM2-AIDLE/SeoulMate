@@ -1,8 +1,12 @@
 import inspect
+import asyncio
 import json
 import unittest
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
+
+import psycopg2
 
 from application.recommendation.domain_executor import execute_domain_search
 from application.recommendation.selection_models import (
@@ -14,8 +18,18 @@ from domains.cafe.search_service import CafeSearchService
 from domains.common.mapper import search_candidate_to_place
 from domains.common.models import DomainSearchRequest, SearchCandidate
 from domains.common.registry import DomainSearchRegistry
+from domains.restaurant.mapper import to_search_candidate as restaurant_to_search_candidate
 from routers import chat
-from routers.chat import _stream
+from routers.chat import (
+    _place,
+    _rank_cafes_for_route,
+    _rank_restaurants_for_route,
+    _restaurant_candidates_open_at_slot,
+    _route_candidate_occurrence_key,
+    _route_search_concurrency,
+    _search_route_batches,
+    _stream,
+)
 from schemas.chat import ChatRequest
 from schemas.structured_query import StructuredTravelQuery
 from integrations.mcp.base_client import ContextResult
@@ -72,6 +86,14 @@ class BrokenCafeService:
         raise RuntimeError("cafe database unavailable")
 
 
+class UnavailableDatabaseCafeService:
+    domain = "cafe"
+    implemented = True
+
+    async def search(self, request: DomainSearchRequest) -> list[SearchCandidate]:
+        raise psycopg2.OperationalError("connection refused")
+
+
 class LiveAttractionService:
     domain = "attraction"
     implemented = True
@@ -92,6 +114,258 @@ class LiveAttractionService:
 
 
 class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
+    def test_route_candidate_occurrence_resets_for_each_day(self):
+        parsed = StructuredTravelQuery.model_validate({
+            "language": "ko",
+            "intent": "multi_day_route",
+            "original_question": "강남구 이틀 루트",
+            "normalized_question": "강남구 이틀 루트",
+            "tasks": [
+                {
+                    "task_id": "day-1-a",
+                    "domain": "attraction",
+                    "search_query": "강남구 명소",
+                    "day_number": 1,
+                    "filters": {"location": "강남구"},
+                },
+                {
+                    "task_id": "day-1-b",
+                    "domain": "attraction",
+                    "search_query": "강남구 명소",
+                    "day_number": 1,
+                    "filters": {"location": "강남구"},
+                },
+                {
+                    "task_id": "day-2-a",
+                    "domain": "attraction",
+                    "search_query": "강남구 명소",
+                    "day_number": 2,
+                    "filters": {"location": "강남구"},
+                },
+            ],
+            "filters": {"location": "서울"},
+        })
+
+        first, repeated, next_day = parsed.tasks
+        self.assertEqual(
+            _route_candidate_occurrence_key(first, 1),
+            _route_candidate_occurrence_key(repeated, 1),
+        )
+        self.assertNotEqual(
+            _route_candidate_occurrence_key(first, 1),
+            _route_candidate_occurrence_key(next_day, 2),
+        )
+
+    async def test_route_search_concurrency_follows_busiest_day(self):
+        relaxed_tasks = [SimpleNamespace(day_number=day) for day in (1, 1, 1, 2, 2, 2)]
+        normal_tasks = [
+            SimpleNamespace(day_number=day)
+            for day in (1, 1, 1, 1, 1, 2, 2, 2, 2, 2)
+        ]
+
+        self.assertEqual(3, _route_search_concurrency(relaxed_tasks, 5))
+        self.assertEqual(5, _route_search_concurrency(normal_tasks, 5))
+        self.assertEqual(4, _route_search_concurrency(normal_tasks, 4))
+
+    async def test_route_search_batches_are_bounded_and_keep_task_order(self):
+        active = 0
+        maximum_active = 0
+
+        async def fake_search(_body, task, *, candidate_count):
+            nonlocal active, maximum_active
+            active += 1
+            maximum_active = max(maximum_active, active)
+            await asyncio.sleep((6 - int(task.task_id)) * 0.001)
+            active -= 1
+            return (task.task_id, candidate_count)
+
+        prepared = [
+            (
+                SimpleNamespace(task_id=str(index), domain="cafe"),
+                1,
+                None,
+                index - 1,
+                7,
+            )
+            for index in range(1, 6)
+        ]
+        with patch("routers.chat._search_structured_task", side_effect=fake_search):
+            results = await _search_route_batches(object(), prepared, 3)
+
+        self.assertEqual(3, maximum_active)
+        self.assertEqual(["1", "2", "3", "4", "5"], [item[0] for item in results])
+
+    async def test_route_search_batches_share_same_day_restaurant_search_only(self):
+        calls = []
+
+        async def fake_search(_body, task, *, candidate_count):
+            calls.append(task.task_id)
+            return (task.task_id, candidate_count)
+
+        def prepared(task_id, domain, day, query, start_time):
+            return (
+                SimpleNamespace(
+                    task_id=task_id,
+                    domain=domain,
+                    search_query=query,
+                    themes=[],
+                    filters=None,
+                    start_time=start_time,
+                ),
+                day,
+                f"2026-08-0{day}",
+                0,
+                6,
+            )
+
+        tasks = [
+            prepared("lunch-1", "restaurant", 1, "강남구 식당", "12:30"),
+            prepared("dinner-1", "restaurant", 1, "강남구 식당", "19:00"),
+            prepared("attraction-1", "attraction", 1, "강남구 관광지", "10:00"),
+            prepared("attraction-2", "attraction", 1, "강남구 관광지", "17:00"),
+            prepared("lunch-2", "restaurant", 2, "마포구 식당", "12:30"),
+            prepared("dinner-2", "restaurant", 2, "마포구 식당", "19:00"),
+        ]
+
+        with patch("routers.chat._search_structured_task", side_effect=fake_search):
+            results = await _search_route_batches(object(), tasks, 5)
+
+        self.assertEqual(
+            ["lunch-1", "attraction-1", "attraction-2", "lunch-2"],
+            calls,
+        )
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(results[4], results[5])
+
+    async def test_restaurant_candidates_are_filtered_for_each_slot_time(self):
+        candidates = [
+            {"restaurant_id": 1, "hours": "토 11:00~15:00"},
+            {"restaurant_id": 2, "hours": "토 17:00~23:00"},
+            {"restaurant_id": 3, "hours": None},
+        ]
+
+        lunch = _restaurant_candidates_open_at_slot(
+            candidates,
+            datetime(2026, 8, 1).date(),
+            "12:30",
+        )
+        dinner = _restaurant_candidates_open_at_slot(
+            candidates,
+            datetime(2026, 8, 1).date(),
+            "19:00",
+        )
+
+        self.assertEqual([1, 3], [item["restaurant_id"] for item in lunch])
+        self.assertEqual([2, 3], [item["restaurant_id"] for item in dinner])
+
+    async def test_route_restaurants_prefer_anchors_within_two_point_five_km(self):
+        anchor = [(37.5, 127.0)]
+        candidates = [
+            {"restaurant_id": 1, "lat": 37.535, "lng": 127.0},
+            {"restaurant_id": 2, "lat": 37.505, "lng": 127.0},
+            {"restaurant_id": 3, "lat": 37.507, "lng": 127.0},
+            {"restaurant_id": 4, "lat": 37.509, "lng": 127.0},
+            {"restaurant_id": 5, "lat": 37.511, "lng": 127.0},
+            {"restaurant_id": 6, "lat": 37.513, "lng": 127.0},
+        ]
+
+        ranked = _rank_restaurants_for_route(candidates, anchor)
+
+        self.assertEqual(
+            [2, 3, 4, 5, 6],
+            [item["restaurant_id"] for item in ranked[:5]],
+        )
+        self.assertTrue(all(
+            item["route_anchor_distance_km"] <= 2.5
+            for item in ranked[:5]
+        ))
+
+    async def test_route_cafes_prefer_a_place_close_to_both_neighbor_attractions(self):
+        candidates = [
+            SearchCandidate(
+                domain="cafe",
+                place_id="near-previous-only",
+                task_id="cafe-1",
+                name="앞 관광지에만 가까운 카페",
+                category="카페",
+                latitude=37.501,
+                longitude=127.0,
+                base_score=0.95,
+                final_score=0.95,
+            ),
+            SearchCandidate(
+                domain="cafe",
+                place_id="between",
+                task_id="cafe-1",
+                name="두 관광지 사이 카페",
+                category="카페",
+                latitude=37.510,
+                longitude=127.0,
+                base_score=0.90,
+                final_score=0.90,
+            ),
+            SearchCandidate(
+                domain="cafe",
+                place_id="far",
+                task_id="cafe-1",
+                name="먼 카페",
+                category="카페",
+                latitude=37.550,
+                longitude=127.0,
+                base_score=0.99,
+                final_score=0.99,
+            ),
+        ]
+
+        ranked = _rank_cafes_for_route(
+            candidates,
+            previous_anchors=[(37.500, 127.0)],
+            next_anchors=[(37.520, 127.0)],
+        )
+
+        self.assertEqual("between", ranked[0].place_id)
+        self.assertLessEqual(
+            ranked[0].signals["route_previous_distance_km"],
+            1.5,
+        )
+        self.assertLessEqual(
+            ranked[0].signals["route_next_distance_km"],
+            1.5,
+        )
+
+    async def test_legacy_restaurant_place_preserves_tripadvisor_link(self):
+        restaurant = _place({
+            "restaurant_id": 101,
+            "name": "검증 식당",
+            "category": "한식",
+            "score": 0.9,
+            "link": "https://www.tripadvisor.co.kr/Restaurant_Review-test.html",
+        })
+
+        self.assertEqual(
+            "https://www.tripadvisor.co.kr/Restaurant_Review-test.html",
+            restaurant.link,
+        )
+
+    async def test_restaurant_tripadvisor_link_reaches_common_place(self):
+        candidate = restaurant_to_search_candidate(
+            {
+                "restaurant_id": 101,
+                "name": "검증 식당",
+                "category": "한식",
+                "score": 0.9,
+                "link": "https://www.tripadvisor.co.kr/Restaurant_Review-test.html",
+            },
+            "restaurant-1",
+        )
+
+        place = search_candidate_to_place(candidate)
+
+        self.assertEqual(
+            "https://www.tripadvisor.co.kr/Restaurant_Review-test.html",
+            place.link,
+        )
+
     async def test_attraction_congestion_is_candidate_specific_not_generic_weather(self):
         self.assertEqual(requested_contexts("rag_mcp", "attraction"), ())
 
@@ -228,6 +502,17 @@ class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(RuntimeError, "database unavailable"):
             await execute_domain_search(registry, parsed, parsed.tasks[0])
+
+    async def test_unavailable_database_uses_explicit_mock_fallback(self):
+        registry = DomainSearchRegistry()
+        registry.register(UnavailableDatabaseCafeService())
+        parsed = cafe_query()
+
+        batch = await execute_domain_search(registry, parsed, parsed.tasks[0])
+
+        self.assertTrue(batch.used_mock)
+        self.assertEqual(batch.sources, ["mock-cafe-agent"])
+        self.assertEqual(batch.warnings, ["connection refused"])
 
     async def test_chat_response_keeps_live_domain_id_and_source(self):
         registry = DomainSearchRegistry()

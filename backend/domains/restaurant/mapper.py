@@ -32,6 +32,10 @@ def to_search_candidate(raw: dict, task_id: str) -> SearchCandidate:
         "score", "rag_score", "weather_score", "weather_reasons", "evidence",
     }
     attributes = {key: deepcopy(value) for key, value in raw.items() if key not in excluded}
+    # restaurant.link는 DB에 검증되어 저장된 TripAdvisor URL이다.
+    # 공통 Place 계약의 url 키로 명시적으로 옮겨 식당에만 외부 링크를 노출한다.
+    if raw.get("link"):
+        attributes["url"] = raw["link"]
     # 기존 날씨 재랭커와 완전히 같은 결과를 보장하는 단계적 마이그레이션용 원본.
     attributes["_legacy_raw"] = deepcopy(raw)
     return SearchCandidate(

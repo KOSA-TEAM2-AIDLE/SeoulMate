@@ -15,7 +15,8 @@ const UI_TEXT = {
         toastAdded: (day, name) => `${day}일차 루트에 '${name}'이(가) 추가되었습니다.`,
         toastDuplicate: (name) => `'${name}'은(는) 이미 해당 일차 루트에 존재합니다.`,
         aiReason: '추천 이유',
-        moreInfo: '바로가기'
+        moreInfo: '바로가기',
+        travelerReviews: '여행자 리뷰'
     },
     en: {
         searchResult: 'Search Results',
@@ -25,7 +26,8 @@ const UI_TEXT = {
         toastAdded: (day, name) => `'${name}' has been added to Day ${day} path.`,
         toastDuplicate: (name) => `'${name}' is already in this day's path.`,
         aiReason: 'Why we recommend',
-        moreInfo: 'Link'
+        moreInfo: 'Link',
+        travelerReviews: 'Traveler reviews'
     }
 };
 

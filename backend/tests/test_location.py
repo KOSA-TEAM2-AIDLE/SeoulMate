@@ -28,6 +28,7 @@ class LocationResolutionTests(unittest.TestCase):
     def test_citywide_location_variants_are_normalized(self):
         variants = (
             "서울", "서울 전체", "서울 전역", "서울 어디든", "서울 아무 데나",
+            "아무 곳", "아무곳", "아무 데",
             "아무 곳이나", "아무데나", "아무 지역이나", "어디든지",
             "어느 지역이든", "지역 상관없어요", "위치 무관", "지역 제한 없음",
             "Anywhere", "Any area", "No preference", "Seoul-wide",

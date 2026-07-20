@@ -30,6 +30,7 @@ from domains.accommodation.search_accommodation_rrf_en import (
 )
 
 from core.config import KAKAO_REST_API_KEY
+from domains.accommodation.agent import apply_structured_location_intent
 
 def parse_user_intent_with_kakao(user_message):
     if not user_message:
@@ -291,7 +292,10 @@ def search_accommodations_structured_en(request):
     current_lng = request.longitude
     top_n = request.candidate_count
     
-    intent = parse_user_intent_with_kakao(user_message)
+    intent = apply_structured_location_intent(
+        parse_user_intent_with_kakao(user_message),
+        request.location,
+    )
     is_valid_location = intent["location_type"] != "default"
 
     if not intent["is_live_booking"] and not is_valid_location:

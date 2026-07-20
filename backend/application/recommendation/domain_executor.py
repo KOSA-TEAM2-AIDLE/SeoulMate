@@ -89,12 +89,15 @@ async def execute_domain_search(
     #  - DomainNotImplementedError: 스켈레톤(미구현) 도메인
     #  - UndefinedTable: 검색기는 구현됐지만 테이블이 아직 적재되지 않은 도메인
     #    (예: 카페 데이터 미적재). 데이터가 들어오면 자동으로 실제 결과로 전환된다.
+    #  - OperationalError: 로컬 DB 서버가 꺼져 있거나 연결되지 않은 도메인. 경고와
+    #    mock 출처를 응답에 남기므로 실제 검색 결과처럼 오인되지 않는다.
     try:
         service = registry.get(task.domain)
         candidates = await service.search(request)
     except (
         DomainNotImplementedError,
         DomainNotRegisteredError,
+        psycopg2.OperationalError,
         psycopg2.errors.UndefinedTable,
     ) as exc:
         return DomainSearchBatch(

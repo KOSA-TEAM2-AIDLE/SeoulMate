@@ -26,6 +26,7 @@ const getBase64ImageFromUrl = async (imageUrl) => {
 export default function usePdfGenerator(t) {
     const allDay = useTravelStore((state) => state.all_day);
     const travelPath = useTravelStore((state) => state.travelPath);
+    const accommodation = useTravelStore((state) => state.accommodation);
     const days = Array.from({ length: allDay }, (_, i) => i + 1);
 
     const generateAllDaysPdfTemplate = async () => {
@@ -49,7 +50,10 @@ export default function usePdfGenerator(t) {
 
         for (let dayIndex = 0; dayIndex < days.length; dayIndex++) {
             const dayNum = days[dayIndex];
-            const dayRoute = travelPath[dayNum] || [];
+            const dayRoute = [
+                ...(travelPath[dayNum] || []),
+                ...(dayNum < allDay && accommodation ? [accommodation] : []),
+            ];
 
             const daySection = document.createElement('div');
             daySection.style.marginBottom = '40px';
@@ -90,6 +94,9 @@ export default function usePdfGenerator(t) {
                     const rating = getPlaceDisplayRating(place);
                     const originalImage = getPlaceDisplayImage(place);
                     const hasLink = !!place.link;
+                    const linkLabel = place.link?.toLowerCase().includes('tripadvisor.')
+                        ? t.travelerReviews
+                        : t.moreInfo;
 
                     let safeImageSrc = null;
                     if (originalImage) {
@@ -138,7 +145,7 @@ export default function usePdfGenerator(t) {
                   <p style="margin: 0; font-size: 13px; color: #f59e0b; font-weight: bold;">★ ${rating}</p>
                   ${hasLink ? `
                     <a href="${place.link}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; text-decoration: none; font-weight: bold; padding: 2px 8px; border-radius: 4px; color: #475569; background-color: #f1f5f9; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; gap: 4px;">
-                      🔗 ${t.moreInfo}
+                      🔗 ${linkLabel}
                     </a>
                   ` : ''}
                 </div>
