@@ -4,34 +4,29 @@ import { useMapMarkers } from '../../hooks/map/useMapMarkers';
 import { usePlaceOverlay } from '../../hooks/map/usePlaceOverlay';
 import { useRoutePolyline } from '../../hooks/map/useRoutePolyline';
 import { useTransitGeometryLayer } from '../../hooks/map/useTransitGeometryLayer';
-import { extractGeometryPlaces } from '../../services/map/transitGeometryService';
+import { getRouteViewportPlaces } from '../../services/map/routeSegmentNavigation';
 import useTravelStore from '../../stores/useTravelStore';
 
 const SEOUL_CENTER = { lat: 37.5665, lng: 126.978 };
 
-export default function NaverMap({ places = [], segments = [], selectedSegment, selectedSegmentIndex, hiddenSegmentIndex, onSegmentSelect, transitGeometry, language }) {
+export default function NaverMap({ places = [], segments = [], selectedSegment, isSegmentSelected = false, selectedSegmentIndex, hiddenSegmentIndex, onSegmentSelect, transitGeometry, language }) {
   const setSelectedPlace = useTravelStore((state) => state.setSelectedPlace);
   const selectedPlace = useTravelStore((state) => state.selectedPlace);
   const clearSelectedPlace = useTravelStore((state) => state.clearSelectedPlace);
   const { naver, map, mapContainerRef, isLoading, isMapReady, error, fitPlaces } = useNaverMap({ center: SEOUL_CENTER, zoom: 12, language });
   const handleGeometryClick = useCallback(() => onSegmentSelect?.(selectedSegmentIndex), [onSegmentSelect, selectedSegmentIndex]);
-  const geometryPlaces = useMemo(() => extractGeometryPlaces(transitGeometry), [transitGeometry]);
+  const viewportPlaces = useMemo(
+    () => getRouteViewportPlaces(places, selectedSegment, isSegmentSelected),
+    [places, selectedSegment, isSegmentSelected],
+  );
   useMapMarkers({ naver, map, places, onMarkerClick: setSelectedPlace });
   usePlaceOverlay({ naver, map, place: selectedPlace, onClose: clearSelectedPlace });
   useRoutePolyline({ naver, map, places, segments, hiddenSegmentIndex, selectedSegmentIndex, onSegmentSelect });
   useTransitGeometryLayer({ naver, map, geometry: transitGeometry, segment: selectedSegment, onClick: handleGeometryClick });
 
   useEffect(() => {
-    if (map) fitPlaces(places);
-  }, [map, places, fitPlaces]);
-
-  useEffect(() => {
-    if (selectedSegment) fitPlaces([selectedSegment.origin, selectedSegment.destination]);
-  }, [selectedSegment, fitPlaces]);
-
-  useEffect(() => {
-    if (geometryPlaces.length > 1) fitPlaces(geometryPlaces);
-  }, [geometryPlaces, fitPlaces]);
+    if (map) fitPlaces(viewportPlaces);
+  }, [map, viewportPlaces, fitPlaces]);
 
   if (error) {
     return <div className="flex h-full min-h-[460px] flex-col items-center justify-center gap-2 bg-slate-100 px-6 text-center text-sm font-semibold text-red-500"><span>지도를 불러오지 못했습니다.</span><span className="max-w-lg text-xs font-normal text-slate-600">{error.message}</span></div>;

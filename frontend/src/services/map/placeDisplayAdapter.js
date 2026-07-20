@@ -16,6 +16,12 @@ export function getPlaceDisplaySubCategory(place) {
   return place.category || place.meta?.style || place.type || '기타';
 }
 
+export function getDistinctPlaceDisplaySubCategory(place) {
+  const category = getPlaceDisplayCategory(place);
+  const subCategory = getPlaceDisplaySubCategory(place);
+  return category === subCategory ? '' : subCategory;
+}
+
 export function getPlaceDisplayRating(place) {
   return place.meta?.rating ?? place.rating ?? '-';
 }
@@ -30,4 +36,15 @@ export function getPlaceDisplayTime(place) {
 
 export function getPlaceDisplayImage(place) {
   return place.image || place.routeMeta?.image || '';
+}
+
+export function getPlaceDisplayLink(place) {
+  const link = place.link || place.meta?.link || place.meta?.homepageUrl || place.raw?.link || place.raw?.homepage_url || '';
+
+  try {
+    const url = new URL(link);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
 }
