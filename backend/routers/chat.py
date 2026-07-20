@@ -1385,7 +1385,12 @@ async def _multi_task_recommendation_stream(
             sources=list(dict.fromkeys([*sources, *weather_sources])),
             result=recommendation_frontend_response([]),
         ).model_dump())
-        yield _sse(ChatToken(text="조건에 맞는 장소를 찾지 못했습니다.").model_dump())
+        empty_message = (
+            "I couldn't find any places matching those conditions."
+            if effective_query_language(parsed) == "en"
+            else "조건에 맞는 장소를 찾지 못했습니다."
+        )
+        yield _sse(ChatToken(text=empty_message).model_dump())
         yield _sse(ChatDone().model_dump())
         return
 

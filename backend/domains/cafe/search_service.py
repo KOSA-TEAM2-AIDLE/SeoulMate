@@ -14,6 +14,7 @@ from integrations.kakao.geocoding_client import geocode_kakao
 
 
 DEFAULT_LOCATION_RADIUS_KM = 2.0
+FALLBACK_LOCATION_RADIUS_KM = 5.0
 DEFAULT_ROUTE_LOCATION_RADIUS_KM = 5.0
 LOCATION_CAFE_VECTOR_LIMIT = 500
 LOCATION_REVIEW_VECTOR_POOL = 500
@@ -152,6 +153,7 @@ class CafeSearchService:
 
         radius_km = request.radius_km
         has_origin = origin_latitude is not None and origin_longitude is not None
+        uses_default_radius = radius_km is None and bool(target_location) and has_origin
         if radius_km is None and target_location and has_origin:
             radius_km = _default_location_radius_km(request)
         if request.radius_km is not None and not has_origin:
@@ -180,6 +182,16 @@ class CafeSearchService:
             radius_km=radius_km,
             limit=request.candidate_count,
         )
+        if not ranked and uses_default_radius:
+            ranked = self.reranker.rerank(
+                retrieval,
+                category_hint=extract_cafe_category_hint(request),
+                min_rating=request.min_rating,
+                origin_latitude=origin_latitude,
+                origin_longitude=origin_longitude,
+                radius_km=FALLBACK_LOCATION_RADIUS_KM,
+                limit=request.candidate_count,
+            )
         supporting_reviews = self.repository.fetch_supporting_reviews(
             retrieval.query_vector,
             [candidate.cafe.id for candidate in ranked],
