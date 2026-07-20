@@ -21,6 +21,7 @@ const UI_TEXT = {
         reviewButton: '리뷰',
         moreInfo: '바로가기',
         travelerReviews: '여행자 리뷰',
+        bookingLink: '예약',
         accommodation: '숙소'
     },
     en: {
@@ -40,6 +41,7 @@ const UI_TEXT = {
         reviewButton: 'Reviews',
         moreInfo: 'Link',
         travelerReviews: 'Traveler reviews',
+        bookingLink: 'Book',
         accommodation: 'Accommodation'
     }
 };
