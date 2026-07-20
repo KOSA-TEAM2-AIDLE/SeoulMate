@@ -18,6 +18,10 @@ from application.recommendation.domain_executor import execute_domain_search
 from application.recommendation.group_selection import select_grouped_candidates
 from application.recommendation.location_resolution import SearchLocationResolver
 from application.recommendation.request_factory import build_domain_search_request
+from application.recommendation.route_reason import (
+    RouteReasonFacts,
+    build_route_reason,
+)
 from application.recommendation.selection_registry import (
     build_default_selection_registry,
 )
@@ -543,6 +547,95 @@ async def _search_route_accommodation(body, parsed, route_request: RouteRequest)
     return places[0], places[1:]
 
 
+def _restaurant_open_at(raw: dict, visit_date: date, slot_time: str) -> bool | None:
+    """해당 방문 시각의 영업 여부. 영업시간 정보가 없으면 None을 반환한다."""
+
+    try:
+        target = datetime.combine(visit_date, time.fromisoformat(slot_time))
+    except ValueError:
+        return None
+    return is_open_at(raw.get("hours"), target)
+
+
+def _route_place_reason(
+    place: Place,
+    facts: dict,
+    previous_place: Place | None,
+    language: str,
+) -> str:
+    """도메인과 무관하게 같은 골격의 루트 추천 이유를 만든다."""
+
+    distance_km = None
+    if (
+        previous_place is not None
+        and None not in (place.lat, place.lng, previous_place.lat, previous_place.lng)
+    ):
+        distance_km = haversine_km(
+            previous_place.lat,
+            previous_place.lng,
+            place.lat,
+            place.lng,
+        )
+    return build_route_reason(
+        RouteReasonFacts(
+            domain=facts.get("domain") or place.source_type,
+            category=place.category,
+            rating=place.rating,
+            review_count=place.review_count,
+            open_at_visit_time=facts.get("open_at_visit_time"),
+            visit_time=facts.get("visit_time"),
+            weather_condition=facts.get("weather_condition"),
+            weather_indoor_evidence=bool(facts.get("weather_indoor_evidence")),
+            weather_outdoor_evidence=bool(facts.get("weather_outdoor_evidence")),
+            distance_from_previous_km=distance_km,
+            is_first_stop=previous_place is None,
+        ),
+        language,
+    )
+
+
+def _route_area_centroid(days: list[DayPlan]) -> tuple[float, float] | None:
+    coordinates = [
+        (slot.place.lat, slot.place.lng)
+        for day in days
+        for slot in day.slots
+        if slot.place.lat is not None and slot.place.lng is not None
+    ]
+    if not coordinates:
+        return None
+    return (
+        sum(latitude for latitude, _ in coordinates) / len(coordinates),
+        sum(longitude for _, longitude in coordinates) / len(coordinates),
+    )
+
+
+def _with_accommodation_reason(
+    place: Place,
+    centroid: tuple[float, float] | None,
+    language: str,
+) -> Place:
+    """숙소는 특정 슬롯이 아니라 일정 전체 권역과의 거리로 설명한다."""
+
+    updated = place.model_copy(deep=True)
+    distance_km = (
+        haversine_km(centroid[0], centroid[1], place.lat, place.lng)
+        if centroid is not None and place.lat is not None and place.lng is not None
+        else None
+    )
+    updated.selection_reason = build_route_reason(
+        RouteReasonFacts(
+            domain="accommodation",
+            category=place.category,
+            rating=place.rating,
+            review_count=place.review_count,
+            distance_from_area_km=distance_km,
+        ),
+        language,
+    )
+    updated.reason = updated.selection_reason
+    return updated
+
+
 def _route_candidate_window(candidates, occurrence_index: int):
     """반복 도메인 슬롯이 항상 같은 상위 5곳을 공유하지 않도록 창을 이동한다."""
 
@@ -983,6 +1076,9 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
 
     slot_inputs: list[RouteSlotCandidates] = []
     place_lookup: dict[str, Place] = {}
+    # 이유 문장은 루트 확정 뒤에 동선 거리까지 합쳐 한 곳에서 만든다.
+    # 여기서는 슬롯 조립 시점에만 알 수 있는 도메인별 사실을 모아둔다.
+    reason_facts: dict[str, dict] = {}
     has_mock = False
     per_day_counts: dict[int, int] = {}
     domain_slot_counts = Counter(task.domain for task in parsed.tasks)
@@ -1138,6 +1234,11 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                 )
                 place = _place(raw, task_id=task.task_id)
                 place_lookup[candidate_id] = place
+                reason_facts[candidate_id] = {
+                    "domain": "restaurant",
+                    "open_at_visit_time": _restaurant_open_at(raw, visit_date, slot_time),
+                    "visit_time": slot_time,
+                }
                 wrapped = _restaurant_group_candidate(raw, include_weather)
                 candidates.append(RouteCandidate(
                     candidate_id=candidate_id,
@@ -1159,6 +1260,7 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     f"{task.slot_id or task.task_id}:{task.domain}:{candidate.place_id}"
                 )
                 place_lookup[candidate_id] = place
+                reason_facts[candidate_id] = {"domain": task.domain}
                 wrapped = _accommodation_group_candidate(candidate, place)
                 candidates.append(RouteCandidate(
                     candidate_id=candidate_id,
@@ -1210,6 +1312,16 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     f"{task.slot_id or task.task_id}:{task.domain}:{candidate.place_id}"
                 )
                 place_lookup[candidate_id] = place
+                reason_facts[candidate_id] = {
+                    "domain": task.domain,
+                    "weather_condition": candidate.signals.get("weather_condition"),
+                    "weather_indoor_evidence": bool(
+                        candidate.signals.get("weather_indoor_evidence")
+                    ),
+                    "weather_outdoor_evidence": bool(
+                        candidate.signals.get("weather_outdoor_evidence")
+                    ),
+                }
                 candidates.append(RouteCandidate(
                     candidate_id=candidate_id,
                     domain=task.domain,
@@ -1247,20 +1359,38 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
     )
     plan = await asyncio.to_thread(generate_route_plan, planner_input)
     days: list[DayPlan] = []
+    route_language = effective_query_language(parsed)
     for day_number in range(1, day_count + 1):
         day_slots: list[TimeSlot] = []
-        for confirmed in (slot for slot in plan.slots if slot.day_number == day_number):
+        # 이유 문장의 "직전 일정" 근거는 방문 시각 순서를 따라야 한다.
+        previous_place: Place | None = None
+        for confirmed in sorted(
+            (slot for slot in plan.slots if slot.day_number == day_number),
+            key=lambda slot: (slot.start_time, slot.slot_id),
+        ):
             selected = place_lookup[confirmed.selected.candidate_id].model_copy(deep=True)
-            selected.selection_reason = confirmed.selection_reason
-            selected.reason = confirmed.selection_reason
+            selected.selection_reason = _route_place_reason(
+                selected,
+                reason_facts.get(confirmed.selected.candidate_id, {}),
+                previous_place,
+                route_language,
+            )
+            selected.reason = selected.selection_reason
             alternatives: list[Place] = []
             for rank, alternative in enumerate(confirmed.alternatives, start=2):
                 place = place_lookup[alternative.candidate.candidate_id].model_copy(deep=True)
                 place.rank = rank
-                place.selection_reason = alternative.selection_reason
-                place.reason = alternative.selection_reason
+                # 대안도 같은 골격으로 설명해야 대표 장소와 나란히 비교된다.
+                place.selection_reason = _route_place_reason(
+                    place,
+                    reason_facts.get(alternative.candidate.candidate_id, {}),
+                    previous_place,
+                    route_language,
+                )
+                place.reason = place.selection_reason
                 alternatives.append(place)
             selected.rank = 1
+            previous_place = selected
             day_slots.append(TimeSlot(
                 slot_id=confirmed.slot_id,
                 date=confirmed.date.isoformat(),
@@ -1272,6 +1402,18 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                 alternatives=alternatives,
             ))
         days.append(DayPlan(day=day_number, theme=plan.title, slots=day_slots))
+
+    if accommodation_place is not None:
+        area_centroid = _route_area_centroid(days)
+        accommodation_place = _with_accommodation_reason(
+            accommodation_place,
+            area_centroid,
+            route_language,
+        )
+        accommodation_alternatives = [
+            _with_accommodation_reason(place, area_centroid, route_language)
+            for place in accommodation_alternatives
+        ]
 
     yield _sse(ChatMetaRoute(
         intent=route_intent,
