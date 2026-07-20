@@ -1,3 +1,4 @@
+import logging
 import re
 from difflib import SequenceMatcher
 from core.config import KAKAO_REST_API_KEY
@@ -13,6 +14,8 @@ from domains.accommodation.vector_search import (
     ACC_TOP_N,
     REVIEW_POOL
 )
+
+logger = logging.getLogger(__name__)
 
 STYLE_TERMS = {
     "멋짐": "멋짐", "멋진": "멋짐", "멋지고": "멋짐", "인테리어": "멋짐", "디자인": "멋짐",
@@ -422,7 +425,11 @@ def search_accommodations_structured(request):
             )
             print(f"[DEBUG AccommodationSearchService] run_live_scraper result status: {scraped_result.get('status')}, data length: {len(scraped_result.get('data', []))}")
         except Exception as e:
-            print(f"Warning: booking 모듈 불러오기 실패 ({e}). RAG 모드로 Fallback")
+            # 진단 출력이 실패해도 RAG 폴백은 반드시 수행해야 한다. Playwright가
+            # 브라우저 미설치 시 내는 안내문에는 박스 문자(╔═╗)가 들어 있어
+            # cp949 콘솔에서 print가 UnicodeEncodeError를 내고, 그 예외가 폴백
+            # 자체를 삼켜 루트의 숙소가 통째로 빠지는 문제가 있었다.
+            logger.warning("booking 실시간 스크래퍼 실패, RAG 모드로 폴백합니다: %s", e)
             return run_local_rag(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
 
         if not scraped_result or scraped_result.get("status") != "success" or not scraped_result.get("data"):

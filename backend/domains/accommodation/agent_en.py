@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import math
@@ -31,6 +32,9 @@ from domains.accommodation.search_accommodation_rrf_en import (
 
 from core.config import KAKAO_REST_API_KEY
 from domains.accommodation.agent import apply_structured_location_intent
+
+logger = logging.getLogger(__name__)
+
 
 def parse_user_intent_with_kakao(user_message):
     if not user_message:
@@ -306,12 +310,18 @@ def search_accommodations_structured_en(request):
     
     else:
         if not run_live_scraper:
-            print("Warning: booking module not found. Falling back to RAG Mode.")
+            logger.warning("booking module not found. Falling back to RAG mode.")
             return run_local_rag_en(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
-            
-        scraped_result = run_live_scraper(
-            intent["location"], intent["checkin"], intent["checkout"]
-        )
+
+        try:
+            scraped_result = run_live_scraper(
+                intent["location"], intent["checkin"], intent["checkout"]
+            )
+        except Exception as e:
+            # 스크래퍼 예외가 그대로 올라가면 루트의 숙소가 통째로 빠진다.
+            # 한국어 경로와 동일하게 RAG 폴백으로 내려간다.
+            logger.warning("live booking scraper failed, falling back to RAG mode: %s", e)
+            return run_local_rag_en(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
 
         if not scraped_result or scraped_result.get("status") != "success" or not scraped_result.get("data"):
             return run_local_rag_en(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
