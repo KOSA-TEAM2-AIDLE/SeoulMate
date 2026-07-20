@@ -55,7 +55,14 @@ export default function useTravelRoute(showToast) {
     const cycleAccommodationCandidate = useTravelStore((state) => state.cycleAccommodationCandidate);
     const clearAccommodation = useTravelStore((state) => state.clearAccommodation);
     const selectedDay = useTravelStore((state) => state.selectedDay);
-    const setSelectedDay = useTravelStore((state) => state.setSelectedDay);
+    const setSelectedDayStore = useTravelStore((state) => state.setSelectedDay);
+    const clearSelectedPlace = useTravelStore((state) => state.clearSelectedPlace);
+    const setSelectedPlace = useTravelStore((state) => state.setSelectedPlace);
+
+    const setSelectedDay = (day) => {
+        setSelectedDayStore(day);
+        clearSelectedPlace();
+    };
 
     const lang = useLangStore((state) => state.lang);
     const t = UI_TEXT[lang] || UI_TEXT.ko;
@@ -64,9 +71,9 @@ export default function useTravelRoute(showToast) {
 
     useEffect(() => {
         if (selectedDay > allDay) {
-            setSelectedDay(1);
+            setSelectedDayStore(1);
         }
-    }, [selectedDay, allDay, setSelectedDay]);
+    }, [selectedDay, allDay, setSelectedDayStore]);
 
     const currentDay = selectedDay > allDay ? 1 : selectedDay;
     const currentRoute = travelPath[currentDay] || [];
@@ -99,6 +106,7 @@ export default function useTravelRoute(showToast) {
         currentRoute,
         currentAccommodation,
         setSelectedDay,
+        setSelectedPlace,
         handleDeleteItem,
         handleCycleCandidate,
         handleCycleAccommodation: cycleAccommodationCandidate,

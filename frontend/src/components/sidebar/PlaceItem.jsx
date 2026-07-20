@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { getPlaceDisplaySubCategory, getPlaceDisplayRating, getPlaceDisplayImage } from '../../services/map/placeDisplayAdapter';
 import { getLocalizedPlaceSubCategory } from '../../services/display/localizedPlaceDisplay';
 
@@ -24,6 +24,8 @@ const PlaceItem = memo(({ place, onClick, t, lang }) => {
         default: 'text-red-500 bg-red-50'
     };
 
+    const [imgError, setImgError] = useState(false);
+
     return (
         <article
             onClick={() => onClick(place)}
@@ -32,11 +34,12 @@ const PlaceItem = memo(({ place, onClick, t, lang }) => {
             <div className="flex gap-3">
                 {/* 이미지 영역 */}
                 <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
-                    {image ? (
+                    {image && !imgError ? (
                         <img
                             src={image}
                             alt={place.name}
                             className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200"
+                            onError={() => setImgError(true)}
                         />
                     ) : (
                         <span className="text-xs font-semibold text-slate-400">
