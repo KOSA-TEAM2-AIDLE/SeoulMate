@@ -23,8 +23,6 @@ def mock_places_for_task(
     candidate_count: int | None = None,
 ) -> list[Place]:
     """Domain Agent가 연결될 때까지 요청 수만큼 명시적 임시 후보를 반환한다."""
-    if task.domain == "restaurant":
-        raise ValueError("restaurant Task는 실제 RestaurantAgent를 사용해야 합니다.")
 
     base_name, category = MOCK_DOMAIN_LABELS[task.domain]
     count = (

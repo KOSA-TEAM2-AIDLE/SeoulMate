@@ -503,6 +503,11 @@ def search_accommodations_structured(request):
                     "actual_distance": actual_distance,
                 }
             else:
+                try:
+                    parsed_rating = float(live_rating_str)
+                except (ValueError, TypeError):
+                    parsed_rating = 0.0
+
                 hotel_id = f"live_{fallback_counter}"
                 fallback_counter += 1
                 candidates_map[hotel_id] = {
@@ -510,7 +515,7 @@ def search_accommodations_structured(request):
                         "name": raw_title,
                         "hotel_style": "숙박시설",
                         "address": "서울특별시",
-                        "rating": float(live_rating_str) if live_rating_str and live_rating_str != "0.0" else 0.0,
+                        "rating": parsed_rating,
                         "review_count": 0,
                         "image": image_url,
                         "lat": intent["lat"],
