@@ -16,10 +16,10 @@ BATCH_SIZE = 200  # 배치 임베딩 크기
 
 DB_PARAMS = {
     "host": "localhost",
-    "port": 5432,
-    "user": "edu",
+    "port": 5433,
+    "user": "seoulmate",
     "password": "1234",
-    "database": "edudb",
+    "database": "seoulmate",
 }
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))

@@ -170,16 +170,20 @@ class AttractionAnswerValidationTests(unittest.TestCase):
             [item.place_id for item in result.selections],
         )
 
-    def test_fallback_uses_available_count_and_requested_language(self):
+    def test_fallback_uses_user_facing_reason_without_internal_reranking_terms(self):
         korean = fallback_attraction_answer(answer_input())
         english_input = answer_input(language="en").model_copy(
             update={"candidates": answer_input(language="en").candidates[:2]}
         )
         english = fallback_attraction_answer(english_input)
 
-        self.assertIn("재랭킹", korean.selections[0].selection_reason)
+        self.assertIn("관광지 관련 검증 정보", korean.selections[0].selection_reason)
+        self.assertNotIn("재랭킹", korean.selections[0].selection_reason)
+        self.assertNotIn("재랭킹", korean.answer)
         self.assertEqual(len(english.selections), 2)
-        self.assertIn("reranking", english.selections[0].selection_reason)
+        self.assertIn("verified attraction information", english.selections[0].selection_reason)
+        self.assertNotIn("reranking", english.selections[0].selection_reason)
+        self.assertNotIn("reranking", english.answer)
 
     def test_recommendation_limit_is_controlled_by_one_setting(self):
         with patch(

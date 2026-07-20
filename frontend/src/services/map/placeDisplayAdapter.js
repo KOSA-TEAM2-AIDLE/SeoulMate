@@ -7,11 +7,19 @@ export function getPlaceDisplayCategory(place) {
     'storage-locker': '보관소',
   };
 
-  return typeLabelMap[place.type] || place.category || '장소';
+  const category = typeLabelMap[place.type] || place.category || '장소';
+  if (category === '관광지' || category === 'Attraction') return '명소';
+  return category;
 }
 
 export function getPlaceDisplaySubCategory(place) {
   return place.category || place.meta?.style || place.type || '기타';
+}
+
+export function getDistinctPlaceDisplaySubCategory(place) {
+  const category = getPlaceDisplayCategory(place);
+  const subCategory = getPlaceDisplaySubCategory(place);
+  return category === subCategory ? '' : subCategory;
 }
 
 export function getPlaceDisplayRating(place) {
@@ -28,4 +36,15 @@ export function getPlaceDisplayTime(place) {
 
 export function getPlaceDisplayImage(place) {
   return place.image || place.routeMeta?.image || '';
+}
+
+export function getPlaceDisplayLink(place) {
+  const link = place.link || place.meta?.link || place.meta?.homepageUrl || place.raw?.link || place.raw?.homepage_url || '';
+
+  try {
+    const url = new URL(link);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
 }

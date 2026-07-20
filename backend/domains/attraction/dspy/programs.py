@@ -4,6 +4,7 @@ import dspy
 
 from domains.attraction.dspy.signatures import (
     TourismAnswerSignature,
+    TourismReasonSignature,
     TourismSelectionSignature,
 )
 
@@ -26,5 +27,13 @@ class TourismAnswerProgram(dspy.Module):
         return self.generate(**inputs)
 
 
-__all__ = ["TourismAnswerProgram", "TourismSelectionProgram"]
+class TourismReasonProgram(dspy.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.generate = dspy.Predict(TourismReasonSignature)
 
+    def forward(self, **inputs):
+        return self.generate(**inputs)
+
+
+__all__ = ["TourismAnswerProgram", "TourismReasonProgram", "TourismSelectionProgram"]

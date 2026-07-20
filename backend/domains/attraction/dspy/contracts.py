@@ -29,6 +29,14 @@ class AttractionSelectionPrediction(BaseModel):
         return self
 
 
+class AttractionReasonPrediction(BaseModel):
+    """LLM-owned recommendation reasons for already selected attraction IDs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    recommendation_reasons: dict[str, str] = Field(default_factory=dict)
+
+
 class AttractionAnswerContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -89,4 +97,3 @@ __all__ = [
     "AttractionStructuredAnswer",
     "AttractionStructuredRecommendation",
 ]
-

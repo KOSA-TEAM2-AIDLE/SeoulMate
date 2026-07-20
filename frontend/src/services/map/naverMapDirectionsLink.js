@@ -22,6 +22,14 @@ function createNaverWebDirectionsUrl(origin, destination, mode) {
   return `${NAVER_MAP_WEB_DIRECTIONS_URL}${originPlace}/${destinationPlace}/-/${routeMode}?c=11.00,0,0,0,dh`;
 }
 
+function createNaverCurrentLocationWebDirectionsUrl(destination) {
+  const destinationCoordinate = getWebMercatorCoordinate(destination);
+  if (!destinationCoordinate) return NAVER_MAP_WEB_DIRECTIONS_URL;
+
+  const destinationPlace = `${destinationCoordinate},${encodeURIComponent(getPlaceLabel(destination))},,ADDRESS_POI`;
+  return `${NAVER_MAP_WEB_DIRECTIONS_URL}-/${destinationPlace}/-/walk?c=11.00,0,0,0,dh`;
+}
+
 export function createNaverRouteAppUrl(origin, destination, appName, mode = 'public') {
   const params = new URLSearchParams({
     slat: String(origin.lat),
@@ -38,6 +46,20 @@ export function createNaverRouteAppUrl(origin, destination, appName, mode = 'pub
 
 export function createNaverTransitAppUrl(origin, destination, appName) {
   return createNaverRouteAppUrl(origin, destination, appName, 'public');
+}
+
+export function getNaverCurrentLocationWalkingUrl(destination, appName, userAgent = '') {
+  if (/Android|iPhone|iPad|iPod/i.test(userAgent)) {
+    const params = new URLSearchParams({
+      dlat: String(destination.lat),
+      dlng: String(destination.lng),
+      dname: getPlaceLabel(destination),
+      appname: appName,
+    });
+    return `nmap://route/walk?${params}`;
+  }
+
+  return createNaverCurrentLocationWebDirectionsUrl(destination);
 }
 
 export function getNaverMapDirectionsUrl(origin, destination, appName, userAgent = '', mode = 'public') {

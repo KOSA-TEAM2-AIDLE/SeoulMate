@@ -275,20 +275,10 @@ async def _rerank_attraction_candidates(
     parsed,
     source_mode: str,
     request,
-    *,
-    include_congestion: bool = True,
 ):
-    # 식당·카페와 같이 검색 모드와 Context 정책을 분리한다.
-    # 날씨는 Enricher 내부 조건을 따르고, 관광 혼잡도는 좌표·위치·
-    # 명시적 한적함 요청이 있으면 rag_only에서도 보강한다.
-    if include_congestion:
-        reranked = await attraction_context_enricher.enrich(request, candidates)
-    else:
-        reranked = await attraction_context_enricher.enrich(
-            request,
-            candidates,
-            include_congestion=False,
-        )
+    # 관광 후보는 검색 모드와 무관하게 항상 실시간 혼잡도 Context를 보강한다.
+    # 날씨는 Enricher 내부의 사용자 요청 정책을 따른다.
+    reranked = await attraction_context_enricher.enrich(request, candidates)
     sources = []
     if any(
         candidate.signals.get("congestion_available") is True
@@ -1094,7 +1084,6 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                 parsed,
                 source_mode,
                 attraction_request,
-                include_congestion=False,
             ) if task.domain == "attraction" else (batch.candidates, ())
             if task.domain == "cafe":
                 previous_anchors, next_anchors = _cafe_neighbor_anchor_coordinates(

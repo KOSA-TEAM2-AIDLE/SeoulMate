@@ -55,10 +55,11 @@ class AttractionCongestionRerankerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([enriched], result)
         self.assertIn("Seoul-Congestion-MCP", sources)
 
-    async def test_route_mode_skips_congestion_but_keeps_other_enrichment(self):
+    async def test_route_mode_also_enriches_congestion(self):
         class Congestion:
             async def rerank(self, candidates, question, *, language="ko"):
-                raise AssertionError("루트 추천에서 혼잡도를 호출하면 안 됩니다.")
+                self.called = True
+                return candidates
 
         class WeatherProvider:
             async def get_context(self, request):
@@ -79,18 +80,18 @@ class AttractionCongestionRerankerTests(unittest.IsolatedAsyncioTestCase):
             visit_date=datetime.now(timezone.utc).date(),
             start_time="10:00",
         )
+        congestion = Congestion()
         enricher = AttractionContextEnricher(
-            congestion_reranker=Congestion(),
+            congestion_reranker=congestion,
             weather_provider=WeatherProvider(),
         )
 
         result = await enricher.enrich(
             request,
             [_candidate()],
-            include_congestion=False,
         )
 
-        self.assertNotIn("congestion_available", result[0].signals)
+        self.assertTrue(congestion.called)
         self.assertTrue(result[0].signals["weather_available"])
 
     async def test_candidate_coordinates_are_sent_and_fresh_congestion_is_applied(self):

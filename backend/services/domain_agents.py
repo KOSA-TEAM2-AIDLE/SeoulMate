@@ -12,6 +12,7 @@ MOCK_DOMAIN_LABELS = {
     "attraction": ("임시 문화시설 후보", "문화시설"),
     "accommodation": ("임시 숙소 후보", "숙박시설"),
     "etc": ("임시 기타 장소 후보", "기타"),
+    "accommodation" : ("임시 숙소 장소 후보","숙소")
 }
 
 

@@ -143,10 +143,32 @@ def to_answer_example(case: ProductionDspyCase) -> dspy.Example:
     )
 
 
+def to_reason_example(case: ProductionDspyCase) -> dspy.Example:
+    selected = [
+        {
+            "place_id": candidate.place_id,
+            "name": candidate.name,
+            "category": candidate.category,
+        }
+        for candidate in case.answer_input.candidates
+        if candidate.place_id in set(case.selected_place_ids)
+    ]
+    return dspy.Example(
+        case_id=case.case_id,
+        language=case.answer_input.language,
+        question=case.answer_input.question,
+        selected_candidates_json=json.dumps(selected, ensure_ascii=False),
+        selection_reasons_json=json.dumps(case.selection_reasons, ensure_ascii=False),
+    ).with_inputs(
+        "language", "question", "selected_candidates_json", "selection_reasons_json"
+    )
+
+
 __all__ = [
     "ProductionDspyCase",
     "adapt_production_example",
     "load_production_splits",
     "to_answer_example",
+    "to_reason_example",
     "to_selection_example",
 ]
