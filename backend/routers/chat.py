@@ -816,7 +816,7 @@ async def _multi_task_recommendation_stream(
             ]
         elif task.domain == "accommodation":
             group_candidates = [
-                _accommodation_group_candidate(candidate)
+                _accommodation_group_candidate(candidate, search_candidate_to_place(candidate))
                 for candidate in batch.candidates[:LLM_CANDIDATE_COUNT]
             ]
         else:

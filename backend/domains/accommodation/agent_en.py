@@ -257,7 +257,7 @@ def run_local_rag_en(user_question, user_lat=None, user_lng=None, top_n=30):
         amenities_sample = amenities.split(',')[0].strip() if amenities else 'Basic amenities'
         description = c.get('description')
         if description and len(description) >= 10:
-            reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+            reason_text = description
         else:
             reason_text = f"Highly relevant to your preferences. (Features {amenities_sample} etc.)"
 
@@ -423,7 +423,7 @@ def search_accommodations_structured_en(request):
             
             description = matched_db.get('description')
             if description and len(description) >= 10:
-                reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+                reason_text = description
             else:
                 reason_text = f"Recommended accommodation with live availability. (Features {amenities_sample} etc.)"
 

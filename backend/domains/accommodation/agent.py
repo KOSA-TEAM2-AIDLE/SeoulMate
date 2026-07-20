@@ -301,7 +301,7 @@ def run_local_rag(user_question, user_lat=None, user_lng=None, top_n=30):
         
         description = c.get('description')
         if description and len(description) >= 10:
-            reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+            reason_text = description
         else:
             reason_text = f"{c['name']}은(는) {best_feature} 등을 갖추고 있어 일정 중 머무르기 좋은 추천 숙소입니다."
 
@@ -524,7 +524,7 @@ def search_accommodations_structured(request):
                 
             description = matched_db.get('description')
             if description and len(description) >= 10:
-                reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+                reason_text = description
             else:
                 reason_text = f"{matched_db['name']}은(는) {best_feature} 등을 갖추고 있어 여행 중 편안하게 휴식하기 좋은 곳입니다."
 
