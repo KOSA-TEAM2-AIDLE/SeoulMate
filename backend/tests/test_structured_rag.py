@@ -624,7 +624,7 @@ class StructuredRestaurantPlanTests(unittest.TestCase):
             },
         })
         plan = build_restaurant_search_plan(parsed, parsed.tasks[0])
-        self.assertEqual(plan.radius_km, 2.0)
+        self.assertEqual(plan.radius_km, 4.0)
         self.assertIsNone(plan.target_time_window)
         self.assertIsNone(plan.target_visit_at)
         self.assertIsNone(plan.budget_min_krw)

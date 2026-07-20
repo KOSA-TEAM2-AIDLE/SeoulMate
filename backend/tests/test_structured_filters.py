@@ -38,6 +38,8 @@ def _meta(**updates):
     value = {
         "rating": 4.6,
         "menu_price_median": 25_000,
+        "menu_price_lo": 20_000,
+        "menu_price_hi": 30_000,
         "has_parking": True,
         "allows_pets": False,
         "has_kids_menu": False,
@@ -85,7 +87,7 @@ class StructuredCandidateFilterTests(unittest.TestCase):
                 )
             self.assertEqual(passed, expected)
 
-    def test_budget_range_uses_median_price_and_unknown_price_does_not_pass(self):
+    def test_budget_range_uses_menu_range_and_unknown_price_does_not_pass(self):
         plan = replace(_plan(), budget_min_krw=20_000, budget_max_krw=30_000)
         for price, expected in (
             (20_000, True), (25_000, True), (30_000, True),
@@ -95,26 +97,29 @@ class StructuredCandidateFilterTests(unittest.TestCase):
                 "services.rag.is_open_now", return_value=True
             ):
                 passed, _, _ = _passes_candidate_filters(
-                    _meta(menu_price_median=price), plan, min_rating=None, open_now=False
+                    _meta(menu_price_lo=price, menu_price_hi=price),
+                    plan,
+                    min_rating=None,
+                    open_now=False,
                 )
             self.assertEqual(passed, expected)
 
-    def test_budget_max_does_not_accept_expensive_restaurant_by_minimum_price(self):
+    def test_budget_max_accepts_when_menu_range_overlaps_budget(self):
         plan = replace(_plan(), budget_max_krw=20_000)
         with patch("services.rag.is_open_now", return_value=True):
             passed, _, _ = _passes_candidate_filters(
-                _meta(menu_price_min=10_000, menu_price_median=30_000),
+                _meta(menu_price_lo=10_000, menu_price_hi=30_000),
                 plan,
                 min_rating=None,
                 open_now=False,
             )
-        self.assertFalse(passed)
+        self.assertTrue(passed)
 
-    def test_budget_max_accepts_restaurant_when_median_price_is_within_budget(self):
+    def test_budget_max_accepts_restaurant_when_menu_range_is_within_budget(self):
         plan = replace(_plan(), budget_max_krw=20_000)
         with patch("services.rag.is_open_now", return_value=True):
             passed, _, _ = _passes_candidate_filters(
-                _meta(menu_price_min=10_000, menu_price_median=18_000),
+                _meta(menu_price_lo=10_000, menu_price_hi=18_000),
                 plan,
                 min_rating=None,
                 open_now=False,

@@ -24,17 +24,17 @@ class AttractionDspySettingsTests(unittest.TestCase):
         self.assertEqual(settings.attraction_dspy_temperature, 0.0)
         self.assertEqual(settings.attraction_dspy_max_tokens, 900)
         self.assertTrue(
-            str(settings.attraction_dspy_artifact_path).endswith(
+            settings.attraction_dspy_artifact_path.as_posix().endswith(
                 "domains/attraction/artifacts/optimized_program.json"
             )
         )
         self.assertTrue(
-            str(settings.attraction_dspy_selection_artifact_path).endswith(
+            settings.attraction_dspy_selection_artifact_path.as_posix().endswith(
                 "domains/attraction/artifacts/selection_v1.json"
             )
         )
         self.assertTrue(
-            str(settings.attraction_dspy_answer_artifact_path).endswith(
+            settings.attraction_dspy_answer_artifact_path.as_posix().endswith(
                 "domains/attraction/artifacts/answer_v1.json"
             )
         )
