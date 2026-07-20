@@ -12,8 +12,13 @@ import { extractGeometryPaths } from '../services/map/transitGeometryService';
 export default function MapWorkspace() {
     const selectedDay = useTravelStore((state) => state.selectedDay);
     const travelPath = useTravelStore((state) => state.travelPath);
+    const accommodation = useTravelStore((state) => state.accommodation);
+    const allDay = useTravelStore((state) => state.all_day);
 
-    const routePlaces = useMemo(() => travelPath[selectedDay] ?? [], [travelPath, selectedDay]);
+    const routePlaces = useMemo(() => {
+        const places = travelPath[selectedDay] ?? [];
+        return (selectedDay < allDay && accommodation) ? [...places, accommodation] : places;
+    }, [travelPath, selectedDay, accommodation, allDay]);
     const routeKey = routePlaces.map((place) => `${place.id}:${place.lat}:${place.lng}`).join('|');
     const language = useLangStore((state) => state.lang);
     const segments = useTransitRoutes(routePlaces, language);

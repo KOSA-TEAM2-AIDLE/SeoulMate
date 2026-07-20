@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import {
     getPlaceDisplayCategory,
     getPlaceDisplaySubCategory,
@@ -27,6 +27,8 @@ const RouteItem = memo(({ place, index, isAccommodation, onDelete, onCycleCandid
         default: 'text-red-500 bg-red-50'
     };
 
+    const [imgError, setImgError] = useState(false);
+
     return (
         <article className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all duration-200 relative">
             <div className="flex items-start gap-4">
@@ -45,8 +47,8 @@ const RouteItem = memo(({ place, index, isAccommodation, onDelete, onCycleCandid
 
                 {/* 썸네일 이미지 */}
                 <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
-                    {image ? (
-                        <img src={image} alt={place.name} className="h-full w-full object-cover" />
+                    {image && !imgError ? (
+                        <img src={image} alt={place.name} className="h-full w-full object-cover" onError={() => setImgError(true)} />
                     ) : (
                         <span className="text-xs font-semibold text-slate-400">{t.noImage}</span>
                     )}
