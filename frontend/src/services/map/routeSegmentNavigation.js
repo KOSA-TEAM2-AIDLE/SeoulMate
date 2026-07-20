@@ -1,3 +1,5 @@
+import { markerType } from './markerService';
+
 export function getRouteSegmentNavigationItems(places = []) {
   return places.slice(0, -1).map((place, index) => ({
     index,
@@ -11,5 +13,5 @@ export function getRouteViewportPlaces(places = [], selectedSegment, isSegmentSe
     return [selectedSegment.origin, selectedSegment.destination].filter(Boolean);
   }
 
-  return places;
+  return places.filter(place => markerType(place) !== 'accommodation');
 }
