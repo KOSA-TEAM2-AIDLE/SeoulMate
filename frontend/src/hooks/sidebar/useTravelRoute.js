@@ -57,6 +57,7 @@ export default function useTravelRoute(showToast) {
     const selectedDay = useTravelStore((state) => state.selectedDay);
     const setSelectedDayStore = useTravelStore((state) => state.setSelectedDay);
     const clearSelectedPlace = useTravelStore((state) => state.clearSelectedPlace);
+    const setSelectedPlace = useTravelStore((state) => state.setSelectedPlace);
 
     const setSelectedDay = (day) => {
         setSelectedDayStore(day);
@@ -105,6 +106,7 @@ export default function useTravelRoute(showToast) {
         currentRoute,
         currentAccommodation,
         setSelectedDay,
+        setSelectedPlace,
         handleDeleteItem,
         handleCycleCandidate,
         handleCycleAccommodation: cycleAccommodationCandidate,

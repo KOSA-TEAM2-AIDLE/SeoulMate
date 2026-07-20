@@ -9,6 +9,7 @@ export default function TravelRouteTab({ showToast }) {
     currentRoute,
     currentAccommodation,
     setSelectedDay,
+    setSelectedPlace,
     handleDeleteItem,
     handleCycleCandidate,
     handleCycleAccommodation,
@@ -70,6 +71,7 @@ export default function TravelRouteTab({ showToast }) {
                       index={index}
                       onDelete={handleDeleteItem}
                       onCycleCandidate={handleCycleCandidate}
+                      onClick={() => setSelectedPlace(place)}
                       t={t}
                   />
               ))
@@ -92,6 +94,7 @@ export default function TravelRouteTab({ showToast }) {
                     isAccommodation={true}
                     onDelete={handleDeleteAccommodation}
                     onCycleCandidate={handleCycleAccommodation}
+                    onClick={() => setSelectedPlace(currentAccommodation)}
                     t={t}
                 />
               </section>

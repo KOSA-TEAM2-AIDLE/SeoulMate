@@ -6,7 +6,7 @@ import {
     getPlaceDisplayImage,
 } from '../../services/map/placeDisplayAdapter';
 
-const RouteItem = memo(({ place, index, isAccommodation, onDelete, onCycleCandidate, t }) => {
+const RouteItem = memo(({ place, index, isAccommodation, onDelete, onCycleCandidate, onClick, t }) => {
     const category = getPlaceDisplayCategory(place);
     const subCategory = getPlaceDisplaySubCategory(place);
     const rating = getPlaceDisplayRating(place);
@@ -30,7 +30,10 @@ const RouteItem = memo(({ place, index, isAccommodation, onDelete, onCycleCandid
     const [imgError, setImgError] = useState(false);
 
     return (
-        <article className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all duration-200 relative">
+        <article 
+            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all duration-200 relative cursor-pointer"
+            onClick={onClick}
+        >
             <div className="flex items-start gap-4">
                 {/* 순서 마커 */}
                 {isAccommodation ? (
@@ -78,7 +81,7 @@ const RouteItem = memo(({ place, index, isAccommodation, onDelete, onCycleCandid
                         {canCycleCandidate && (
                             <button
                                 type="button"
-                                onClick={() => onCycleCandidate(place)}
+                                onClick={(e) => { e.stopPropagation(); onCycleCandidate(place); }}
                                 className="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-100 border border-blue-100 transition-colors"
                             >
                                 {t.changeCandidate}
@@ -119,7 +122,7 @@ const RouteItem = memo(({ place, index, isAccommodation, onDelete, onCycleCandid
             <div className="absolute top-4 right-4 z-10">
                 <button
                     type="button"
-                    onClick={() => onDelete(place)}
+                    onClick={(e) => { e.stopPropagation(); onDelete(place); }}
                     className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:bg-slate-200 transition-colors"
                     title={t.deleteRoute}
                 >
