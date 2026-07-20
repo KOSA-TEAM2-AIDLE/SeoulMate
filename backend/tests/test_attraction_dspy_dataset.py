@@ -17,15 +17,26 @@ from experiments.attraction_dspy.metrics import (
 )
 from experiments.attraction_dspy.evaluate import build_evaluation_plan
 from experiments.attraction_dspy.optimize import build_optimization_plan
-from experiments.attraction_dspy.optimize import build_production_optimization_plan
+from experiments.attraction_dspy.optimize import (
+    build_production_optimization_plan,
+    pending_production_programs,
+)
+from experiments.attraction_dspy.production_evaluate import summarize_candidate
+from domains.attraction.dspy.signatures import TourismAnswerSignature
+from experiments.attraction_dspy.run_budget import (
+    estimate_run_budget,
+    require_within_budget,
+)
 from experiments.attraction_dspy.production_dataset import (
     adapt_production_example,
     load_production_splits,
     to_answer_example,
+    to_reason_example,
     to_selection_example,
 )
 from experiments.attraction_dspy.production_metrics import (
     build_answer_metric,
+    build_reason_metric,
     build_selection_metric,
 )
 from experiments.attraction_dspy.build_augmentation_draft import build_augmentation_draft
@@ -135,6 +146,10 @@ class AttractionDspyDatasetTests(unittest.TestCase):
             set(to_answer_example(adapted).inputs()),
             {"language", "question", "selected_candidates_json", "selection_reasons_json"},
         )
+        self.assertEqual(
+            set(to_reason_example(adapted).inputs()),
+            {"language", "question", "selected_candidates_json", "selection_reasons_json"},
+        )
 
     def test_production_split_loader_keeps_gold_out_of_training_splits(self):
         dataset_root = Path(__file__).parents[1] / "data" / "attraction" / "DSPy"
@@ -157,6 +172,72 @@ class AttractionDspyDatasetTests(unittest.TestCase):
         self.assertEqual(plan["programs"]["selection"]["train_split"], "train")
         self.assertEqual(plan["programs"]["answer"]["validation_split"], "dev")
         self.assertNotIn("gold_test", plan["programs"]["selection"])
+
+    def test_production_plan_uses_requested_trial_count_and_budget(self):
+        dataset_root = Path(__file__).parents[1] / "data" / "attraction" / "DSPy" / "optimization_v2"
+
+        plan = build_production_optimization_plan(
+            dataset_root, num_trials=1, max_cost_usd=0.10,
+        )
+
+        self.assertEqual(1, plan["programs"]["selection"]["num_trials"])
+        self.assertEqual(1, plan["programs"]["answer"]["num_trials"])
+        self.assertEqual(0.10, plan["max_cost_usd"])
+        self.assertEqual(104, plan["budget"]["optimization_calls"])
+
+    def test_resume_only_runs_missing_candidate_artifact(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            artifact_dir = Path(temp_directory)
+            (artifact_dir / "selection_v1.json").write_text("{}", encoding="utf-8")
+
+            self.assertEqual(("answer",), pending_production_programs(artifact_dir))
+
+    def test_budget_estimate_covers_pilot_and_full_candidate_evaluation(self):
+        dataset_root = Path(__file__).parents[1] / "data" / "attraction" / "DSPy" / "optimization_v2"
+
+        pilot = estimate_run_budget(
+            dataset_root, num_trials=1, include_full_evaluation=False,
+        )
+        full = estimate_run_budget(
+            dataset_root, num_trials=3, include_full_evaluation=True,
+        )
+
+        self.assertEqual(104, pilot["optimization_calls"])
+        self.assertEqual(0, pilot["evaluation_calls"])
+        self.assertEqual(248, full["optimization_calls"])
+        self.assertEqual(270, full["evaluation_calls"])
+        self.assertEqual(518, full["total_calls"])
+        self.assertEqual(124_800, pilot["output_token_cap"])
+        self.assertGreater(full["estimated_cost_usd"], 0)
+
+    def test_budget_guard_rejects_over_cap(self):
+        with self.assertRaisesRegex(ValueError, "비용 상한"):
+            require_within_budget({"estimated_cost_usd": 0.51}, 0.50)
+
+    def test_candidate_summary_requires_zero_failures_low_fallback_and_legacy_accuracy(self):
+        summary = summarize_candidate([
+            {"source_split": "test", "method": "legacy_single", "selection_exact": True, "fallback_used": False, "hard_failure": False},
+            {"source_split": "test", "method": "split", "selection_exact": True, "fallback_used": False, "hard_failure": False},
+            {"source_split": "gold_test", "method": "legacy_single", "selection_exact": True, "fallback_used": False, "hard_failure": False},
+            {"source_split": "gold_test", "method": "split", "selection_exact": True, "fallback_used": False, "hard_failure": False},
+        ])
+
+        self.assertEqual(0, summary["hard_failures"])
+        self.assertEqual(0.0, summary["fallback_rate"])
+        self.assertTrue(summary["accepted"])
+
+    def test_candidate_summary_rejects_projected_fallback_above_five_percent(self):
+        summary = summarize_candidate([
+            {"source_split": "test", "method": "legacy_single", "selection_exact": True, "fallback_used": False, "hard_failure": False},
+            {"source_split": "test", "method": "split", "selection_exact": True, "fallback_used": True, "hard_failure": True},
+        ])
+
+        self.assertFalse(summary["accepted"])
+
+    def test_answer_signature_requires_verbatim_candidate_evidence(self):
+        self.assertIn("verbatim", TourismAnswerSignature.__doc__.casefold())
+        self.assertIn("never summarize", TourismAnswerSignature.__doc__.casefold())
+        self.assertIn("at most one", TourismAnswerSignature.__doc__.casefold())
 
     def test_production_metrics_reject_invalid_outputs_and_reward_gold_ids(self):
         case = adapt_production_example(

@@ -27,10 +27,10 @@ WALK_KM_PER_MIN = 0.07
 
 ACCOMMODATION_DB_CONFIG = {
     "host": "localhost",
-    "port": 5432,
-    "user": "edu",
+    "port": 5433,
+    "user": "seoulmate",
     "password": "1234",
-    "dbname": "edudb",
+    "dbname": "seoulmate",
 }
 
 client = OpenAI(api_key=OPENAI_API_KEY)

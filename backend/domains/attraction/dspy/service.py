@@ -12,6 +12,7 @@ import dspy
 from core.config import settings
 from domains.attraction.answer_models import AttractionAnswerInput
 from domains.attraction.dspy.renderer import render_selection_result
+from domains.attraction.dspy.grounding import ground_structured_answer
 from domains.attraction.dspy.programs import TourismAnswerProgram, TourismSelectionProgram
 from domains.attraction.dspy.validator import (
     validate_selection_prediction,
@@ -42,7 +43,13 @@ class AttractionDspyRuntimeService:
 class SplitAttractionDspyRuntime:
     """Execute independently optimized selection and answer artifacts."""
 
-    def __init__(self, *, selection_program: Any, answer_program: Any, lm: Any) -> None:
+    def __init__(
+        self,
+        *,
+        selection_program: Any,
+        answer_program: Any,
+        lm: Any,
+    ) -> None:
         self._selection_program = selection_program
         self._answer_program = answer_program
         self._lm = lm
@@ -91,7 +98,12 @@ class SplitAttractionDspyRuntime:
         answer = validate_structured_answer(
             answer_input,
             selection.selected_place_ids,
-            json.loads(answer_prediction.structured_answer_json),
+            ground_structured_answer(
+                answer_input,
+                selection.selected_place_ids,
+                selection.selection_reasons,
+                json.loads(answer_prediction.structured_answer_json),
+            ),
         )
         return render_selection_result(
             selection,

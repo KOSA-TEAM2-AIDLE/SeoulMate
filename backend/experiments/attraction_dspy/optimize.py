@@ -27,6 +27,10 @@ from experiments.attraction_dspy.production_metrics import (
     build_answer_metric,
     build_selection_metric,
 )
+from experiments.attraction_dspy.run_budget import (
+    estimate_run_budget,
+    require_within_budget,
+)
 
 
 def build_optimization_plan(splits) -> dict:
@@ -54,7 +58,12 @@ def build_optimization_plan(splits) -> dict:
     }
 
 
-def build_production_optimization_plan(data_dir: str | Path) -> dict:
+def build_production_optimization_plan(
+    data_dir: str | Path,
+    *,
+    num_trials: int = 3,
+    max_cost_usd: float = 0.50,
+) -> dict:
     """Describe separate, leakage-safe optimization runs without calling an LLM."""
 
     programs = {}
@@ -73,9 +82,26 @@ def build_production_optimization_plan(data_dir: str | Path) -> dict:
             "dev_cases": len(dev_ids),
             "test_cases": len(test_ids),
             "optimizer": "MIPROv2",
-            "num_trials": 3,
+            "num_trials": num_trials,
         }
-    return {"programs": programs, "gold_test_policy": "evaluation_only"}
+    budget = estimate_run_budget(
+        Path(data_dir), num_trials=num_trials, include_full_evaluation=False,
+    )
+    require_within_budget(budget, max_cost_usd)
+    return {
+        "programs": programs,
+        "gold_test_policy": "evaluation_only",
+        "budget": budget,
+        "max_cost_usd": max_cost_usd,
+    }
+
+
+def pending_production_programs(artifact_dir: Path) -> tuple[str, ...]:
+    """Return candidate programs that have not already been exported."""
+    return tuple(
+        kind for kind in ("selection", "answer")
+        if not (artifact_dir / f"{kind}_v1.json").is_file()
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,14 +118,25 @@ def main(argv: list[str] | None = None) -> int:
         "--artifact-dir", type=Path,
         help="후보 selection/answer artifact와 metadata를 저장할 디렉터리",
     )
+    parser.add_argument("--num-trials", type=int, default=3)
+    parser.add_argument("--max-cost-usd", type=float, default=0.50)
     args = parser.parse_args(argv)
-    production_plan = build_production_optimization_plan(args.data_dir)
+    production_plan = build_production_optimization_plan(
+        args.data_dir,
+        num_trials=args.num_trials,
+        max_cost_usd=args.max_cost_usd,
+    )
     print(json.dumps(production_plan, ensure_ascii=False, indent=2))
     if args.dry_run:
         return 0
 
     if args.run_production:
-        _compile_production_programs(args.data_dir, artifact_dir=args.artifact_dir)
+        _compile_production_programs(
+            args.data_dir,
+            artifact_dir=args.artifact_dir,
+            num_trials=args.num_trials,
+            max_cost_usd=args.max_cost_usd,
+        )
         return 0
 
     splits = load_dataset_splits(args.data_dir, allow_provisional=True)
@@ -158,19 +195,26 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _compile_production_programs(data_dir: Path, *, artifact_dir: Path | None = None) -> None:
+def _compile_production_programs(
+    data_dir: Path,
+    *,
+    artifact_dir: Path | None = None,
+    num_trials: int = 3,
+    max_cost_usd: float = 0.50,
+) -> None:
     """Compile and export both programs; this path intentionally requires an API key."""
 
+    if artifact_dir is None:
+        raise ValueError("운영 artifact 보호를 위해 --artifact-dir가 필요합니다.")
+    if artifact_dir.resolve() == settings.attraction_dspy_selection_artifact_path.parent.resolve():
+        raise ValueError("운영 artifact 디렉터리에는 candidate를 저장할 수 없습니다.")
+    budget = estimate_run_budget(
+        data_dir, num_trials=num_trials, include_full_evaluation=False,
+    )
+    require_within_budget(budget, max_cost_usd)
     api_key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else ""
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY가 필요합니다.")
-    lm = dspy.LM(
-        settings.attraction_dspy_model,
-        api_key=api_key,
-        temperature=settings.attraction_dspy_temperature,
-        max_tokens=settings.attraction_dspy_max_tokens,
-    )
-    artifact_dir = artifact_dir or settings.attraction_dspy_selection_artifact_path.parent
     targets = (
         (
             "selection",
@@ -187,14 +231,33 @@ def _compile_production_programs(data_dir: Path, *, artifact_dir: Path | None = 
             artifact_dir / "answer_v1.json",
         ),
     )
+    pending = set(pending_production_programs(artifact_dir))
     metadata: dict[str, object] = {
         "dspy_version": dspy.__version__,
         "model": settings.attraction_dspy_model,
         "temperature": settings.attraction_dspy_temperature,
         "max_tokens": settings.attraction_dspy_max_tokens,
+        "num_trials": num_trials,
+        "budget": budget,
+        "resumed_existing_programs": [
+            kind for kind in ("selection", "answer") if kind not in pending
+        ],
         "programs": {},
     }
     for kind, program_type, example_factory, metric_factory, artifact_path in targets:
+        if kind not in pending:
+            continue
+        max_tokens = (
+            settings.attraction_dspy_answer_max_tokens
+            if kind == "answer"
+            else settings.attraction_dspy_max_tokens
+        )
+        lm = dspy.LM(
+            settings.attraction_dspy_model,
+            api_key=api_key,
+            temperature=settings.attraction_dspy_temperature,
+            max_tokens=max_tokens,
+        )
         splits = load_production_splits(data_dir, kind)
         # Keep labels outside Example inputs; the metric closure resolves them by case_id.
         metric = metric_factory(
@@ -217,7 +280,7 @@ def _compile_production_programs(data_dir: Path, *, artifact_dir: Path | None = 
                 program_type(),
                 trainset=[example_factory(case) for case in splits["train"]],
                 valset=[example_factory(case) for case in splits["dev"]],
-                num_trials=3,
+                num_trials=num_trials,
                 minibatch=False,
                 max_bootstrapped_demos=0,
                 max_labeled_demos=0,
@@ -231,6 +294,7 @@ def _compile_production_programs(data_dir: Path, *, artifact_dir: Path | None = 
             "dev_cases": len(splits["dev"]),
             "test_cases": len(splits["test"]),
             "artifact": str(artifact_path),
+            "max_tokens": max_tokens,
             "elapsed_seconds": perf_counter() - started,
         }
     artifact_dir.mkdir(parents=True, exist_ok=True)

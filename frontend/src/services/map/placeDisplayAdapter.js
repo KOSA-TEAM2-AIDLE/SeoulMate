@@ -7,7 +7,9 @@ export function getPlaceDisplayCategory(place) {
     'storage-locker': '보관소',
   };
 
-  return typeLabelMap[place.type] || place.category || '장소';
+  const category = typeLabelMap[place.type] || place.category || '장소';
+  if (category === '관광지' || category === 'Attraction') return '명소';
+  return category;
 }
 
 export function getPlaceDisplaySubCategory(place) {
