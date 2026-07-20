@@ -85,14 +85,11 @@ export default function TravelRouteTab({ showToast }) {
               </div>
           )}
           {currentAccommodation && (
-              <section className="space-y-2 border-t border-dashed border-purple-200 pt-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-purple-600">
-                  {t.accommodation}
-                </p>
+              <section className="space-y-2 border-t border-dashed border-purple-200 pt-4 mt-4">
                 <RouteItem
                     key={`accommodation:${currentAccommodation.id}`}
                     place={currentAccommodation}
-                    index={currentRoute.length}
+                    isAccommodation={true}
                     onDelete={handleDeleteAccommodation}
                     onCycleCandidate={handleCycleAccommodation}
                     t={t}

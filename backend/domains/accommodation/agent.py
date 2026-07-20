@@ -336,6 +336,7 @@ def run_local_rag(user_question, user_lat=None, user_lng=None, top_n=30):
             "image": c.get("image"),
             "lat": c.get("lat"),
             "lng": c.get("lng"),
+            "url": c.get("link"),
             "reason": reason_text,
             "features": f"편의시설: {amenities} / 특징: {c.get('room_features', '')}"
         })
@@ -371,6 +372,8 @@ def search_accommodations_structured(request):
         filters = parsed_query.get("filters") if isinstance(parsed_query, dict) else getattr(parsed_query, "filters", None)
         if filters:
             visit_date_val = filters.get("start_date") if isinstance(filters, dict) else getattr(filters, "start_date", None)
+    if not visit_date_val:
+        visit_date_val = request.context.get("visit_date")
 
     end_date_val = None
     if task:
@@ -379,6 +382,8 @@ def search_accommodations_structured(request):
         filters = parsed_query.get("filters") if isinstance(parsed_query, dict) else getattr(parsed_query, "filters", None)
         if filters:
             end_date_val = filters.get("end_date") if isinstance(filters, dict) else getattr(filters, "end_date", None)
+    if not end_date_val:
+        end_date_val = request.context.get("end_date")
             
     if visit_date_val:
         # 문자열인 경우 그대로 사용, date 객체인 경우 isoformat() 호출
