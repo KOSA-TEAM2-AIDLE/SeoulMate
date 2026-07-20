@@ -302,6 +302,50 @@ def search_accommodations_structured_en(request):
         parse_user_intent_with_kakao(user_message),
         request.location,
     )
+    
+    # Extract date from request like in agent.py
+    visit_date_val = getattr(request, "visit_date", None)
+    task = request.context.get("task")
+    parsed_query = request.context.get("parsed_query")
+
+    if task and not visit_date_val:
+        visit_date_val = task.get("visit_date") if isinstance(task, dict) else getattr(task, "visit_date", None)
+    if parsed_query and not visit_date_val:
+        filters = parsed_query.get("filters") if isinstance(parsed_query, dict) else getattr(parsed_query, "filters", None)
+        if filters:
+            visit_date_val = filters.get("start_date") if isinstance(filters, dict) else getattr(filters, "start_date", None)
+    if not visit_date_val:
+        visit_date_val = request.context.get("visit_date")
+
+    end_date_val = None
+    if task:
+        end_date_val = task.get("end_date") if isinstance(task, dict) else getattr(task, "end_date", None)
+    if not end_date_val and parsed_query:
+        filters = parsed_query.get("filters") if isinstance(parsed_query, dict) else getattr(parsed_query, "filters", None)
+        if filters:
+            end_date_val = filters.get("end_date") if isinstance(filters, dict) else getattr(filters, "end_date", None)
+    if not end_date_val:
+        end_date_val = request.context.get("end_date")
+            
+    if visit_date_val:
+        intent["checkin"] = visit_date_val if isinstance(visit_date_val, str) else visit_date_val.isoformat()
+        if end_date_val:
+            intent["checkout"] = end_date_val if isinstance(end_date_val, str) else end_date_val.isoformat()
+        else:
+            from datetime import timedelta, date
+            if isinstance(visit_date_val, str):
+                try:
+                    from datetime import datetime
+                    v_date = datetime.strptime(visit_date_val, "%Y-%m-%d").date()
+                    intent["checkout"] = (v_date + timedelta(days=1)).isoformat()
+                except ValueError:
+                    pass
+            else:
+                intent["checkout"] = (visit_date_val + timedelta(days=1)).isoformat()
+        
+        if intent.get("checkout"):
+            intent["is_live_booking"] = True
+
     is_valid_location = intent["location_type"] != "default"
 
     if not intent["is_live_booking"] and not is_valid_location:
@@ -311,17 +355,13 @@ def search_accommodations_structured_en(request):
         return run_local_rag_en(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
     
     else:
-        if not run_live_scraper:
-            logger.warning("booking module not found. Falling back to RAG mode.")
-            return run_local_rag_en(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
-
         try:
-            scraped_result = run_live_scraper(
+            print(f"[DEBUG AccommodationSearchService EN] Calling run_live_scraper with: location={intent['location']}, checkin={intent['checkin']}, checkout={intent['checkout']}")
+            from mcp_server.booking_client import main as run_live_scraper_dynamic
+            scraped_result = run_live_scraper_dynamic(
                 intent["location"], intent["checkin"], intent["checkout"]
             )
         except Exception as e:
-            # 스크래퍼 예외가 그대로 올라가면 루트의 숙소가 통째로 빠진다.
-            # 한국어 경로와 동일하게 RAG 폴백으로 내려간다.
             logger.warning("live booking scraper failed, falling back to RAG mode: %s", e)
             return run_local_rag_en(user_message, user_lat=intent["lat"], user_lng=intent["lng"], top_n=top_n)
 
@@ -370,12 +410,14 @@ def search_accommodations_structured_en(request):
 
         candidates_map = {}
         used_db_ids = set()
+        fallback_counter = 1
 
         for item in scraped_result["data"]:
             raw_title = item.get("hotel_name", "Unnamed")
             live_price = item.get("live_price", "Price N/A")
             live_rating_str = item.get("live_rating", "0.0")
             booking_url = item.get("booking_url", "#")
+            image_url = item.get("image", "")
 
             cleaned_title = clean_hotel_name_pure(raw_title)
             matched_db, sim_score = find_best_db_match_pure(cleaned_title, db_hotels)
@@ -399,11 +441,37 @@ def search_accommodations_structured_en(request):
                     "booking_url": booking_url,
                     "actual_distance": actual_distance,
                 }
+            else:
+                try:
+                    parsed_rating = float(live_rating_str)
+                except (ValueError, TypeError):
+                    parsed_rating = 0.0
+
+                hotel_id = f"live_{fallback_counter}"
+                fallback_counter += 1
+                candidates_map[hotel_id] = {
+                    "matched_db": {
+                        "name": raw_title,
+                        "hotel_style": "Accommodation",
+                        "address": "Seoul",
+                        "rating": parsed_rating,
+                        "review_count": 0,
+                        "image": image_url,
+                        "lat": intent["lat"],
+                        "lng": intent["lng"],
+                        "amenities": "",
+                        "room_features": "",
+                    },
+                    "sim_score": 0.5,
+                    "live_price": live_price,
+                    "live_rating_str": live_rating_str,
+                    "booking_url": booking_url,
+                    "actual_distance": 0.0,
+                }
 
         q_vec = get_embedding(semantic_query)
         db_only_ids = [k for k in candidates_map.keys() if str(k).isdigit()]
         rag_similarity_scores = get_direct_semantic_similarity(q_vec, db_only_ids) if db_only_ids else {}
-        best_reviews = get_best_reviews_for_hotels(q_vec, db_only_ids) if db_only_ids else {}
 
         valid_scores = list(rag_similarity_scores.values())
         max_sim = max(valid_scores) if valid_scores else 1.0
@@ -435,13 +503,17 @@ def search_accommodations_structured_en(request):
             )
 
             amenities = matched_db.get('amenities', '')
-            amenities_sample = amenities.split(',')[0].strip() if amenities else 'Basic amenities'
+            if amenities:
+                features_list = [f.strip() for f in amenities.split(',') if f.strip()]
+                best_feature = features_list[0] if features_list else 'Basic amenities'
+            else:
+                best_feature = 'Comfortable rooms'
             
             description = matched_db.get('description')
             if description and len(description) >= 10:
                 reason_text = description
             else:
-                reason_text = f"Recommended accommodation with live availability. (Features {amenities_sample} etc.)"
+                reason_text = f"Recommended accommodation with live availability. (Features {best_feature} etc.)"
 
             final_processed_list.append({
                 "accommodation_id": str(hotel_id),

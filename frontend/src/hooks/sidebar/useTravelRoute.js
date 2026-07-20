@@ -40,7 +40,7 @@ const UI_TEXT = {
         changeCandidate: 'Change',
         reviewButton: 'Reviews',
         moreInfo: 'Link',
-        travelerReviews: 'Traveler reviews',
+        travelerReviews: 'Reviews',
         bookingLink: 'Book',
         accommodation: 'Accommodation'
     }
