@@ -664,20 +664,38 @@ def _restaurant_route_search_key(prepared) -> tuple:
     )
 
 
-def _route_candidate_occurrence_key(task, day_number: int) -> tuple:
-    """같은 날 같은 검색을 반복하는 슬롯만 후보 창을 순서대로 이동한다."""
-
+def _task_filters_key(task) -> str:
     task_filters = (
         task.filters.model_dump(mode="json", exclude_none=True)
         if task.filters is not None
         else {}
     )
+    return json.dumps(task_filters, ensure_ascii=False, sort_keys=True)
+
+
+def _route_candidate_occurrence_key(task) -> tuple:
+    """같은 검색을 반복하는 슬롯의 후보 창을 순서대로 이동한다.
+
+    날짜를 키에 넣으면 Day마다 창이 0으로 돌아가 같은 검색이 매일 동일한
+    상위 후보를 받고, 결국 같은 장소가 여러 날에 배치된다. 후보 요청 수는
+    이미 도메인의 전체 슬롯 수를 기준으로 잡으므로 날짜를 넣지 않는다.
+    """
+
     return (
         task.domain,
-        day_number,
         task.search_query,
         tuple(task.themes),
-        json.dumps(task_filters, ensure_ascii=False, sort_keys=True),
+        _task_filters_key(task),
+    )
+
+
+def _restaurant_candidate_occurrence_key(task) -> tuple:
+    """식당도 점심·저녁뿐 아니라 날짜를 넘어 후보 창을 이어서 이동한다."""
+
+    return (
+        task.search_query,
+        tuple(task.themes),
+        _task_filters_key(task),
     )
 
 
@@ -1116,22 +1134,11 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         if visit_date != expected_date:
             raise ValueError(f"{task.task_id}의 visit_date와 day_number가 일치하지 않습니다.")
         if task.domain == "restaurant":
-            task_filters_key = (
-                task.filters.model_dump_json(exclude_none=True)
-                if task.filters is not None
-                else "{}"
-            )
-            restaurant_key = (
-                day_number,
-                visit_date,
-                task.search_query,
-                tuple(task.themes),
-                task_filters_key,
-            )
+            restaurant_key = _restaurant_candidate_occurrence_key(task)
             occurrence_index = restaurant_occurrences[restaurant_key]
             restaurant_occurrences[restaurant_key] += 1
         else:
-            occurrence_key = _route_candidate_occurrence_key(task, day_number)
+            occurrence_key = _route_candidate_occurrence_key(task)
             occurrence_index = domain_occurrences[occurrence_key]
             domain_occurrences[occurrence_key] += 1
         required_candidate_count = min(

@@ -295,6 +295,13 @@ def _apply_route_optimization(
     result = _optimize_route_candidates(planner_input)
     coverage = _coordinate_coverage(planner_input)
     if result is None:
+        # 후보 풀이 좁아 조합을 만들지 못하면 동선 최적화를 포기한다.
+        # 조용히 넘어가면 최적화가 왜 꺼졌는지 추적할 수 없다.
+        logger.info(
+            "동선 최적화를 건너뜁니다(슬롯 %d개, 좌표 커버리지 %.2f).",
+            len(planner_input.slots),
+            coverage,
+        )
         return plan.model_copy(update={"coordinate_coverage": round(coverage, 3)})
 
     input_slots = {slot.slot_id: slot for slot in planner_input.slots}
