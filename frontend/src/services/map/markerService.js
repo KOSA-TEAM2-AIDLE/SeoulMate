@@ -32,7 +32,7 @@ function createMarkerContent(type, order) {
   return `<div style="display:flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:${padding};border:3px solid white;border-radius:10px;background:${markerStyle.color};box-shadow:0 4px 10px rgba(15,23,42,.25);color:white;font-size:14px;font-weight:800">${content}</div>`;
 }
 
-function markerType(place) {
+export function markerType(place) {
   const category = String(place.category ?? '').toLowerCase();
   if (category.includes('카페') || category.includes('cafe')) return 'cafe';
   if (category.includes('맛집') || category.includes('restaurant')) return 'restaurant';
