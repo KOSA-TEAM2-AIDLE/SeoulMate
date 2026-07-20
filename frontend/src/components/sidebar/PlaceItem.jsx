@@ -12,7 +12,7 @@ const PlaceItem = memo(({ place, onClick, t, lang }) => {
     const hasLink = !!place.link;
     const linkLabel = place.link?.toLowerCase().includes('tripadvisor.')
         ? t.travelerReviews
-        : t.moreInfo;
+        : place.category === '숙소' ? t.reservation : t.moreInfo;
 
     console.log("PlaceItem Render:", place.name, place);
 

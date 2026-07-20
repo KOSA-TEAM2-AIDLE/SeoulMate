@@ -366,6 +366,27 @@ class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
             place.link,
         )
 
+    def test_cafe_review_link_reaches_common_place(self):
+        candidate = SearchCandidate(
+            domain="cafe",
+            place_id="cafe-10",
+            task_id="task-cafe",
+            name="테스트 카페",
+            category="카페",
+            base_score=0.9,
+            final_score=0.9,
+            attributes={
+                "link": "https://www.tripadvisor.com/Cafe_Review-test.html",
+            },
+        )
+
+        place = search_candidate_to_place(candidate)
+
+        self.assertEqual(
+            "https://www.tripadvisor.com/Cafe_Review-test.html",
+            place.link,
+        )
+
     async def test_attraction_congestion_is_candidate_specific_not_generic_weather(self):
         self.assertEqual(requested_contexts("rag_mcp", "attraction"), ())
 
