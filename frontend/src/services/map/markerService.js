@@ -7,7 +7,7 @@ const MARKER_IMAGE_BY_TYPE = {
     color: '#dc2626',
   },
   accommodation: {
-    color: '#16a34a',
+    color: '#9333ea',
   },
   event: {
     color: '#9333ea',
@@ -22,7 +22,11 @@ function createMarkerContent(type, order) {
     color: '#475569',
   };
 
-  return `<div style="display:flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 8px;border:3px solid white;border-radius:10px;background:${markerStyle.color};box-shadow:0 4px 10px rgba(15,23,42,.25);color:white;font-size:14px;font-weight:800">${order}</div>`;
+  const content = type === 'accommodation'
+    ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z"/></svg>`
+    : order;
+
+  return `<div style="display:flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 8px;border:3px solid white;border-radius:10px;background:${markerStyle.color};box-shadow:0 4px 10px rgba(15,23,42,.25);color:white;font-size:14px;font-weight:800">${content}</div>`;
 }
 
 function markerType(place) {
