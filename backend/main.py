@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # from core.config import ALLOWED_ORIGINS
 
 from core.config import settings
+from core.logging import configure_logging
 from api.routers import (
     accommodations,
     actions,
@@ -22,6 +23,8 @@ from api.routers import (
 )
 
 # load_dotenv() # Pydantic Settings 설정으로 인해 제외 -> Settings 가 직접 .env를 읽음
+
+configure_logging()
 
 app = FastAPI(title="SeoulMate Backend API")
 

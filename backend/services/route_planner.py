@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import logging
+import time
 
 from openai import OpenAIError
 
@@ -21,6 +23,8 @@ from schemas.route_planner import (
 from services.llm import _client, _extract_json_object, _sanitize_recommendation
 from services.location import haversine_km
 
+
+logger = logging.getLogger(__name__)
 
 ROUTE_RANK_PENALTY_KM = 1.0
 ROUTE_OPTIMIZATION_BEAM_WIDTH = 512
@@ -62,10 +66,22 @@ distance_from_previous_km이 있으면 앞 일정과 가깝다는 정도로만 �
 마크다운 없이 다음 JSON 객체만 반환한다.
 {"title":"일정 제목","summary":"2~3문장 요약","reasons":[{"slot_id":"슬롯 ID","selection_reason":"한 문장 이유"}]}"""
 
-# 대표 장소 15곳 기준 실측에서 이유까지 쓰면 출력이 1,600자 안팎이다.
-# 대안까지 쓰게 하면 3배가 되어 응답이 20초로 늘어나므로 대표만 작성시킨다.
-ROUTE_SUMMARY_MAX_OUTPUT_TOKENS = 1200
+# 출력 토큰은 슬롯 수에 비례한다. 실측(합성 데이터): 5슬롯 299 / 15슬롯 669 /
+# 25슬롯 1,087 토큰. 실제 장소·카테고리 이름은 이보다 길어 고정 한도 1,200으로는
+# 25슬롯에서 응답이 잘리고, JSON 파싱이 실패해 이유가 통째로 버려졌다.
+# 슬롯당 여유를 두 배 이상 잡아 잘림을 막는다.
+ROUTE_SUMMARY_BASE_OUTPUT_TOKENS = 600
+ROUTE_SUMMARY_TOKENS_PER_SLOT = 110
+ROUTE_SUMMARY_MAX_OUTPUT_TOKENS = 4000
 ROUTE_SELECTION_REASON_MAX_LENGTH = 300
+
+
+def _summary_max_output_tokens(slot_count: int) -> int:
+    return min(
+        ROUTE_SUMMARY_MAX_OUTPUT_TOKENS,
+        ROUTE_SUMMARY_BASE_OUTPUT_TOKENS
+        + ROUTE_SUMMARY_TOKENS_PER_SLOT * max(slot_count, 1),
+    )
 
 COMPACT_WEATHER_FIELDS = (
     "date",
@@ -726,22 +742,39 @@ def _summarize_confirmed_route(
                 route_summary_payload(plan, planner_input),
                 ensure_ascii=False,
             ),
-            max_output_tokens=ROUTE_SUMMARY_MAX_OUTPUT_TOKENS,
+            max_output_tokens=_summary_max_output_tokens(len(plan.slots)),
             reasoning={"effort": "minimal"},
         )
         parsed = _extract_json_object(response.output_text)
-    except (OpenAIError, RuntimeError, TimeoutError):
+    except (OpenAIError, RuntimeError, TimeoutError) as exc:
+        logger.warning("루트 요약 호출 실패, 규칙 기반 요약을 사용합니다: %s", exc)
         return fallback
     if not parsed:
+        # 응답이 잘리면 제목·요약·이유를 전부 잃는다. 조용히 넘어가면
+        # 다일 일정에서 이유가 통째로 사라진 원인을 찾을 수 없다.
+        logger.warning(
+            "루트 요약 JSON 파싱 실패(status=%s, incomplete=%s, 출력 %d자). "
+            "규칙 기반 요약으로 대체합니다.",
+            getattr(response, "status", None),
+            getattr(response, "incomplete_details", None),
+            len(response.output_text or ""),
+        )
         return fallback
     title = _sanitize_recommendation(str(parsed.get("title") or ""))[:100]
     summary = _sanitize_recommendation(str(parsed.get("summary") or ""))[:600]
     if not title or not summary:
         return fallback
+    reasons = _parse_selection_reasons(parsed, plan)
+    if len(reasons) < len(plan.slots):
+        logger.warning(
+            "루트 이유 %d/%d개만 확보해 나머지는 결정론적 문장으로 채웁니다.",
+            len(reasons),
+            len(plan.slots),
+        )
     return plan.model_copy(update={
         "title": title,
         "summary": summary,
-        "llm_selection_reasons": _parse_selection_reasons(parsed, plan),
+        "llm_selection_reasons": reasons,
     })
 
 
@@ -768,11 +801,24 @@ def _parse_selection_reasons(parsed: dict, plan: ConfirmedRoutePlan) -> dict[str
 
 
 def generate_route_plan(planner_input: RoutePlannerInput) -> ConfirmedRoutePlan:
-    """서버가 루트를 확정한 뒤 GPT는 소형 입력으로 제목과 요약만 작성한다."""
+    """서버가 루트를 확정한 뒤 GPT는 소형 입력으로 요약과 슬롯 이유만 작성한다."""
 
+    started = time.perf_counter()
     ranked_plan = validate_route_planner_output("{}", planner_input)
     optimized_plan = _apply_route_optimization(ranked_plan, planner_input)
-    return _summarize_confirmed_route(optimized_plan, planner_input)
+    optimized_at = time.perf_counter()
+    plan = _summarize_confirmed_route(optimized_plan, planner_input)
+    logger.info(
+        "[route-timing]   ├ 동선 최적화(빔서치) %.2fs / 슬롯 %d개",
+        optimized_at - started,
+        len(planner_input.slots),
+    )
+    logger.info(
+        "[route-timing]   └ GPT 요약·이유 %.2fs / 이유 %d개",
+        time.perf_counter() - optimized_at,
+        len(plan.llm_selection_reasons),
+    )
+    return plan
 
 
 __all__ = [

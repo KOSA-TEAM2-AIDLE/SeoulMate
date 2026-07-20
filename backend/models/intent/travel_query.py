@@ -101,6 +101,8 @@ conversation_history와 previous_structured_query는 이전 추천 문맥이다.
 단일 추천에서 사용자가 한 곳을 말해도 장소 수 정책은 후속 단계가 처리한다.
 당일 루트에서 방문 종류를 명시했다면 explicit_visit_count에 실제 슬롯 수를 넣는다.
 당일 루트의 강도 선택은 relaxed=3곳, normal=4곳, packed=5곳으로 매핑한다.
+일정 강도나 하루 방문 장소 수를 사용자가 '상관없어', '아무거나', '알아서 해줘'처럼
+위임하면 되묻지 말고 pace="normal"로 둔다.
 다일 루트의 target_places_per_day는 정확한 전체 검증값으로 만들지 않는다.
 날씨를 requested_domains에 넣지 않는다.
 도메인 기준은 다음과 같다.
@@ -351,6 +353,14 @@ class TravelIntentExtractor:
             and state.get("intent") is not None
             else extracted_intent
         )
+        # 강도·장소 수를 물었는데 사용자가 판단을 위임하면 기본값으로 확정한다.
+        # 위임 답변을 미수집으로 처리하면 같은 질문이 계속 반복된다.
+        if (
+            extracted.get("pace") is None
+            and any(field in _PACE_FIELDS for field in missing_fields)
+            and wants_default_pace(latest_answer)
+        ):
+            extracted["pace"] = "normal"
         _apply_deterministic_defaults(intent, extracted)
         _apply_current_location_hint(state, extracted)
 
@@ -496,6 +506,25 @@ def _confirmed_details(
     if domains:
         details.append(f"방문 유형 {', '.join(map(str, domains))}")
     return details
+
+
+# 일정 강도·장소 수를 사용자가 위임하는 표현. 지역의 '아무데나'와 같은 성격이라
+# 되묻지 않고 기본값으로 확정한다. 이 처리가 없으면 같은 질문이 무한 반복된다.
+_PACE_DELEGATION_PATTERN = re.compile(
+    r"(상관\s*없|아무\s*거나|아무렇게나|알아서|무관|맘대로|마음대로|편한\s*대로|"
+    r"골라\s*줘|정해\s*줘|추천해\s*줘|"
+    r"whatever|any(?:thing)?\s*(?:is)?\s*(?:fine|ok)|"
+    r"up\s*to\s*you|does(?:n't| not)\s*matter|no\s*preference)",
+    flags=re.IGNORECASE,
+)
+_PACE_FIELDS = {
+    "route_request.pace",
+    "route_request.target_places_per_day",
+}
+
+
+def wants_default_pace(text: object) -> bool:
+    return bool(_PACE_DELEGATION_PATTERN.search(str(text or "")))
 
 
 def _apply_deterministic_defaults(

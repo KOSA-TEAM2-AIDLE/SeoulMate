@@ -15,6 +15,7 @@ from schemas.route_planner import (
 )
 from services.route_planner import (
     ROUTE_SUMMARY_MAX_OUTPUT_TOKENS,
+    _summary_max_output_tokens,
     generate_route_plan,
     route_planner_payload,
     route_summary_payload,
@@ -344,7 +345,7 @@ class RoutePlannerValidationTests(unittest.TestCase):
         self.assertLess(len(captured["input"]), 5000)
         self.assertEqual(
             captured["max_output_tokens"],
-            ROUTE_SUMMARY_MAX_OUTPUT_TOKENS,
+            _summary_max_output_tokens(len(result.slots)),
         )
         self.assertEqual(captured["reasoning"], {"effort": "minimal"})
         self.assertEqual(result.title, "비 오는 날의 서울 일정")
@@ -407,6 +408,18 @@ class RoutePlannerValidationTests(unittest.TestCase):
         self.assertTrue(plan.title)
         self.assertTrue(plan.summary)
         self.assertEqual(len(plan.slots), 2)
+
+    def test_output_token_budget_grows_with_slot_count(self):
+        # 25슬롯 실측 출력이 1,087토큰이라 고정 한도 1,200으로는 잘렸다.
+        self.assertGreater(_summary_max_output_tokens(25), 1200 * 2)
+        self.assertLess(
+            _summary_max_output_tokens(5),
+            _summary_max_output_tokens(25),
+        )
+        self.assertLessEqual(
+            _summary_max_output_tokens(100),
+            ROUTE_SUMMARY_MAX_OUTPUT_TOKENS,
+        )
 
     def test_day_boundary_is_connected_only_from_accommodation(self):
         period = TripPeriod(

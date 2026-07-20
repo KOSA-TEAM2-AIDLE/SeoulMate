@@ -19,7 +19,9 @@ from domains.accommodation.search_accommodation_rrf_en import (
     search_by_accommodation,
     search_by_review,
     fuse_and_rank,
-    get_direct_semantic_similarity,
+    # get_direct_semantic_similarity는 이 모듈이 직접 정의한다(아래 참조).
+    # 존재하지 않는 이름을 임포트해 모듈 로드가 ImportError로 실패했고,
+    # 그 탓에 영어 숙소 검색이 항상 폴백 없이 죽었다.
     get_best_reviews_for_hotels,
     ACC_TOP_N,
     REVIEW_POOL,

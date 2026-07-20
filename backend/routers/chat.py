@@ -9,6 +9,8 @@ from dataclasses import dataclass
 import json
 import logging
 from datetime import date, datetime, time, timedelta
+# datetime.time을 time이라는 이름으로 쓰고 있어 time 모듈은 함수만 가져온다.
+from time import perf_counter
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -25,6 +27,7 @@ from application.recommendation.route_reason import (
 from application.recommendation.selection_registry import (
     build_default_selection_registry,
 )
+from application.travel_query.builder import DOMAIN_LABELS
 from application.travel_query.service import TravelQueryService, get_travel_query_service
 from application.response.frontend_response_mapper import (
     empty_frontend_response,
@@ -1054,8 +1057,19 @@ async def _search_route_batches(body, prepared_tasks, concurrency: int):
     return batches
 
 
+async def _timed(stage: str, awaitable):
+    """루트 단계별 소요 시간을 남긴다. 병렬 실행 구간도 각각 측정한다."""
+
+    started = perf_counter()
+    try:
+        return await awaitable
+    finally:
+        logger.info("[route-timing] %s %.2fs", stage, perf_counter() - started)
+
+
 async def _structured_route_stream(body: ChatRequest, source_mode: str, route_intent: str):
     """Task별 5개 후보를 GPT가 대표 1곳과 대안 2곳으로 편성한다."""
+    route_started_at = perf_counter()
     parsed = body.parsed_query
     if parsed is None or not parsed.tasks:
         raise ValueError("루트 생성에는 하나 이상의 장소 Task가 필요합니다.")
@@ -1079,6 +1093,8 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
     # 이유 문장은 루트 확정 뒤에 동선 거리까지 합쳐 한 곳에서 만든다.
     # 여기서는 슬롯 조립 시점에만 알 수 있는 도메인별 사실을 모아둔다.
     reason_facts: dict[str, dict] = {}
+    # 후보를 한 곳도 찾지 못해 일정에서 뺀 슬롯의 도메인 목록.
+    skipped_slots: list[str] = []
     has_mock = False
     per_day_counts: dict[int, int] = {}
     domain_slot_counts = Counter(task.domain for task in parsed.tasks)
@@ -1140,27 +1156,31 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
             logger.exception("다일 일정의 분리 숙소 검색 중 예외가 발생했습니다.")
             return None, []
 
-    route_search = _search_route_batches(
+    route_search = _timed("도메인 검색", _search_route_batches(
         body,
         prepared_tasks,
         _route_search_concurrency(parsed.tasks, route_request.max_places_per_day),
-    )
+    ))
     route_weather = (
-        _prefetch_route_weather(body, parsed, prepared_tasks, slot_start_times)
+        _timed(
+            "날씨 프리페치",
+            _prefetch_route_weather(body, parsed, prepared_tasks, slot_start_times),
+        )
         if include_weather
         else None
     )
+    parallel_started_at = perf_counter()
     if day_count > 1:
         if route_weather is not None:
             batches, accommodation_result, weather_cache = await asyncio.gather(
                 route_search,
-                safe_accommodation_search(),
+                _timed("숙소 검색", safe_accommodation_search()),
                 route_weather,
             )
         else:
             batches, accommodation_result = await asyncio.gather(
                 route_search,
-                safe_accommodation_search(),
+                _timed("숙소 검색", safe_accommodation_search()),
             )
         accommodation_place, accommodation_alternatives = accommodation_result
     else:
@@ -1171,6 +1191,12 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
             )
         else:
             batches = await route_search
+
+    logger.info(
+        "[route-timing] 병렬 구간 합계 %.2fs",
+        perf_counter() - parallel_started_at,
+    )
+    assembly_started_at = perf_counter()
 
     for (target_date, target_time, location), weather in weather_cache.items():
         weather_contexts.append({
@@ -1349,7 +1375,15 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     },
                 ))
         if not candidates:
-            raise ValueError(f"{task.task_id} 슬롯의 후보를 찾지 못했습니다.")
+            # 슬롯 하나가 비었다고 루트 전체를 실패시키지 않는다. 나머지
+            # 슬롯으로 일정을 구성하고 몇 곳을 못 채웠는지 안내한다.
+            logger.warning(
+                "%s 슬롯(%s)의 후보를 찾지 못해 일정에서 제외합니다.",
+                task.task_id,
+                task.domain,
+            )
+            skipped_slots.append(task.domain)
+            continue
         slot_inputs.append(RouteSlotCandidates(
             slot_id=task.slot_id or task.task_id,
             day_number=day_number,
@@ -1361,6 +1395,9 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
             candidates=candidates,
         ))
 
+    if not slot_inputs:
+        raise ValueError("조건에 맞는 후보를 찾지 못해 루트를 만들 수 없습니다.")
+
     planner_input = RoutePlannerInput(
         language=effective_query_language(parsed),
         original_question=parsed.original_question,
@@ -1370,7 +1407,15 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         origin_latitude=body.lat,
         origin_longitude=body.lng,
     )
-    plan = await asyncio.to_thread(generate_route_plan, planner_input)
+    logger.info(
+        "[route-timing] 슬롯 조립·재랭킹 %.2fs (슬롯 %d개)",
+        perf_counter() - assembly_started_at,
+        len(slot_inputs),
+    )
+    plan = await _timed(
+        "루트 확정(빔서치 최적화 + GPT 요약·이유)",
+        asyncio.to_thread(generate_route_plan, planner_input),
+    )
     days: list[DayPlan] = []
     route_language = effective_query_language(parsed)
     for day_number in range(1, day_count + 1):
@@ -1421,6 +1466,13 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
             ))
         days.append(DayPlan(day=day_number, theme=plan.title, slots=day_slots))
 
+    logger.info(
+        "[route-timing] 총 소요 %.2fs (%d일 / 슬롯 %d개)",
+        perf_counter() - route_started_at,
+        day_count,
+        len(plan.slots),
+    )
+
     if accommodation_place is not None:
         area_centroid = _route_area_centroid(days)
         accommodation_place = _with_accommodation_reason(
@@ -1454,6 +1506,17 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         note += " 후보 좌표를 바탕으로 시간순 연속 방문지의 직선거리를 최적화했습니다."
     if include_weather and any(not context.get("available") for context in weather_contexts):
         note += " 제공 범위를 벗어난 예보 시점은 날씨를 추측하지 않고 검색 순위를 유지했습니다."
+    if skipped_slots:
+        labels = [
+            DOMAIN_LABELS.get(domain, {}).get(
+                effective_query_language(parsed), domain
+            )
+            for domain in dict.fromkeys(skipped_slots)
+        ]
+        note += (
+            f" 조건에 맞는 후보를 찾지 못한 {', '.join(labels)}"
+            f" {len(skipped_slots)}곳은 일정에서 제외했습니다."
+        )
     if has_mock:
         note += " 식당 외 도메인은 현재 임시 후보입니다."
     if day_count > 1 and accommodation_place is None:
