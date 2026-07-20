@@ -59,6 +59,63 @@ class TravelIntentExtractorTests(unittest.TestCase):
             find_missing_fields({**state, **result}),
         )
 
+    def test_pace_delegation_answer_is_accepted_instead_of_reasking(self) -> None:
+        # "상관없어"를 미수집으로 처리하면 같은 질문이 무한 반복된다.
+        for answer in ("상관없어", "아무거나 괜찮아", "알아서 해줘", "whatever is fine"):
+            with self.subTest(answer=answer):
+                chain = RunnableLambda(
+                    lambda _: {
+                        "language": "ko",
+                        "intent": "day_trip_route",
+                        "normalized_question": "강남 하루 코스",
+                        "location": "강남",
+                        "start_date": "2026-07-21",
+                        "end_date": "2026-07-21",
+                        "days": 1,
+                        "nights": 0,
+                    }
+                )
+                state = _base_state()
+                state.update({
+                    "original_question": "강남 하루 코스 짜줘",
+                    "intent": "day_trip_route",
+                    "missing_fields": ["route_request.target_places_per_day"],
+                    "latest_user_answer": answer,
+                })
+
+                result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+                self.assertEqual(result["collected"].get("pace"), "normal")
+                self.assertNotIn(
+                    "route_request.target_places_per_day",
+                    find_missing_fields({**state, **result}),
+                )
+
+    def test_pace_question_still_reasks_on_unrelated_answer(self) -> None:
+        chain = RunnableLambda(
+            lambda _: {
+                "language": "ko",
+                "intent": "day_trip_route",
+                "normalized_question": "강남 하루 코스",
+                "location": "강남",
+                "start_date": "2026-07-21",
+                "end_date": "2026-07-21",
+                "days": 1,
+                "nights": 0,
+            }
+        )
+        state = _base_state()
+        state.update({
+            "original_question": "강남 하루 코스 짜줘",
+            "intent": "day_trip_route",
+            "missing_fields": ["route_request.target_places_per_day"],
+            "latest_user_answer": "주차 되는 곳으로 해줘",
+        })
+
+        result = asyncio.run(TravelIntentExtractor(chain)(state))
+
+        self.assertIsNone(result["collected"].get("pace"))
+
     def test_location_clarification_accepts_anywhere_without_llm_location(self) -> None:
         chain = RunnableLambda(
             lambda _: {

@@ -9,6 +9,8 @@ from dataclasses import dataclass
 import json
 import logging
 from datetime import date, datetime, time, timedelta
+# datetime.time을 time이라는 이름으로 쓰고 있어 time 모듈은 함수만 가져온다.
+from time import perf_counter
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -18,9 +20,14 @@ from application.recommendation.domain_executor import execute_domain_search
 from application.recommendation.group_selection import select_grouped_candidates
 from application.recommendation.location_resolution import SearchLocationResolver
 from application.recommendation.request_factory import build_domain_search_request
+from application.recommendation.route_reason import (
+    RouteReasonFacts,
+    build_route_reason,
+)
 from application.recommendation.selection_registry import (
     build_default_selection_registry,
 )
+from application.travel_query.builder import DOMAIN_LABELS
 from application.travel_query.service import TravelQueryService, get_travel_query_service
 from application.response.frontend_response_mapper import (
     empty_frontend_response,
@@ -82,6 +89,7 @@ from services.query_policy import (
 from domains.restaurant.weather_policy import prepare_rag_only_candidates, rerank_with_weather
 from domains.attraction.congestion_reranker import AttractionCongestionReranker
 from domains.attraction.context_enricher import AttractionContextEnricher
+from domains.attraction.weather_reranker import AttractionWeatherReranker
 from services.source_router import decide_source_mode, mode_to_intent, normalize_source_mode
 from integrations.mcp.congestion_client import CongestionMCPProvider
 from integrations.mcp.weather_client import WeatherMCPProvider, get_weather_via_mcp
@@ -126,11 +134,13 @@ ROUTE_RESTAURANT_RANK_PENALTY_KM = 0.25
 ROUTE_CAFE_PREFERRED_DISTANCE_KM = 1.5
 ROUTE_CAFE_MAX_DISTANCE_KM = 2.5
 ROUTE_CAFE_RANK_PENALTY_KM = 0.25
+ROUTE_WEATHER_CONCURRENCY = 5
 attraction_congestion_reranker = AttractionCongestionReranker(CongestionMCPProvider())
 attraction_context_enricher = AttractionContextEnricher(
     congestion_reranker=attraction_congestion_reranker,
     weather_provider=WeatherMCPProvider(),
 )
+route_attraction_weather_reranker = AttractionWeatherReranker()
 domain_selection_registry = build_default_selection_registry()
 
 MEAL_TIME_HINTS = (
@@ -530,6 +540,95 @@ async def _search_route_accommodation(body, parsed, route_request: RouteRequest)
     return places[0], places[1:]
 
 
+def _restaurant_open_at(raw: dict, visit_date: date, slot_time: str) -> bool | None:
+    """해당 방문 시각의 영업 여부. 영업시간 정보가 없으면 None을 반환한다."""
+
+    try:
+        target = datetime.combine(visit_date, time.fromisoformat(slot_time))
+    except ValueError:
+        return None
+    return is_open_at(raw.get("hours"), target)
+
+
+def _route_place_reason(
+    place: Place,
+    facts: dict,
+    previous_place: Place | None,
+    language: str,
+) -> str:
+    """도메인과 무관하게 같은 골격의 루트 추천 이유를 만든다."""
+
+    distance_km = None
+    if (
+        previous_place is not None
+        and None not in (place.lat, place.lng, previous_place.lat, previous_place.lng)
+    ):
+        distance_km = haversine_km(
+            previous_place.lat,
+            previous_place.lng,
+            place.lat,
+            place.lng,
+        )
+    return build_route_reason(
+        RouteReasonFacts(
+            domain=facts.get("domain") or place.source_type,
+            category=place.category,
+            rating=place.rating,
+            review_count=place.review_count,
+            open_at_visit_time=facts.get("open_at_visit_time"),
+            visit_time=facts.get("visit_time"),
+            weather_condition=facts.get("weather_condition"),
+            weather_indoor_evidence=bool(facts.get("weather_indoor_evidence")),
+            weather_outdoor_evidence=bool(facts.get("weather_outdoor_evidence")),
+            distance_from_previous_km=distance_km,
+            is_first_stop=previous_place is None,
+        ),
+        language,
+    )
+
+
+def _route_area_centroid(days: list[DayPlan]) -> tuple[float, float] | None:
+    coordinates = [
+        (slot.place.lat, slot.place.lng)
+        for day in days
+        for slot in day.slots
+        if slot.place.lat is not None and slot.place.lng is not None
+    ]
+    if not coordinates:
+        return None
+    return (
+        sum(latitude for latitude, _ in coordinates) / len(coordinates),
+        sum(longitude for _, longitude in coordinates) / len(coordinates),
+    )
+
+
+def _with_accommodation_reason(
+    place: Place,
+    centroid: tuple[float, float] | None,
+    language: str,
+) -> Place:
+    """숙소는 특정 슬롯이 아니라 일정 전체 권역과의 거리로 설명한다."""
+
+    updated = place.model_copy(deep=True)
+    distance_km = (
+        haversine_km(centroid[0], centroid[1], place.lat, place.lng)
+        if centroid is not None and place.lat is not None and place.lng is not None
+        else None
+    )
+    updated.selection_reason = build_route_reason(
+        RouteReasonFacts(
+            domain="accommodation",
+            category=place.category,
+            rating=place.rating,
+            review_count=place.review_count,
+            distance_from_area_km=distance_km,
+        ),
+        language,
+    )
+    updated.reason = updated.selection_reason
+    return updated
+
+
 def _route_candidate_window(candidates, occurrence_index: int):
     """반복 도메인 슬롯이 항상 같은 상위 5곳을 공유하지 않도록 창을 이동한다."""
 
@@ -555,20 +654,38 @@ def _restaurant_route_search_key(prepared) -> tuple:
     )
 
 
-def _route_candidate_occurrence_key(task, day_number: int) -> tuple:
-    """같은 날 같은 검색을 반복하는 슬롯만 후보 창을 순서대로 이동한다."""
-
+def _task_filters_key(task) -> str:
     task_filters = (
         task.filters.model_dump(mode="json", exclude_none=True)
         if task.filters is not None
         else {}
     )
+    return json.dumps(task_filters, ensure_ascii=False, sort_keys=True)
+
+
+def _route_candidate_occurrence_key(task) -> tuple:
+    """같은 검색을 반복하는 슬롯의 후보 창을 순서대로 이동한다.
+
+    날짜를 키에 넣으면 Day마다 창이 0으로 돌아가 같은 검색이 매일 동일한
+    상위 후보를 받고, 결국 같은 장소가 여러 날에 배치된다. 후보 요청 수는
+    이미 도메인의 전체 슬롯 수를 기준으로 잡으므로 날짜를 넣지 않는다.
+    """
+
     return (
         task.domain,
-        day_number,
         task.search_query,
         tuple(task.themes),
-        json.dumps(task_filters, ensure_ascii=False, sort_keys=True),
+        _task_filters_key(task),
+    )
+
+
+def _restaurant_candidate_occurrence_key(task) -> tuple:
+    """식당도 점심·저녁뿐 아니라 날짜를 넘어 후보 창을 이어서 이동한다."""
+
+    return (
+        task.search_query,
+        tuple(task.themes),
+        _task_filters_key(task),
     )
 
 
@@ -814,6 +931,90 @@ def _route_search_concurrency(tasks, max_places_per_day: int) -> int:
     return max(1, min(busiest_day, max_places_per_day, 5))
 
 
+def _route_weather_time_bucket(slot_time: str) -> str:
+    """오전·점심과 오후·저녁 슬롯이 각각 하나의 예보를 공유한다."""
+
+    return "12:00" if _route_time_minutes(slot_time) < 15 * 60 else "18:00"
+
+
+def _route_task_weather_location(body, parsed, task) -> str:
+    return (
+        effective_task_filters(parsed, task).location
+        or parsed.filters.location
+        or body.location_name
+        or "서울"
+    )
+
+
+def _route_weather_key(body, parsed, task, visit_date: date, slot_time: str):
+    return (
+        visit_date.isoformat(),
+        _route_weather_time_bucket(slot_time),
+        _route_task_weather_location(body, parsed, task),
+    )
+
+
+async def _prefetch_route_weather(
+    body,
+    parsed,
+    prepared_tasks,
+    slot_start_times: dict[str, str],
+) -> dict[tuple[str, str, str], dict]:
+    """루트의 일자·시간대별 예보를 제한된 동시성으로 한 번씩 조회한다."""
+
+    keys = sorted({
+        _route_weather_key(
+            body,
+            parsed,
+            task,
+            visit_date,
+            slot_start_times[task.task_id],
+        )
+        for task, _, visit_date, _, _ in prepared_tasks
+        if task.domain in {"attraction", "restaurant"}
+    })
+    if not keys:
+        return {}
+
+    locations = list(dict.fromkeys(key[2] for key in keys))
+
+    async def resolve_location(location: str):
+        same_as_current = bool(
+            body.location_name
+            and body.lat is not None
+            and body.lng is not None
+            and location.strip().casefold()
+            == body.location_name.strip().casefold()
+        )
+        if same_as_current:
+            return body.lat, body.lng, body.location_name
+        geocoded = await asyncio.to_thread(geocode_kakao, location)
+        return geocoded or (SEOUL_CENTER[0], SEOUL_CENTER[1], location)
+
+    resolved_values = await asyncio.gather(*(
+        resolve_location(location) for location in locations
+    ))
+    resolved = dict(zip(locations, resolved_values, strict=True))
+    semaphore = asyncio.Semaphore(ROUTE_WEATHER_CONCURRENCY)
+
+    async def fetch(key: tuple[str, str, str]):
+        target_date, target_time, location = key
+        latitude, longitude, resolved_name = resolved[location]
+        async with semaphore:
+            weather = await get_weather_via_mcp(
+                parsed.original_question,
+                latitude,
+                longitude,
+                effective_query_language(parsed),
+                resolved_name,
+                target_date=target_date,
+                target_time=target_time,
+            )
+        return key, weather
+
+    return dict(await asyncio.gather(*(fetch(key) for key in keys)))
+
+
 async def _search_route_batches(body, prepared_tasks, concurrency: int):
     semaphore = asyncio.Semaphore(concurrency)
 
@@ -864,8 +1065,19 @@ async def _search_route_batches(body, prepared_tasks, concurrency: int):
     return batches
 
 
+async def _timed(stage: str, awaitable):
+    """루트 단계별 소요 시간을 남긴다. 병렬 실행 구간도 각각 측정한다."""
+
+    started = perf_counter()
+    try:
+        return await awaitable
+    finally:
+        logger.info("[route-timing] %s %.2fs", stage, perf_counter() - started)
+
+
 async def _structured_route_stream(body: ChatRequest, source_mode: str, route_intent: str):
     """Task별 5개 후보를 GPT가 대표 1곳과 대안 2곳으로 편성한다."""
+    route_started_at = perf_counter()
     parsed = body.parsed_query
     if parsed is None or not parsed.tasks:
         raise ValueError("루트 생성에는 하나 이상의 장소 Task가 필요합니다.")
@@ -881,25 +1093,16 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         )
     include_weather = normalize_source_mode(source_mode) == "rag_mcp"
     tool_results: list[ToolResult] = []
-    weather_cache: dict[tuple[str, str], dict] = {}
+    weather_cache: dict[tuple[str, str, str], dict] = {}
     weather_contexts: list[dict] = []
-    weather_location = parsed.filters.location or body.location_name or "서울"
-    weather_lat, weather_lng = body.lat, body.lng
-    same_as_current = bool(
-        body.location_name
-        and weather_location.strip().lower() == body.location_name.strip().lower()
-    )
-    if include_weather and not same_as_current:
-        geocoded = await asyncio.to_thread(geocode_kakao, weather_location)
-        if geocoded:
-            weather_lat, weather_lng, weather_location = geocoded
-        else:
-            weather_lat, weather_lng = None, None
-    weather_lat = weather_lat if weather_lat is not None else SEOUL_CENTER[0]
-    weather_lng = weather_lng if weather_lng is not None else SEOUL_CENTER[1]
 
     slot_inputs: list[RouteSlotCandidates] = []
     place_lookup: dict[str, Place] = {}
+    # 이유 문장은 루트 확정 뒤에 동선 거리까지 합쳐 한 곳에서 만든다.
+    # 여기서는 슬롯 조립 시점에만 알 수 있는 도메인별 사실을 모아둔다.
+    reason_facts: dict[str, dict] = {}
+    # 후보를 한 곳도 찾지 못해 일정에서 뺀 슬롯의 도메인 목록.
+    skipped_slots: list[str] = []
     has_mock = False
     per_day_counts: dict[int, int] = {}
     domain_slot_counts = Counter(task.domain for task in parsed.tasks)
@@ -921,22 +1124,11 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         if visit_date != expected_date:
             raise ValueError(f"{task.task_id}의 visit_date와 day_number가 일치하지 않습니다.")
         if task.domain == "restaurant":
-            task_filters_key = (
-                task.filters.model_dump_json(exclude_none=True)
-                if task.filters is not None
-                else "{}"
-            )
-            restaurant_key = (
-                day_number,
-                visit_date,
-                task.search_query,
-                tuple(task.themes),
-                task_filters_key,
-            )
+            restaurant_key = _restaurant_candidate_occurrence_key(task)
             occurrence_index = restaurant_occurrences[restaurant_key]
             restaurant_occurrences[restaurant_key] += 1
         else:
-            occurrence_key = _route_candidate_occurrence_key(task, day_number)
+            occurrence_key = _route_candidate_occurrence_key(task)
             occurrence_index = domain_occurrences[occurrence_key]
             domain_occurrences[occurrence_key] += 1
         required_candidate_count = min(
@@ -961,19 +1153,67 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
             logger.exception("다일 일정의 분리 숙소 검색 중 예외가 발생했습니다.")
             return None, []
 
-    route_search = _search_route_batches(
+    route_search = _timed("도메인 검색", _search_route_batches(
         body,
         prepared_tasks,
         _route_search_concurrency(parsed.tasks, route_request.max_places_per_day),
-    )
-    if day_count > 1:
-        batches, accommodation_result = await asyncio.gather(
-            route_search,
-            safe_accommodation_search(),
+    ))
+    route_weather = (
+        _timed(
+            "날씨 프리페치",
+            _prefetch_route_weather(body, parsed, prepared_tasks, slot_start_times),
         )
+        if include_weather
+        else None
+    )
+    parallel_started_at = perf_counter()
+    if day_count > 1:
+        if route_weather is not None:
+            batches, accommodation_result, weather_cache = await asyncio.gather(
+                route_search,
+                _timed("숙소 검색", safe_accommodation_search()),
+                route_weather,
+            )
+        else:
+            batches, accommodation_result = await asyncio.gather(
+                route_search,
+                _timed("숙소 검색", safe_accommodation_search()),
+            )
         accommodation_place, accommodation_alternatives = accommodation_result
     else:
-        batches = await route_search
+        if route_weather is not None:
+            batches, weather_cache = await asyncio.gather(
+                route_search,
+                route_weather,
+            )
+        else:
+            batches = await route_search
+
+    logger.info(
+        "[route-timing] 병렬 구간 합계 %.2fs",
+        perf_counter() - parallel_started_at,
+    )
+    assembly_started_at = perf_counter()
+
+    for (target_date, target_time, location), weather in weather_cache.items():
+        weather_contexts.append({
+            **weather,
+            "date": target_date,
+            "time": target_time,
+            "location": location,
+        })
+        tool_results.append(ToolResult(
+            tool_name="get_weather_context",
+            params={
+                "location": location,
+                "target_date": target_date,
+                "target_time": target_time,
+            },
+            result={key: value for key, value in weather.items() if key != "error"},
+            ok=bool(weather.get("available")),
+            source="live" if weather.get("available") else "mock",
+            error=weather.get("error"),
+        ))
 
     for prepared_index, (prepared, batch) in enumerate(zip(prepared_tasks, batches)):
         (
@@ -987,30 +1227,9 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         has_mock = has_mock or batch.used_mock
         if task.domain == "restaurant":
             slot_time = slot_start_times[task.task_id]
-            weather = None
-            if include_weather:
-                cache_key = (visit_date.isoformat(), slot_time)
-                weather = weather_cache.get(cache_key)
-                if weather is None:
-                    weather = await get_weather_via_mcp(
-                        parsed.original_question,
-                        weather_lat,
-                        weather_lng,
-                        effective_query_language(parsed),
-                        weather_location,
-                        target_date=visit_date.isoformat(),
-                        target_time=slot_time,
-                    )
-                    weather_cache[cache_key] = weather
-                    weather_contexts.append(weather)
-                    tool_results.append(ToolResult(
-                        tool_name="get_weather_context",
-                        params={"lat": weather_lat, "lng": weather_lng, "target_date": visit_date.isoformat(), "target_time": slot_time},
-                        result={key: value for key, value in weather.items() if key != "error"},
-                        ok=bool(weather.get("available")),
-                        source="live" if weather.get("available") else "mock",
-                        error=weather.get("error"),
-                    ))
+            weather = weather_cache.get(
+                _route_weather_key(body, parsed, task, visit_date, slot_time)
+            )
             ranked = [to_legacy_candidate(item) for item in batch.candidates]
             ranked = (
                 rerank_with_weather(ranked, weather, parsed.original_question, source_mode="rag_mcp")
@@ -1038,7 +1257,20 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                 )
                 place = _place(raw, task_id=task.task_id)
                 place_lookup[candidate_id] = place
+                open_at_visit_time = _restaurant_open_at(raw, visit_date, slot_time)
+                reason_facts[candidate_id] = {
+                    "domain": "restaurant",
+                    "rating": place.rating,
+                    "review_count": place.review_count,
+                    "open_at_visit_time": open_at_visit_time,
+                    "visit_time": slot_time,
+                }
                 wrapped = _restaurant_group_candidate(raw, include_weather)
+                # 슬롯 시각 기준 영업 여부는 검색 후에만 판정되므로 여기서 넣는다.
+                if open_at_visit_time:
+                    wrapped["payload"]["open_at_visit_time"] = True
+                if place.review_count is not None:
+                    wrapped["payload"]["review_count"] = place.review_count
                 candidates.append(RouteCandidate(
                     candidate_id=candidate_id,
                     domain="restaurant",
@@ -1059,6 +1291,7 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     f"{task.slot_id or task.task_id}:{task.domain}:{candidate.place_id}"
                 )
                 place_lookup[candidate_id] = place
+                reason_facts[candidate_id] = {"domain": task.domain}
                 wrapped = _accommodation_group_candidate(candidate, place)
                 candidates.append(RouteCandidate(
                     candidate_id=candidate_id,
@@ -1070,21 +1303,28 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     payload=wrapped["payload"],
                 ))
         else:
-            attraction_request = build_domain_search_request(
-                parsed,
-                task,
-                latitude=body.lat,
-                longitude=body.lng,
-                current_location_name=body.location_name,
-                candidate_count=required_candidate_count,
-                min_rating=body.min_rating,
-            )
-            domain_candidates, _ = await _rerank_attraction_candidates(
-                batch.candidates,
-                parsed,
-                source_mode,
-                attraction_request,
-            ) if task.domain == "attraction" else (batch.candidates, ())
+            # 단일 추천은 _rerank_attraction_candidates로 항상 혼잡도를 보강하지만,
+            # 루트는 관광 슬롯이 최대 10개라 슬롯마다 혼잡도 MCP를 호출하면
+            # 응답이 크게 느려진다. 루트에서는 프리페치한 날씨로만 재랭킹한다.
+            if task.domain == "attraction":
+                weather = weather_cache.get(_route_weather_key(
+                    body,
+                    parsed,
+                    task,
+                    visit_date,
+                    slot_start_times[task.task_id],
+                ))
+                domain_candidates = (
+                    route_attraction_weather_reranker.rerank(
+                        batch.candidates,
+                        weather,
+                        parsed.original_question,
+                    )
+                    if include_weather and weather is not None
+                    else batch.candidates
+                )
+            else:
+                domain_candidates = batch.candidates
             if task.domain == "cafe":
                 previous_anchors, next_anchors = _cafe_neighbor_anchor_coordinates(
                     prepared_tasks,
@@ -1106,6 +1346,18 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     f"{task.slot_id or task.task_id}:{task.domain}:{candidate.place_id}"
                 )
                 place_lookup[candidate_id] = place
+                reason_facts[candidate_id] = {
+                    "domain": task.domain,
+                    "rating": place.rating,
+                    "review_count": place.review_count,
+                    "weather_condition": candidate.signals.get("weather_condition"),
+                    "weather_indoor_evidence": bool(
+                        candidate.signals.get("weather_indoor_evidence")
+                    ),
+                    "weather_outdoor_evidence": bool(
+                        candidate.signals.get("weather_outdoor_evidence")
+                    ),
+                }
                 candidates.append(RouteCandidate(
                     candidate_id=candidate_id,
                     domain=task.domain,
@@ -1115,12 +1367,23 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     longitude=candidate.longitude,
                     payload={
                         "category": candidate.category,
+                        # GPT 이유 작성에 쓸 검증된 근거. 없는 값은 넣지 않는다.
+                        "rating": place.rating,
+                        "review_count": place.review_count,
                         "evidence": candidate.evidence[:3],
                         "fallback_reason": place.reason,
                     },
                 ))
         if not candidates:
-            raise ValueError(f"{task.task_id} 슬롯의 후보를 찾지 못했습니다.")
+            # 슬롯 하나가 비었다고 루트 전체를 실패시키지 않는다. 나머지
+            # 슬롯으로 일정을 구성하고 몇 곳을 못 채웠는지 안내한다.
+            logger.warning(
+                "%s 슬롯(%s)의 후보를 찾지 못해 일정에서 제외합니다.",
+                task.task_id,
+                task.domain,
+            )
+            skipped_slots.append(task.domain)
+            continue
         slot_inputs.append(RouteSlotCandidates(
             slot_id=task.slot_id or task.task_id,
             day_number=day_number,
@@ -1132,6 +1395,9 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
             candidates=candidates,
         ))
 
+    if not slot_inputs:
+        raise ValueError("조건에 맞는 후보를 찾지 못해 루트를 만들 수 없습니다.")
+
     planner_input = RoutePlannerInput(
         language=effective_query_language(parsed),
         original_question=parsed.original_question,
@@ -1141,22 +1407,53 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         origin_latitude=body.lat,
         origin_longitude=body.lng,
     )
-    plan = await asyncio.to_thread(generate_route_plan, planner_input)
+    logger.info(
+        "[route-timing] 슬롯 조립·재랭킹 %.2fs (슬롯 %d개)",
+        perf_counter() - assembly_started_at,
+        len(slot_inputs),
+    )
+    plan = await _timed(
+        "루트 확정(빔서치 최적화 + GPT 요약·이유)",
+        asyncio.to_thread(generate_route_plan, planner_input),
+    )
     days: list[DayPlan] = []
+    route_language = effective_query_language(parsed)
     for day_number in range(1, day_count + 1):
         day_slots: list[TimeSlot] = []
-        for confirmed in (slot for slot in plan.slots if slot.day_number == day_number):
+        # 이유 문장의 "직전 일정" 근거는 방문 시각 순서를 따라야 한다.
+        previous_place: Place | None = None
+        for confirmed in sorted(
+            (slot for slot in plan.slots if slot.day_number == day_number),
+            key=lambda slot: (slot.start_time, slot.slot_id),
+        ):
             selected = place_lookup[confirmed.selected.candidate_id].model_copy(deep=True)
-            selected.selection_reason = confirmed.selection_reason
-            selected.reason = confirmed.selection_reason
+            # 대표 장소는 GPT가 쓴 이유를 우선하고, 누락·실패한 슬롯만
+            # 검증된 사실로 만든 결정론적 문장으로 채운다.
+            selected.selection_reason = (
+                plan.llm_selection_reasons.get(confirmed.slot_id)
+                or _route_place_reason(
+                    selected,
+                    reason_facts.get(confirmed.selected.candidate_id, {}),
+                    previous_place,
+                    route_language,
+                )
+            )
+            selected.reason = selected.selection_reason
             alternatives: list[Place] = []
             for rank, alternative in enumerate(confirmed.alternatives, start=2):
                 place = place_lookup[alternative.candidate.candidate_id].model_copy(deep=True)
                 place.rank = rank
-                place.selection_reason = alternative.selection_reason
-                place.reason = alternative.selection_reason
+                # 대안도 같은 골격으로 설명해야 대표 장소와 나란히 비교된다.
+                place.selection_reason = _route_place_reason(
+                    place,
+                    reason_facts.get(alternative.candidate.candidate_id, {}),
+                    previous_place,
+                    route_language,
+                )
+                place.reason = place.selection_reason
                 alternatives.append(place)
             selected.rank = 1
+            previous_place = selected
             day_slots.append(TimeSlot(
                 slot_id=confirmed.slot_id,
                 date=confirmed.date.isoformat(),
@@ -1168,6 +1465,25 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                 alternatives=alternatives,
             ))
         days.append(DayPlan(day=day_number, theme=plan.title, slots=day_slots))
+
+    logger.info(
+        "[route-timing] 총 소요 %.2fs (%d일 / 슬롯 %d개)",
+        perf_counter() - route_started_at,
+        day_count,
+        len(plan.slots),
+    )
+
+    if accommodation_place is not None:
+        area_centroid = _route_area_centroid(days)
+        accommodation_place = _with_accommodation_reason(
+            accommodation_place,
+            area_centroid,
+            route_language,
+        )
+        accommodation_alternatives = [
+            _with_accommodation_reason(place, area_centroid, route_language)
+            for place in accommodation_alternatives
+        ]
 
     yield _sse(ChatMetaRoute(
         intent=route_intent,
@@ -1190,6 +1506,17 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         note += " 후보 좌표를 바탕으로 시간순 연속 방문지의 직선거리를 최적화했습니다."
     if include_weather and any(not context.get("available") for context in weather_contexts):
         note += " 제공 범위를 벗어난 예보 시점은 날씨를 추측하지 않고 검색 순위를 유지했습니다."
+    if skipped_slots:
+        labels = [
+            DOMAIN_LABELS.get(domain, {}).get(
+                effective_query_language(parsed), domain
+            )
+            for domain in dict.fromkeys(skipped_slots)
+        ]
+        note += (
+            f" 조건에 맞는 후보를 찾지 못한 {', '.join(labels)}"
+            f" {len(skipped_slots)}곳은 일정에서 제외했습니다."
+        )
     if has_mock:
         note += " 식당 외 도메인은 현재 임시 후보입니다."
     if day_count > 1 and accommodation_place is None:
@@ -1458,28 +1785,29 @@ async def _restaurant_stream(
         if body.parsed_query is not None
         else body.location_name or "서울"
     )
-    if body.parsed_query is not None and structured_task is not None:
-        batch = await _search_structured_task(body, structured_task, candidate_count=30)
-        rag_result = {
-            "candidates": [to_legacy_candidate(item) for item in batch.candidates],
-        }
-        # 공통 도메인 검색 계약은 후보 목록만 반환하므로, 빈 결과일 때는 명시된
-        # 지역의 해석 실패 여부를 복원해 사용자 안내가 일반 조건 불일치로 흐려지지
-        # 않게 한다. 주요 권역은 geocode_kakao 내부의 안정 좌표로 즉시 해결된다.
-        if not batch.candidates:
-            requested_location = effective_task_filters(
-                body.parsed_query, structured_task
-            ).location
-            if requested_location and await asyncio.to_thread(
-                geocode_kakao, requested_location
-            ) is None:
-                rag_result.update({
-                    "location_name": requested_location,
-                    "location_resolution_failed": True,
-                })
-        sources = list(batch.sources)
-    else:
-        rag_result = await asyncio.to_thread(
+    async def search_candidates():
+        if body.parsed_query is not None and structured_task is not None:
+            batch = await _search_structured_task(body, structured_task, candidate_count=30)
+            result = {
+                "candidates": [to_legacy_candidate(item) for item in batch.candidates],
+            }
+            # 공통 도메인 검색 계약은 후보 목록만 반환하므로, 빈 결과일 때는 명시된
+            # 지역의 해석 실패 여부를 복원해 사용자 안내가 일반 조건 불일치로 흐려지지
+            # 않게 한다. 주요 권역은 geocode_kakao 내부의 안정 좌표로 즉시 해결된다.
+            if not batch.candidates:
+                requested_location = effective_task_filters(
+                    body.parsed_query, structured_task
+                ).location
+                if requested_location and await asyncio.to_thread(
+                    geocode_kakao, requested_location
+                ) is None:
+                    result.update({
+                        "location_name": requested_location,
+                        "location_resolution_failed": True,
+                    })
+            return result, list(batch.sources)
+
+        result = await asyncio.to_thread(
             search_restaurants,
             body.message,
             body.lang,
@@ -1489,17 +1817,27 @@ async def _restaurant_stream(
             30,
         )
         suffix = "en" if str(effective_lang).lower().startswith("en") else "ko"
-        sources = [
+        return result, [
             f"restaurant_{suffix}",
             f"restaurant_review_{suffix}",
             f"restaurant_menu_{suffix}",
         ]
-    candidates = rag_result["candidates"]
-    weather_lat = rag_result.get("origin_lat") or body.lat or SEOUL_CENTER[0]
-    weather_lng = rag_result.get("origin_lng") or body.lng or SEOUL_CENTER[1]
-    weather: dict | None = None
-    tool_results: list[ToolResult] = []
-    if apply_weather_reranking:
+
+    async def fetch_weather():
+        weather_lat = body.lat
+        weather_lng = body.lng
+        if not (
+            body.location_name
+            and weather_lat is not None
+            and weather_lng is not None
+            and effective_place_name.strip().casefold()
+            == body.location_name.strip().casefold()
+        ):
+            geocoded = await asyncio.to_thread(geocode_kakao, effective_place_name)
+            if geocoded is not None:
+                weather_lat, weather_lng, _ = geocoded
+        weather_lat = weather_lat if weather_lat is not None else SEOUL_CENTER[0]
+        weather_lng = weather_lng if weather_lng is not None else SEOUL_CENTER[1]
         weather_request = (
             body.parsed_query.weather_request
             if body.parsed_query is not None else None
@@ -1521,6 +1859,21 @@ async def _restaurant_stream(
                 trusted_time_window(body.parsed_query) if body.parsed_query else None
             ),
         )
+        return weather, weather_lat, weather_lng
+
+    weather: dict | None = None
+    tool_results: list[ToolResult] = []
+    if apply_weather_reranking:
+        (rag_result, sources), (
+            weather,
+            weather_lat,
+            weather_lng,
+        ) = await asyncio.gather(search_candidates(), fetch_weather())
+    else:
+        rag_result, sources = await search_candidates()
+
+    candidates = rag_result["candidates"]
+    if apply_weather_reranking:
         candidates = rerank_with_weather(
             candidates,
             weather,

@@ -1,6 +1,7 @@
 import json
 import unittest
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from pydantic import ValidationError
@@ -13,8 +14,11 @@ from schemas.route_planner import (
     TripPeriod,
 )
 from services.route_planner import (
+    ROUTE_SUMMARY_MAX_OUTPUT_TOKENS,
+    _summary_max_output_tokens,
     generate_route_plan,
     route_planner_payload,
+    route_summary_payload,
     validate_route_planner_output,
 )
 
@@ -297,6 +301,125 @@ class RoutePlannerValidationTests(unittest.TestCase):
         self.assertEqual(matrix["to_slot_id"], "second")
         self.assertEqual(len(matrix["distances"]), 4)
         self.assertTrue(all(item["distance_km"] >= 0 for item in matrix["distances"]))
+
+    def test_gpt_receives_only_confirmed_places_and_compact_weather(self):
+        planner = spatial_planner_input().model_copy(update={
+            "weather_by_day": [{
+                "date": "2026-07-16",
+                "time": "14:00",
+                "available": True,
+                "condition": "rain",
+                "temperature_c": 24.0,
+                "precipitation_probability_pct": 70,
+                "usage_guidance": ["실내 장소 우선", "우산 준비", "긴 설명 제외"],
+                "irrelevant_raw_payload": "x" * 10000,
+            }],
+        })
+        response = SimpleNamespace(output_text=json.dumps({
+            "title": "비 오는 날의 서울 일정",
+            "summary": "비 예보와 이동 거리를 고려해 두 장소를 연결했습니다. 이동 전 강수 상황을 확인해 주세요.",
+        }, ensure_ascii=False))
+        client = SimpleNamespace(
+            responses=SimpleNamespace(create=lambda **kwargs: response)
+        )
+        captured = {}
+
+        def create(**kwargs):
+            captured.update(kwargs)
+            return response
+
+        client.responses.create = create
+        with patch("services.route_planner._client", return_value=client):
+            result = generate_route_plan(planner)
+
+        payload = json.loads(captured["input"])
+        self.assertNotIn("slots", payload)
+        self.assertNotIn("route_optimization", payload)
+        self.assertNotIn("irrelevant_raw_payload", captured["input"])
+        self.assertEqual(
+            [item["name"] for item in payload["itinerary"]],
+            [slot.selected.name for slot in result.slots],
+        )
+        self.assertEqual(payload["weather"][0]["condition"], "rain")
+        self.assertEqual(payload["weather"][0]["temperature_c"], 24.0)
+        self.assertLess(len(captured["input"]), 5000)
+        self.assertEqual(
+            captured["max_output_tokens"],
+            _summary_max_output_tokens(len(result.slots)),
+        )
+        self.assertEqual(captured["reasoning"], {"effort": "minimal"})
+        self.assertEqual(result.title, "비 오는 날의 서울 일정")
+        # 이유를 돌려주지 않은 응답이므로 슬롯별 GPT 이유는 비어 있어야 한다.
+        self.assertEqual(result.llm_selection_reasons, {})
+
+    def _plan_with_summary_response(self, body: dict):
+        planner = spatial_planner_input()
+        response = SimpleNamespace(
+            output_text=json.dumps(body, ensure_ascii=False)
+        )
+        captured = {}
+
+        def create(**kwargs):
+            captured.update(kwargs)
+            return response
+
+        client = SimpleNamespace(responses=SimpleNamespace(create=create))
+        with patch("services.route_planner._client", return_value=client):
+            return generate_route_plan(planner), captured
+
+    def test_confirmed_slot_facts_are_sent_for_reason_writing(self):
+        _, captured = self._plan_with_summary_response({
+            "title": "서울 하루 일정",
+            "summary": "가까운 두 곳을 이어 구성했습니다. 이동 시간을 확인해 주세요.",
+        })
+        payload = json.loads(captured["input"])
+        first, second = payload["itinerary"]
+        # 이유를 슬롯에 정확히 매칭하려면 slot_id가 반드시 있어야 한다.
+        self.assertEqual(first["slot_id"], "first")
+        self.assertEqual(second["slot_id"], "second")
+        # 같은 날 연속 구간은 직전 일정과의 거리를 근거로 제공한다.
+        self.assertNotIn("distance_from_previous_km", first)
+        self.assertIn("distance_from_previous_km", second)
+
+    def test_llm_reasons_are_kept_only_for_known_slots(self):
+        plan, _ = self._plan_with_summary_response({
+            "title": "서울 하루 일정",
+            "summary": "가까운 두 곳을 이어 구성했습니다. 이동 시간을 확인해 주세요.",
+            "reasons": [
+                {"slot_id": "first", "selection_reason": "평점이 높고 오전에 여유롭습니다."},
+                {"slot_id": "second", "selection_reason": "   "},
+                {"slot_id": "존재하지않는슬롯", "selection_reason": "무시되어야 합니다."},
+            ],
+        })
+        # 빈 이유와 모르는 슬롯은 버리고, 남은 슬롯은 호출부가 폴백으로 채운다.
+        self.assertEqual(
+            plan.llm_selection_reasons,
+            {"first": "평점이 높고 오전에 여유롭습니다."},
+        )
+
+    def test_llm_failure_keeps_route_without_reasons(self):
+        planner = spatial_planner_input()
+        client = SimpleNamespace(responses=SimpleNamespace(
+            create=lambda **kwargs: (_ for _ in ()).throw(TimeoutError()),
+        ))
+        with patch("services.route_planner._client", return_value=client):
+            plan = generate_route_plan(planner)
+        self.assertEqual(plan.llm_selection_reasons, {})
+        self.assertTrue(plan.title)
+        self.assertTrue(plan.summary)
+        self.assertEqual(len(plan.slots), 2)
+
+    def test_output_token_budget_grows_with_slot_count(self):
+        # 25슬롯 실측 출력이 1,087토큰이라 고정 한도 1,200으로는 잘렸다.
+        self.assertGreater(_summary_max_output_tokens(25), 1200 * 2)
+        self.assertLess(
+            _summary_max_output_tokens(5),
+            _summary_max_output_tokens(25),
+        )
+        self.assertLessEqual(
+            _summary_max_output_tokens(100),
+            ROUTE_SUMMARY_MAX_OUTPUT_TOKENS,
+        )
 
     def test_day_boundary_is_connected_only_from_accommodation(self):
         period = TripPeriod(

@@ -655,7 +655,10 @@ def _area_default_radius(location: str | None) -> float:
     if text in CITYWIDE_TERMS:
         return CITYWIDE_RADIUS_KM
     # 지하철역/특정 지점: 역 근처만 좁게
-    if text.endswith("역") or text.endswith("station") or "번 출구" in text:
+    if (
+        text.endswith(("역", "station", "시청", "city hall"))
+        or "번 출구" in text
+    ):
         return STATION_DEFAULT_RADIUS_KM
     # 자치구 단위: 가장 넓게
     if text.endswith("구") or text.endswith("-gu"):

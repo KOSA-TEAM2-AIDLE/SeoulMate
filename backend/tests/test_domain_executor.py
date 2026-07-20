@@ -26,6 +26,7 @@ from routers.chat import (
     _rank_restaurants_for_route,
     _restaurant_candidates_open_at_slot,
     _route_candidate_occurrence_key,
+    _route_candidate_window,
     _route_search_concurrency,
     _search_route_batches,
     _stream,
@@ -114,7 +115,7 @@ class LiveAttractionService:
 
 
 class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
-    def test_route_candidate_occurrence_resets_for_each_day(self):
+    def test_route_candidate_occurrence_continues_across_days(self):
         parsed = StructuredTravelQuery.model_validate({
             "language": "ko",
             "intent": "multi_day_route",
@@ -148,13 +149,22 @@ class DomainExecutorTests(unittest.IsolatedAsyncioTestCase):
 
         first, repeated, next_day = parsed.tasks
         self.assertEqual(
-            _route_candidate_occurrence_key(first, 1),
-            _route_candidate_occurrence_key(repeated, 1),
+            _route_candidate_occurrence_key(first),
+            _route_candidate_occurrence_key(repeated),
         )
-        self.assertNotEqual(
-            _route_candidate_occurrence_key(first, 1),
-            _route_candidate_occurrence_key(next_day, 2),
+        # 날짜가 키에 들어가면 Day마다 후보 창이 0으로 돌아가 같은 검색이
+        # 매일 같은 상위 후보를 받고, 같은 장소가 여러 날에 배치된다.
+        self.assertEqual(
+            _route_candidate_occurrence_key(first),
+            _route_candidate_occurrence_key(next_day),
         )
+
+    def test_repeated_search_across_days_gets_distinct_candidates(self):
+        candidates = list(range(14))
+        # 3일치 동일 검색이면 창이 0,1,2로 이동해 대표 후보가 달라져야 한다.
+        windows = [_route_candidate_window(candidates, index) for index in range(3)]
+        self.assertEqual([window[0] for window in windows], [0, 1, 2])
+        self.assertEqual(len({window[0] for window in windows}), 3)
 
     async def test_route_search_concurrency_follows_busiest_day(self):
         relaxed_tasks = [SimpleNamespace(day_number=day) for day in (1, 1, 1, 2, 2, 2)]

@@ -311,6 +311,9 @@ class ConfirmedRoutePlan(BaseModel):
     travel_distance_km: float | None = Field(default=None, ge=0)
     distance_method: Literal["haversine"] | None = None
     coordinate_coverage: float = Field(default=0.0, ge=0, le=1)
+    # GPT가 작성해 검증을 통과한 슬롯별 선정 이유. 슬롯이 빠지거나 LLM이
+    # 실패하면 그 슬롯은 여기에 없고, 호출부가 결정론적 문장으로 대체한다.
+    llm_selection_reasons: dict[str, str] = Field(default_factory=dict)
     alternative_routes: list[dict] = Field(default_factory=list, max_length=0)
 
 
