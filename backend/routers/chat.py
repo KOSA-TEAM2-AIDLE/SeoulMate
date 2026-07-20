@@ -82,6 +82,7 @@ from services.query_policy import (
 from domains.restaurant.weather_policy import prepare_rag_only_candidates, rerank_with_weather
 from domains.attraction.congestion_reranker import AttractionCongestionReranker
 from domains.attraction.context_enricher import AttractionContextEnricher
+from domains.attraction.weather_reranker import AttractionWeatherReranker
 from services.source_router import decide_source_mode, mode_to_intent, normalize_source_mode
 from integrations.mcp.congestion_client import CongestionMCPProvider
 from integrations.mcp.weather_client import WeatherMCPProvider, get_weather_via_mcp
@@ -126,11 +127,13 @@ ROUTE_RESTAURANT_RANK_PENALTY_KM = 0.25
 ROUTE_CAFE_PREFERRED_DISTANCE_KM = 1.5
 ROUTE_CAFE_MAX_DISTANCE_KM = 2.5
 ROUTE_CAFE_RANK_PENALTY_KM = 0.25
+ROUTE_WEATHER_CONCURRENCY = 5
 attraction_congestion_reranker = AttractionCongestionReranker(CongestionMCPProvider())
 attraction_context_enricher = AttractionContextEnricher(
     congestion_reranker=attraction_congestion_reranker,
     weather_provider=WeatherMCPProvider(),
 )
+route_attraction_weather_reranker = AttractionWeatherReranker()
 domain_selection_registry = build_default_selection_registry()
 
 MEAL_TIME_HINTS = (
@@ -822,6 +825,90 @@ def _route_search_concurrency(tasks, max_places_per_day: int) -> int:
     return max(1, min(busiest_day, max_places_per_day, 5))
 
 
+def _route_weather_time_bucket(slot_time: str) -> str:
+    """오전·점심과 오후·저녁 슬롯이 각각 하나의 예보를 공유한다."""
+
+    return "12:00" if _route_time_minutes(slot_time) < 15 * 60 else "18:00"
+
+
+def _route_task_weather_location(body, parsed, task) -> str:
+    return (
+        effective_task_filters(parsed, task).location
+        or parsed.filters.location
+        or body.location_name
+        or "서울"
+    )
+
+
+def _route_weather_key(body, parsed, task, visit_date: date, slot_time: str):
+    return (
+        visit_date.isoformat(),
+        _route_weather_time_bucket(slot_time),
+        _route_task_weather_location(body, parsed, task),
+    )
+
+
+async def _prefetch_route_weather(
+    body,
+    parsed,
+    prepared_tasks,
+    slot_start_times: dict[str, str],
+) -> dict[tuple[str, str, str], dict]:
+    """루트의 일자·시간대별 예보를 제한된 동시성으로 한 번씩 조회한다."""
+
+    keys = sorted({
+        _route_weather_key(
+            body,
+            parsed,
+            task,
+            visit_date,
+            slot_start_times[task.task_id],
+        )
+        for task, _, visit_date, _, _ in prepared_tasks
+        if task.domain in {"attraction", "restaurant"}
+    })
+    if not keys:
+        return {}
+
+    locations = list(dict.fromkeys(key[2] for key in keys))
+
+    async def resolve_location(location: str):
+        same_as_current = bool(
+            body.location_name
+            and body.lat is not None
+            and body.lng is not None
+            and location.strip().casefold()
+            == body.location_name.strip().casefold()
+        )
+        if same_as_current:
+            return body.lat, body.lng, body.location_name
+        geocoded = await asyncio.to_thread(geocode_kakao, location)
+        return geocoded or (SEOUL_CENTER[0], SEOUL_CENTER[1], location)
+
+    resolved_values = await asyncio.gather(*(
+        resolve_location(location) for location in locations
+    ))
+    resolved = dict(zip(locations, resolved_values, strict=True))
+    semaphore = asyncio.Semaphore(ROUTE_WEATHER_CONCURRENCY)
+
+    async def fetch(key: tuple[str, str, str]):
+        target_date, target_time, location = key
+        latitude, longitude, resolved_name = resolved[location]
+        async with semaphore:
+            weather = await get_weather_via_mcp(
+                parsed.original_question,
+                latitude,
+                longitude,
+                effective_query_language(parsed),
+                resolved_name,
+                target_date=target_date,
+                target_time=target_time,
+            )
+        return key, weather
+
+    return dict(await asyncio.gather(*(fetch(key) for key in keys)))
+
+
 async def _search_route_batches(body, prepared_tasks, concurrency: int):
     semaphore = asyncio.Semaphore(concurrency)
 
@@ -889,22 +976,8 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         )
     include_weather = normalize_source_mode(source_mode) == "rag_mcp"
     tool_results: list[ToolResult] = []
-    weather_cache: dict[tuple[str, str], dict] = {}
+    weather_cache: dict[tuple[str, str, str], dict] = {}
     weather_contexts: list[dict] = []
-    weather_location = parsed.filters.location or body.location_name or "서울"
-    weather_lat, weather_lng = body.lat, body.lng
-    same_as_current = bool(
-        body.location_name
-        and weather_location.strip().lower() == body.location_name.strip().lower()
-    )
-    if include_weather and not same_as_current:
-        geocoded = await asyncio.to_thread(geocode_kakao, weather_location)
-        if geocoded:
-            weather_lat, weather_lng, weather_location = geocoded
-        else:
-            weather_lat, weather_lng = None, None
-    weather_lat = weather_lat if weather_lat is not None else SEOUL_CENTER[0]
-    weather_lng = weather_lng if weather_lng is not None else SEOUL_CENTER[1]
 
     slot_inputs: list[RouteSlotCandidates] = []
     place_lookup: dict[str, Place] = {}
@@ -974,14 +1047,52 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         prepared_tasks,
         _route_search_concurrency(parsed.tasks, route_request.max_places_per_day),
     )
+    route_weather = (
+        _prefetch_route_weather(body, parsed, prepared_tasks, slot_start_times)
+        if include_weather
+        else None
+    )
     if day_count > 1:
-        batches, accommodation_result = await asyncio.gather(
-            route_search,
-            safe_accommodation_search(),
-        )
+        if route_weather is not None:
+            batches, accommodation_result, weather_cache = await asyncio.gather(
+                route_search,
+                safe_accommodation_search(),
+                route_weather,
+            )
+        else:
+            batches, accommodation_result = await asyncio.gather(
+                route_search,
+                safe_accommodation_search(),
+            )
         accommodation_place, accommodation_alternatives = accommodation_result
     else:
-        batches = await route_search
+        if route_weather is not None:
+            batches, weather_cache = await asyncio.gather(
+                route_search,
+                route_weather,
+            )
+        else:
+            batches = await route_search
+
+    for (target_date, target_time, location), weather in weather_cache.items():
+        weather_contexts.append({
+            **weather,
+            "date": target_date,
+            "time": target_time,
+            "location": location,
+        })
+        tool_results.append(ToolResult(
+            tool_name="get_weather_context",
+            params={
+                "location": location,
+                "target_date": target_date,
+                "target_time": target_time,
+            },
+            result={key: value for key, value in weather.items() if key != "error"},
+            ok=bool(weather.get("available")),
+            source="live" if weather.get("available") else "mock",
+            error=weather.get("error"),
+        ))
 
     for prepared_index, (prepared, batch) in enumerate(zip(prepared_tasks, batches)):
         (
@@ -995,30 +1106,9 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
         has_mock = has_mock or batch.used_mock
         if task.domain == "restaurant":
             slot_time = slot_start_times[task.task_id]
-            weather = None
-            if include_weather:
-                cache_key = (visit_date.isoformat(), slot_time)
-                weather = weather_cache.get(cache_key)
-                if weather is None:
-                    weather = await get_weather_via_mcp(
-                        parsed.original_question,
-                        weather_lat,
-                        weather_lng,
-                        effective_query_language(parsed),
-                        weather_location,
-                        target_date=visit_date.isoformat(),
-                        target_time=slot_time,
-                    )
-                    weather_cache[cache_key] = weather
-                    weather_contexts.append(weather)
-                    tool_results.append(ToolResult(
-                        tool_name="get_weather_context",
-                        params={"lat": weather_lat, "lng": weather_lng, "target_date": visit_date.isoformat(), "target_time": slot_time},
-                        result={key: value for key, value in weather.items() if key != "error"},
-                        ok=bool(weather.get("available")),
-                        source="live" if weather.get("available") else "mock",
-                        error=weather.get("error"),
-                    ))
+            weather = weather_cache.get(
+                _route_weather_key(body, parsed, task, visit_date, slot_time)
+            )
             ranked = [to_legacy_candidate(item) for item in batch.candidates]
             ranked = (
                 rerank_with_weather(ranked, weather, parsed.original_question, source_mode="rag_mcp")
@@ -1078,22 +1168,25 @@ async def _structured_route_stream(body: ChatRequest, source_mode: str, route_in
                     payload=wrapped["payload"],
                 ))
         else:
-            attraction_request = build_domain_search_request(
-                parsed,
-                task,
-                latitude=body.lat,
-                longitude=body.lng,
-                current_location_name=body.location_name,
-                candidate_count=required_candidate_count,
-                min_rating=body.min_rating,
-            )
-            domain_candidates, _ = await _rerank_attraction_candidates(
-                batch.candidates,
-                parsed,
-                source_mode,
-                attraction_request,
-                include_congestion=False,
-            ) if task.domain == "attraction" else (batch.candidates, ())
+            if task.domain == "attraction":
+                weather = weather_cache.get(_route_weather_key(
+                    body,
+                    parsed,
+                    task,
+                    visit_date,
+                    slot_start_times[task.task_id],
+                ))
+                domain_candidates = (
+                    route_attraction_weather_reranker.rerank(
+                        batch.candidates,
+                        weather,
+                        parsed.original_question,
+                    )
+                    if include_weather and weather is not None
+                    else batch.candidates
+                )
+            else:
+                domain_candidates = batch.candidates
             if task.domain == "cafe":
                 previous_anchors, next_anchors = _cafe_neighbor_anchor_coordinates(
                     prepared_tasks,
@@ -1462,28 +1555,29 @@ async def _restaurant_stream(
         if body.parsed_query is not None
         else body.location_name or "서울"
     )
-    if body.parsed_query is not None and structured_task is not None:
-        batch = await _search_structured_task(body, structured_task, candidate_count=30)
-        rag_result = {
-            "candidates": [to_legacy_candidate(item) for item in batch.candidates],
-        }
-        # 공통 도메인 검색 계약은 후보 목록만 반환하므로, 빈 결과일 때는 명시된
-        # 지역의 해석 실패 여부를 복원해 사용자 안내가 일반 조건 불일치로 흐려지지
-        # 않게 한다. 주요 권역은 geocode_kakao 내부의 안정 좌표로 즉시 해결된다.
-        if not batch.candidates:
-            requested_location = effective_task_filters(
-                body.parsed_query, structured_task
-            ).location
-            if requested_location and await asyncio.to_thread(
-                geocode_kakao, requested_location
-            ) is None:
-                rag_result.update({
-                    "location_name": requested_location,
-                    "location_resolution_failed": True,
-                })
-        sources = list(batch.sources)
-    else:
-        rag_result = await asyncio.to_thread(
+    async def search_candidates():
+        if body.parsed_query is not None and structured_task is not None:
+            batch = await _search_structured_task(body, structured_task, candidate_count=30)
+            result = {
+                "candidates": [to_legacy_candidate(item) for item in batch.candidates],
+            }
+            # 공통 도메인 검색 계약은 후보 목록만 반환하므로, 빈 결과일 때는 명시된
+            # 지역의 해석 실패 여부를 복원해 사용자 안내가 일반 조건 불일치로 흐려지지
+            # 않게 한다. 주요 권역은 geocode_kakao 내부의 안정 좌표로 즉시 해결된다.
+            if not batch.candidates:
+                requested_location = effective_task_filters(
+                    body.parsed_query, structured_task
+                ).location
+                if requested_location and await asyncio.to_thread(
+                    geocode_kakao, requested_location
+                ) is None:
+                    result.update({
+                        "location_name": requested_location,
+                        "location_resolution_failed": True,
+                    })
+            return result, list(batch.sources)
+
+        result = await asyncio.to_thread(
             search_restaurants,
             body.message,
             body.lang,
@@ -1493,17 +1587,27 @@ async def _restaurant_stream(
             30,
         )
         suffix = "en" if str(effective_lang).lower().startswith("en") else "ko"
-        sources = [
+        return result, [
             f"restaurant_{suffix}",
             f"restaurant_review_{suffix}",
             f"restaurant_menu_{suffix}",
         ]
-    candidates = rag_result["candidates"]
-    weather_lat = rag_result.get("origin_lat") or body.lat or SEOUL_CENTER[0]
-    weather_lng = rag_result.get("origin_lng") or body.lng or SEOUL_CENTER[1]
-    weather: dict | None = None
-    tool_results: list[ToolResult] = []
-    if apply_weather_reranking:
+
+    async def fetch_weather():
+        weather_lat = body.lat
+        weather_lng = body.lng
+        if not (
+            body.location_name
+            and weather_lat is not None
+            and weather_lng is not None
+            and effective_place_name.strip().casefold()
+            == body.location_name.strip().casefold()
+        ):
+            geocoded = await asyncio.to_thread(geocode_kakao, effective_place_name)
+            if geocoded is not None:
+                weather_lat, weather_lng, _ = geocoded
+        weather_lat = weather_lat if weather_lat is not None else SEOUL_CENTER[0]
+        weather_lng = weather_lng if weather_lng is not None else SEOUL_CENTER[1]
         weather_request = (
             body.parsed_query.weather_request
             if body.parsed_query is not None else None
@@ -1525,6 +1629,21 @@ async def _restaurant_stream(
                 trusted_time_window(body.parsed_query) if body.parsed_query else None
             ),
         )
+        return weather, weather_lat, weather_lng
+
+    weather: dict | None = None
+    tool_results: list[ToolResult] = []
+    if apply_weather_reranking:
+        (rag_result, sources), (
+            weather,
+            weather_lat,
+            weather_lng,
+        ) = await asyncio.gather(search_candidates(), fetch_weather())
+    else:
+        rag_result, sources = await search_candidates()
+
+    candidates = rag_result["candidates"]
+    if apply_weather_reranking:
         candidates = rerank_with_weather(
             candidates,
             weather,

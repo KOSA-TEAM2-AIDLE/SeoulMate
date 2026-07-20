@@ -1,5 +1,6 @@
 import asyncio
 import json
+import threading
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -188,6 +189,35 @@ class RestaurantSourceModeTests(unittest.IsolatedAsyncioTestCase):
         meta = json.loads(events[0].removeprefix("data: "))
         self.assertEqual(meta["intent"], "both")
         self.assertIn("KMA-via-Weather-MCP", meta["sources"])
+
+    async def test_rag_mcp_search_and_weather_start_in_parallel(self):
+        body = ChatRequest(message="내일 저녁 식당 추천", lang="ko")
+        search_started = threading.Event()
+        weather_started = threading.Event()
+
+        def slow_search(*args, **kwargs):
+            search_started.set()
+            self.assertTrue(weather_started.wait(1.0))
+            return self._rag_result()
+
+        async def slow_weather(*args, **kwargs):
+            weather_started.set()
+            started = await asyncio.to_thread(search_started.wait, 1.0)
+            self.assertTrue(started)
+            return {"available": True, "condition": "clear"}
+
+        with (
+            patch("routers.chat.search_restaurants", side_effect=slow_search),
+            patch("routers.chat.get_weather_via_mcp", new=slow_weather),
+            patch("routers.chat.generate_recommendation_result", _fake_recommendation_result),
+        ):
+            events = [event async for event in _restaurant_stream(
+                body, "RAG_MCP", "날씨 필요"
+            )]
+
+        self.assertTrue(search_started.is_set())
+        self.assertTrue(weather_started.is_set())
+        self.assertTrue(events)
 
     async def test_structured_task_sends_top_ten_and_returns_three(self):
         parsed = StructuredTravelQuery.model_validate({

@@ -1,6 +1,7 @@
 import json
 import unittest
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from pydantic import ValidationError
@@ -15,6 +16,7 @@ from schemas.route_planner import (
 from services.route_planner import (
     generate_route_plan,
     route_planner_payload,
+    route_summary_payload,
     validate_route_planner_output,
 )
 
@@ -297,6 +299,51 @@ class RoutePlannerValidationTests(unittest.TestCase):
         self.assertEqual(matrix["to_slot_id"], "second")
         self.assertEqual(len(matrix["distances"]), 4)
         self.assertTrue(all(item["distance_km"] >= 0 for item in matrix["distances"]))
+
+    def test_gpt_receives_only_confirmed_places_and_compact_weather(self):
+        planner = spatial_planner_input().model_copy(update={
+            "weather_by_day": [{
+                "date": "2026-07-16",
+                "time": "14:00",
+                "available": True,
+                "condition": "rain",
+                "temperature_c": 24.0,
+                "precipitation_probability_pct": 70,
+                "usage_guidance": ["실내 장소 우선", "우산 준비", "긴 설명 제외"],
+                "irrelevant_raw_payload": "x" * 10000,
+            }],
+        })
+        response = SimpleNamespace(output_text=json.dumps({
+            "title": "비 오는 날의 서울 일정",
+            "summary": "비 예보와 이동 거리를 고려해 두 장소를 연결했습니다. 이동 전 강수 상황을 확인해 주세요.",
+        }, ensure_ascii=False))
+        client = SimpleNamespace(
+            responses=SimpleNamespace(create=lambda **kwargs: response)
+        )
+        captured = {}
+
+        def create(**kwargs):
+            captured.update(kwargs)
+            return response
+
+        client.responses.create = create
+        with patch("services.route_planner._client", return_value=client):
+            result = generate_route_plan(planner)
+
+        payload = json.loads(captured["input"])
+        self.assertNotIn("slots", payload)
+        self.assertNotIn("route_optimization", payload)
+        self.assertNotIn("irrelevant_raw_payload", captured["input"])
+        self.assertEqual(
+            [item["name"] for item in payload["itinerary"]],
+            [slot.selected.name for slot in result.slots],
+        )
+        self.assertEqual(payload["weather"][0]["condition"], "rain")
+        self.assertEqual(payload["weather"][0]["temperature_c"], 24.0)
+        self.assertLess(len(captured["input"]), 5000)
+        self.assertEqual(captured["max_output_tokens"], 500)
+        self.assertEqual(captured["reasoning"], {"effort": "minimal"})
+        self.assertEqual(result.title, "비 오는 날의 서울 일정")
 
     def test_day_boundary_is_connected_only_from_accommodation(self):
         period = TripPeriod(

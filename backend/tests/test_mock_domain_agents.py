@@ -1,8 +1,10 @@
+import asyncio
 import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
 from routers.chat import (
+    _prefetch_route_weather,
     _route_candidate_window,
     _route_slot_start_time,
     _route_slot_start_times,
@@ -474,13 +476,71 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
             events = [event async for event in _stream(body)]
         weather.assert_awaited_once()
         self.assertEqual(weather.await_args.kwargs["target_date"], "2026-07-15")
-        self.assertEqual(weather.await_args.kwargs["target_time"], "19:00")
+        self.assertEqual(weather.await_args.kwargs["target_time"], "18:00")
         meta = decode_sse(events[0])
         self.assertEqual(meta["intent"], "route_multi")
         self.assertEqual([len(day["slots"]) for day in meta["days"]], [1, 1])
         self.assertEqual(meta["days"][1]["slots"][0]["time"], "11:00")
         self.assertEqual(meta["result"]["allDay"], 2)
         self.assertEqual(list(meta["result"]["travelPath"]), ["1", "2"])
+
+    async def test_route_weather_is_deduplicated_by_day_area_and_time_bucket(self):
+        raw_tasks = []
+        slot_times = {}
+        for day_number, visit_date in ((1, "2026-07-15"), (2, "2026-07-16")):
+            for suffix, domain, start_time in (
+                ("attraction-am", "attraction", "10:00"),
+                ("restaurant-noon", "restaurant", "12:30"),
+                ("attraction-pm", "attraction", "17:00"),
+                ("restaurant-pm", "restaurant", "19:00"),
+            ):
+                task_id = f"d{day_number}-{suffix}"
+                raw_tasks.append({
+                    "task_id": task_id,
+                    "slot_id": task_id,
+                    "domain": domain,
+                    "search_query": "홍대 여행",
+                    "desired_count": 1,
+                    "day_number": day_number,
+                    "visit_date": visit_date,
+                    "start_time": start_time,
+                    "filters": {"location": "홍대"},
+                })
+                slot_times[task_id] = start_time
+        parsed = query_with_tasks(
+            intent="multi_day_route",
+            start_date="2026-07-15",
+            tasks=raw_tasks,
+        )
+        body = ChatRequest(message=parsed.original_question, parsed_query=parsed)
+        prepared = [
+            (task, task.day_number, task.visit_date, 0, 5)
+            for task in parsed.tasks
+        ]
+        active = 0
+        max_active = 0
+        weather_calls = []
+
+        async def fake_weather(*args, **kwargs):
+            nonlocal active, max_active
+            weather_calls.append(kwargs)
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return {"available": True, "target_time": kwargs["target_time"]}
+
+        with (
+            patch("routers.chat.geocode_kakao", return_value=(37.5563, 126.9236, "홍대")),
+            patch("routers.chat.get_weather_via_mcp", new=fake_weather),
+        ):
+            result = await _prefetch_route_weather(body, parsed, prepared, slot_times)
+
+        self.assertEqual(len(result), 4)
+        self.assertEqual(len(weather_calls), 4)
+        self.assertEqual({key[1] for key in result}, {"12:00", "18:00"})
+        self.assertGreater(max_active, 1)
+        self.assertLessEqual(max_active, 5)
 
 
 if __name__ == "__main__":

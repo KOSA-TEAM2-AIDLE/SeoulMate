@@ -41,6 +41,38 @@ alternative route 전체를 만들지 않는다. 슬롯별 alternatives와 전�
 마크다운 없이 다음 JSON 객체만 반환한다.
 {"title":"일정 제목","summary":"짧은 요약","selections":[{"slot_id":"입력 슬롯 ID","selected_candidate_id":"대표 후보 ID","selection_reason":"대표 선정 이유","alternatives":[{"candidate_id":"대안 후보 ID","selection_reason":"이 대안의 차별점"}]}],"warnings":[]}"""
 
+ROUTE_SUMMARY_INSTRUCTIONS = """너는 SeoulMate의 여행 일정 요약 작성기다.
+장소 선택과 방문 순서는 서버가 이미 확정했으므로 변경하거나 새 장소를 추가하지 않는다.
+입력의 itinerary에 있는 장소 이름과 시간, weather에 있는 날씨 사실만 사용한다.
+날씨가 available=true인 경우 일정에 영향을 주는 기온·하늘·강수 정보를 자연스럽게 반영한다.
+날씨 정보가 없으면 날씨를 추측하지 않는다.
+준비물이나 안전 조언은 weather의 usage_guidance에 있는 경우만 바꿔 말하고 새로 만들지 않는다.
+사용자 언어로 제목 하나와 2~3문장의 간결한 요약을 작성한다.
+내부 필드명, 점수, API, 직선거리 계산 방식은 노출하지 않는다.
+마크다운 없이 다음 JSON 객체만 반환한다.
+{"title":"일정 제목","summary":"2~3문장 요약"}"""
+
+COMPACT_WEATHER_FIELDS = (
+    "date",
+    "time",
+    "location",
+    "available",
+    "is_forecast",
+    "target_date",
+    "target_time",
+    "target_label",
+    "condition",
+    "condition_label",
+    "sky",
+    "sky_label",
+    "temperature_c",
+    "precipitation_probability_pct",
+    "humidity_pct",
+    "wind_speed_mps",
+    "weather_tags",
+    "usage_guidance",
+)
+
 
 def _default_reason(candidate: RouteCandidate) -> str:
     reason = candidate.payload.get("fallback_reason")
@@ -469,7 +501,10 @@ def validate_route_planner_output(
 
 
 def route_planner_payload(planner_input: RoutePlannerInput) -> dict:
-    """모델에는 프론트 상세정보 대신 선택에 필요한 후보 정보만 전달한다."""
+    """후보 좌표와 거리 행렬을 검사하기 위한 상세 진단 payload를 만든다.
+
+    운영 GPT에는 이 payload를 전달하지 않고 ``route_summary_payload``만 전달한다.
+    """
 
     payload = planner_input.model_dump(mode="json")
     for slot in payload["slots"]:
@@ -535,26 +570,113 @@ def route_planner_payload(planner_input: RoutePlannerInput) -> dict:
     return payload
 
 
-def generate_route_plan(planner_input: RoutePlannerInput) -> ConfirmedRoutePlan:
-    """한 번의 GPT 호출로 기본 루트 하나를 선택하고 서버에서 안전하게 확정한다."""
+def route_summary_payload(
+    plan: ConfirmedRoutePlan,
+    planner_input: RoutePlannerInput,
+) -> dict:
+    """확정 장소와 핵심 날씨만 GPT 요약에 전달한다."""
 
+    itinerary = [
+        {
+            "day": slot.day_number,
+            "date": slot.date.isoformat(),
+            "time": slot.start_time,
+            "category": slot.domain,
+            "name": slot.selected.name,
+        }
+        for slot in sorted(
+            plan.slots,
+            key=lambda item: (item.date, item.start_time, item.slot_id),
+        )
+    ]
+    weather = []
+    for context in planner_input.weather_by_day:
+        compact = {
+            key: context[key]
+            for key in COMPACT_WEATHER_FIELDS
+            if context.get(key) is not None
+        }
+        for list_key in ("weather_tags", "usage_guidance"):
+            if isinstance(compact.get(list_key), list):
+                compact[list_key] = compact[list_key][:3]
+        if compact:
+            weather.append(compact)
+    return {
+        "language": planner_input.language,
+        "destination": planner_input.route_request.destination,
+        "period": {
+            "start_date": planner_input.route_request.period.start_date.isoformat(),
+            "end_date": planner_input.route_request.period.end_date.isoformat(),
+            "days": planner_input.route_request.period.days,
+        },
+        "itinerary": itinerary,
+        "weather": weather,
+    }
+
+
+def _fallback_route_summary(
+    plan: ConfirmedRoutePlan,
+    planner_input: RoutePlannerInput,
+) -> ConfirmedRoutePlan:
+    days = planner_input.route_request.period.days
+    destination = planner_input.route_request.destination
+    weather_available = any(
+        context.get("available") is True
+        for context in planner_input.weather_by_day
+    )
+    if str(planner_input.language).lower().startswith("en"):
+        title = f"{days}-Day {destination} Itinerary"
+        summary = "The itinerary balances candidate quality with shorter travel between consecutive stops."
+        if weather_available:
+            summary += " Available forecast information was also considered for the scheduled visits."
+    else:
+        title = f"{destination} {days}일 추천 일정"
+        summary = "후보 품질과 시간순 방문지 사이의 이동 거리를 함께 고려해 일정을 구성했습니다."
+        if weather_available:
+            summary += " 확인 가능한 시간대별 날씨 정보도 일정 구성에 반영했습니다."
+    return plan.model_copy(update={"title": title, "summary": summary})
+
+
+def _summarize_confirmed_route(
+    plan: ConfirmedRoutePlan,
+    planner_input: RoutePlannerInput,
+) -> ConfirmedRoutePlan:
+    fallback = _fallback_route_summary(plan, planner_input)
     try:
         response = _client().responses.create(
             model=OPENAI_CHAT_MODEL,
-            instructions=ROUTE_PLANNER_INSTRUCTIONS,
-            input=json.dumps(route_planner_payload(planner_input), ensure_ascii=False),
+            instructions=ROUTE_SUMMARY_INSTRUCTIONS,
+            input=json.dumps(
+                route_summary_payload(plan, planner_input),
+                ensure_ascii=False,
+            ),
+            max_output_tokens=500,
+            reasoning={"effort": "minimal"},
         )
-        raw_text = response.output_text
+        parsed = _extract_json_object(response.output_text)
     except (OpenAIError, RuntimeError, TimeoutError):
-        # 검색 후보는 이미 검증됐으므로 LLM 장애 시에도 순위 기반 기본 루트를 제공한다.
-        raw_text = "{}"
-    plan = validate_route_planner_output(raw_text, planner_input)
-    return _apply_route_optimization(plan, planner_input)
+        return fallback
+    if not parsed:
+        return fallback
+    title = _sanitize_recommendation(str(parsed.get("title") or ""))[:100]
+    summary = _sanitize_recommendation(str(parsed.get("summary") or ""))[:600]
+    if not title or not summary:
+        return fallback
+    return plan.model_copy(update={"title": title, "summary": summary})
+
+
+def generate_route_plan(planner_input: RoutePlannerInput) -> ConfirmedRoutePlan:
+    """서버가 루트를 확정한 뒤 GPT는 소형 입력으로 제목과 요약만 작성한다."""
+
+    ranked_plan = validate_route_planner_output("{}", planner_input)
+    optimized_plan = _apply_route_optimization(ranked_plan, planner_input)
+    return _summarize_confirmed_route(optimized_plan, planner_input)
 
 
 __all__ = [
     "ROUTE_PLANNER_INSTRUCTIONS",
     "generate_route_plan",
     "route_planner_payload",
+    "route_summary_payload",
     "validate_route_planner_output",
 ]
