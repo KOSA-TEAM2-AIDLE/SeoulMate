@@ -527,8 +527,10 @@ async def _search_route_accommodation(body, parsed, route_request: RouteRequest)
         current_location_name=body.location_name,
         candidate_count=3,
         # 여행 날짜를 Context에 넣으면 Booking 실시간 스크래퍼가 실행된다.
-        # 루트와 숙소를 분리하는 흐름에서는 DB 숙소를 한 번만 검색한다.
-        context={},
+        context={
+            "visit_date": str(route_request.period.start_date),
+            "end_date": str(route_request.period.end_date),
+        } if route_request.period else {},
     )
     candidates = await domain_registry.get("accommodation").search(request)
     if not candidates:

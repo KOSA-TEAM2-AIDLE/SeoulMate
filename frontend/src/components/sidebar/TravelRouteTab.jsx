@@ -9,6 +9,7 @@ export default function TravelRouteTab({ showToast }) {
     currentRoute,
     currentAccommodation,
     setSelectedDay,
+    setSelectedPlace,
     handleDeleteItem,
     handleCycleCandidate,
     handleCycleAccommodation,
@@ -70,6 +71,7 @@ export default function TravelRouteTab({ showToast }) {
                       index={index}
                       onDelete={handleDeleteItem}
                       onCycleCandidate={handleCycleCandidate}
+                      onClick={() => setSelectedPlace(place)}
                       t={t}
                   />
               ))
@@ -85,16 +87,14 @@ export default function TravelRouteTab({ showToast }) {
               </div>
           )}
           {currentAccommodation && (
-              <section className="space-y-2 border-t border-dashed border-purple-200 pt-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-purple-600">
-                  {t.accommodation}
-                </p>
+              <section className="space-y-2 border-t border-dashed border-purple-200 pt-4 mt-4">
                 <RouteItem
                     key={`accommodation:${currentAccommodation.id}`}
                     place={currentAccommodation}
-                    index={currentRoute.length}
+                    isAccommodation={true}
                     onDelete={handleDeleteAccommodation}
                     onCycleCandidate={handleCycleAccommodation}
+                    onClick={() => setSelectedPlace(currentAccommodation)}
                     t={t}
                 />
               </section>

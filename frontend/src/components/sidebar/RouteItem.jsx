@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import {
     getPlaceDisplayCategory,
     getPlaceDisplaySubCategory,
@@ -6,7 +6,7 @@ import {
     getPlaceDisplayImage,
 } from '../../services/map/placeDisplayAdapter';
 
-const RouteItem = memo(({ place, index, onDelete, onCycleCandidate, t }) => {
+const RouteItem = memo(({ place, index, isAccommodation, onDelete, onCycleCandidate, onClick, t }) => {
     const category = getPlaceDisplayCategory(place);
     const subCategory = getPlaceDisplaySubCategory(place);
     const rating = getPlaceDisplayRating(place);
@@ -14,7 +14,9 @@ const RouteItem = memo(({ place, index, onDelete, onCycleCandidate, t }) => {
     const hasLink = !!place.link;
     const linkLabel = place.link?.toLowerCase().includes('tripadvisor.')
         ? t.travelerReviews
-        : t.moreInfo;
+        : place.link?.toLowerCase().includes('booking.com')
+            ? t.bookingLink
+            : t.moreInfo;
     const canCycleCandidate = place.alternatives?.length > 0;
 
     const categoryStyles = {
@@ -25,18 +27,31 @@ const RouteItem = memo(({ place, index, onDelete, onCycleCandidate, t }) => {
         default: 'text-red-500 bg-red-50'
     };
 
+    const [imgError, setImgError] = useState(false);
+
     return (
-        <article className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all duration-200 relative">
+        <article 
+            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all duration-200 relative cursor-pointer"
+            onClick={onClick}
+        >
             <div className="flex items-start gap-4">
                 {/* 순서 마커 */}
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">
-                    {index + 1}
-                </div>
+                {isAccommodation ? (
+                    <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600 shadow-sm" title={t.accommodation || '숙소'}>
+                        <svg className="size-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 7h-8v6h8V7zM5 7H3v10h2v-2h14v2h2V11a4 4 0 0 0-4-4H5zM5 9h8v4H5V9z"/>
+                        </svg>
+                    </div>
+                ) : (
+                    <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-sm">
+                        {index + 1}
+                    </div>
+                )}
 
                 {/* 썸네일 이미지 */}
                 <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
-                    {image ? (
-                        <img src={image} alt={place.name} className="h-full w-full object-cover" />
+                    {image && !imgError ? (
+                        <img src={image} alt={place.name} className="h-full w-full object-cover" onError={() => setImgError(true)} />
                     ) : (
                         <span className="text-xs font-semibold text-slate-400">{t.noImage}</span>
                     )}
@@ -66,7 +81,7 @@ const RouteItem = memo(({ place, index, onDelete, onCycleCandidate, t }) => {
                         {canCycleCandidate && (
                             <button
                                 type="button"
-                                onClick={() => onCycleCandidate(place)}
+                                onClick={(e) => { e.stopPropagation(); onCycleCandidate(place); }}
                                 className="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-100 border border-blue-100 transition-colors"
                             >
                                 {t.changeCandidate}
@@ -82,7 +97,7 @@ const RouteItem = memo(({ place, index, onDelete, onCycleCandidate, t }) => {
                                 title={linkLabel}
                                 className="inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 border border-slate-200 transition-colors"
                             >
-                                🔗 {place.link?.toLowerCase().includes('tripadvisor.') ? t.reviewButton : linkLabel}
+                                🔗 {linkLabel}
                             </a>
                         )}
                         </div>
@@ -107,7 +122,7 @@ const RouteItem = memo(({ place, index, onDelete, onCycleCandidate, t }) => {
             <div className="absolute top-4 right-4 z-10">
                 <button
                     type="button"
-                    onClick={() => onDelete(place)}
+                    onClick={(e) => { e.stopPropagation(); onDelete(place); }}
                     className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:bg-slate-200 transition-colors"
                     title={t.deleteRoute}
                 >

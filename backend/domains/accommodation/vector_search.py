@@ -146,7 +146,7 @@ def fuse_and_rank(acc_ranks, review_ranks_by_acc, options, top_k=20):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
         """
-        SELECT id, name, hotel_style, rating, review_count, address, amenities, room_features, room_types, lat, lng, image, description
+        SELECT id, name, hotel_style, rating, review_count, address, amenities, room_features, room_types, lat, lng, image, description, link
         FROM accommodation_ko WHERE id = ANY(%s)
     """,
         (list(all_ids),),
