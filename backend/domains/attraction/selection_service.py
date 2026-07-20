@@ -36,7 +36,11 @@ class AttractionSelectionService:
         split_timeout_seconds: float | None = None,
     ) -> None:
         self._answer_generator = answer_generator or AttractionAnswerGenerator()
-        self._dspy_runtime = dspy_runtime or _LazySplitRuntime()
+        self._dspy_runtime = (
+            dspy_runtime
+            if dspy_runtime is not None
+            else (None if answer_generator is not None else _LazySplitRuntime())
+        )
         self._split_timeout_seconds = (
             settings.attraction_dspy_split_timeout_seconds
             if split_timeout_seconds is None

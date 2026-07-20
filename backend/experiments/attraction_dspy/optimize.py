@@ -247,16 +247,11 @@ def _compile_production_programs(
     for kind, program_type, example_factory, metric_factory, artifact_path in targets:
         if kind not in pending:
             continue
-        max_tokens = (
-            settings.attraction_dspy_answer_max_tokens
-            if kind == "answer"
-            else settings.attraction_dspy_max_tokens
-        )
         lm = dspy.LM(
             settings.attraction_dspy_model,
             api_key=api_key,
             temperature=settings.attraction_dspy_temperature,
-            max_tokens=max_tokens,
+            max_tokens=settings.attraction_dspy_max_tokens,
         )
         splits = load_production_splits(data_dir, kind)
         # Keep labels outside Example inputs; the metric closure resolves them by case_id.

@@ -40,7 +40,7 @@ class _LegacyGenerator:
 
 
 class AttractionDspyRuntimeServiceTests(unittest.TestCase):
-    def test_split_runtime_validates_and_renders_two_program_outputs(self):
+    def test_split_runtime_renders_server_grounded_context_from_compact_reason_output(self):
         class SelectionProgram:
             def __call__(self, **inputs):
                 return type("Prediction", (), {
@@ -49,21 +49,15 @@ class AttractionDspyRuntimeServiceTests(unittest.TestCase):
                     "selection_reasons_json": '{"p1": "전시 근거"}',
                 })()
 
-        class AnswerProgram:
+        class ReasonProgram:
             def __call__(self, **inputs):
                 return type("Prediction", (), {
-                    "structured_answer_json": (
-                        '{"language":"ko","recommendations":[{"place_id":"p1",'
-                        '"name":"전시장","recommendation_reason":"전시 관람에 좋습니다.",'
-                        '"description_evidence":["모델 근거"],"review_evidence":["모델 리뷰"],'
-                        '"congestion":{"status":"available","value":"혼잡"},'
-                        '"weather":{"status":"available","value":"condition=rain"}}],"no_result_reason":null}'
-                    ),
+                    "recommendation_reasons_json": '{"p1": "전시 관람에 좋습니다."}',
                 })()
 
         result = SplitAttractionDspyRuntime(
             selection_program=SelectionProgram(),
-            answer_program=AnswerProgram(),
+            reason_program=ReasonProgram(),
             lm=None,
         ).run(AttractionAnswerInput(
             question="전시 추천", language="ko",
@@ -77,6 +71,7 @@ class AttractionDspyRuntimeServiceTests(unittest.TestCase):
         ))
 
         self.assertEqual(["p1"], [item.place_id for item in result.selections])
+        self.assertIn("전시 관람에 좋습니다.", result.selections[0].selection_reason)
         self.assertIn("전시장", result.answer)
         self.assertIn("현재 혼잡도는 보통 수준입니다", result.answer)
         self.assertIn("현재 날씨는 맑음입니다", result.answer)

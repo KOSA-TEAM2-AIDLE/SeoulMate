@@ -40,10 +40,19 @@ def ground_structured_answer(
             "congestion": candidate.congestion.model_dump(),
             "weather": candidate.weather.model_dump(),
         })
+    no_result_reason = None
+    if not recommendations:
+        no_result_reason = str(raw_answer.get("no_result_reason") or "").strip()
+        if not no_result_reason:
+            no_result_reason = (
+                "No verified attraction candidates match the request."
+                if answer_input.language.casefold().startswith("en")
+                else "요청 조건에 맞는 검증된 관광지 후보가 없습니다."
+            )
     return {
         "language": answer_input.language,
         "recommendations": recommendations,
-        "no_result_reason": None,
+        "no_result_reason": no_result_reason,
     }
 
 
