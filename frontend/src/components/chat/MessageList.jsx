@@ -10,7 +10,15 @@ const MessageList = memo(({ messages, isStreaming, preparingText, messageEndRef 
                     <UserMessage key={message.id}>{message.content}</UserMessage>
                 ) : (
                     <AssistantMessage key={message.id}>
-                        {message.content || (isStreaming ? preparingText : "")}
+                        {message.content || (
+                            isStreaming ? (
+                                <span className="inline-flex items-center gap-2 animate-pulse text-slate-500">
+                                    {preparingText}
+                                </span>
+                            ) : (
+                                ""
+                            )
+                        )}
                     </AssistantMessage>
                 )
             )}
