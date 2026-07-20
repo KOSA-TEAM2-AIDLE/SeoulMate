@@ -5,3 +5,11 @@ export function getRouteSegmentNavigationItems(places = []) {
     description: `${place.name} → ${places[index + 1].name}`,
   }));
 }
+
+export function getRouteViewportPlaces(places = [], selectedSegment, isSegmentSelected = false) {
+  if (isSegmentSelected && selectedSegment) {
+    return [selectedSegment.origin, selectedSegment.destination].filter(Boolean);
+  }
+
+  return places;
+}

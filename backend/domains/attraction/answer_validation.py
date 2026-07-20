@@ -188,18 +188,21 @@ def fallback_attraction_answer(
     )[:settings.attraction_recommendation_limit]
     english = answer_input.language.casefold().startswith("en")
     if english:
-        reason = "Selected from the highest-ranked verified reranking results."
+        reason = (
+            "Selected using verified attraction information that matches "
+            "your request."
+        )
         answer = (
-            "Here are the highest-ranked verified results: "
+            "Here are verified attraction recommendations matching your request: "
             + ", ".join(candidate.name for candidate in selected)
             + "."
             if selected
             else "No verified attraction candidates are available."
         )
     else:
-        reason = "검증된 재랭킹 결과에서 상위 후보로 선정했습니다."
+        reason = "관광지 관련 검증 정보와 요청 조건을 바탕으로 선정했습니다."
         answer = (
-            "검증된 재랭킹 상위 결과는 "
+            "요청 조건에 맞는 검증된 관광지 추천은 "
             + ", ".join(candidate.name for candidate in selected)
             + "입니다."
             if selected

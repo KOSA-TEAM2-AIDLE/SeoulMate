@@ -30,6 +30,13 @@ export function usePlaceOverlay({
     };
   }, [naver, map, place, onClose]);
 
+  useEffect(() => {
+    if (!naver || !map || !place) return undefined;
+
+    const listener = naver.maps.Event.addListener(map, 'click', () => onClose?.());
+    return () => naver.maps.Event.removeListener(listener);
+  }, [naver, map, place, onClose]);
+
   return {
     overlayRef,
   };

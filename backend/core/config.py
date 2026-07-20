@@ -67,10 +67,10 @@ class Settings(BaseSettings):
     llm_mode: str = "openai-api"
 
     # Attraction 도메인에서 사용하기 위한 DSPy 운영 설정
-    # MIPROv2 최적화는 오프라인에서 수행하고 서버는 artifact만 로드한다.
     attraction_dspy_model: str = "openai/gpt-4o-mini"
     attraction_dspy_temperature: float = Field(default=0.0, ge=0, le=2)
     attraction_dspy_max_tokens: int = Field(default=900, ge=1)
+    attraction_dspy_split_timeout_seconds: float = Field(default=30.0, gt=0)
     attraction_recommendation_limit: int = Field(default=3, ge=1, le=10)
     attraction_dspy_artifact_path: Path = (
         BASE_DIR

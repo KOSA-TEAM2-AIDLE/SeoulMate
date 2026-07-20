@@ -13,6 +13,7 @@ from typing import Any
 from domains.attraction.dspy.validator import (
     AttractionDspyValidationError,
     validate_selection_prediction,
+    validate_reason_prediction,
     validate_structured_answer,
 )
 from experiments.attraction_dspy.production_dataset import ProductionDspyCase
@@ -62,6 +63,21 @@ def build_answer_metric(case_index: dict[str, ProductionDspyCase]):
     return metric
 
 
+def build_reason_metric(case_index: dict[str, ProductionDspyCase]):
+    def metric(example, prediction, trace=None) -> float:
+        case = _case_for(example, case_index)
+        try:
+            validate_reason_prediction(
+                case.selected_place_ids,
+                {"recommendation_reasons": json.loads(prediction.recommendation_reasons_json)},
+            )
+        except (AttractionDspyValidationError, AttributeError, TypeError, json.JSONDecodeError):
+            return 0.0
+        return 1.0
+
+    return metric
+
+
 def _case_for(example: Any, case_index: dict[str, ProductionDspyCase]) -> ProductionDspyCase:
     case_id = str(getattr(example, "case_id", ""))
     try:
@@ -79,4 +95,4 @@ def _id_score(actual: list[str], expected: list[str]) -> float:
     return len(actual_set & expected_set) / len(actual_set | expected_set)
 
 
-__all__ = ["build_answer_metric", "build_selection_metric"]
+__all__ = ["build_answer_metric", "build_reason_metric", "build_selection_metric"]

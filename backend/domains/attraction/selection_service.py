@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+from time import perf_counter
+
 from core.config import settings
 from application.recommendation.selection_models import (
     CandidateSelection,
@@ -16,14 +20,34 @@ from domains.attraction.value_normalization import optional_text
 from domains.common.models import DomainSearchRequest, SearchCandidate
 
 
+logger = logging.getLogger(__name__)
+
+
 class AttractionSelectionService:
     """DSPy는 ID·이유·답변만 만들고 원본 후보 사실은 변경하지 않는다."""
 
     domain = "attraction"
 
-    def __init__(self, *, answer_generator=None, dspy_runtime=None) -> None:
+    def __init__(
+        self,
+        *,
+        answer_generator=None,
+        dspy_runtime=None,
+        split_timeout_seconds: float | None = None,
+    ) -> None:
         self._answer_generator = answer_generator or AttractionAnswerGenerator()
-        self._dspy_runtime = dspy_runtime or _LazySplitRuntime()
+        self._dspy_runtime = (
+            dspy_runtime
+            if dspy_runtime is not None
+            else (None if answer_generator is not None else _LazySplitRuntime())
+        )
+        self._split_timeout_seconds = (
+            settings.attraction_dspy_split_timeout_seconds
+            if split_timeout_seconds is None
+            else split_timeout_seconds
+        )
+        if self._split_timeout_seconds <= 0:
+            raise ValueError("split_timeout_seconds는 양수여야 합니다.")
 
     async def select(
         self,
@@ -42,6 +66,7 @@ class AttractionSelectionService:
         )[:10]
         question = _original_question(request)
         if self._dspy_runtime is not None:
+            started = perf_counter()
             try:
                 answer_input = build_attraction_answer_input(
                     question=question,
@@ -50,11 +75,20 @@ class AttractionSelectionService:
                     themes=request.themes,
                     candidates=ranked,
                 )
-                result = self._dspy_runtime.run(answer_input)
-                if isinstance(result, CandidateSelectionResult):
-                    return result
-            except Exception:
-                pass
+                result = await _run_split_runtime(
+                    self._dspy_runtime,
+                    answer_input,
+                    timeout_seconds=self._split_timeout_seconds,
+                )
+                if not isinstance(result, CandidateSelectionResult):
+                    raise TypeError("split runtime이 CandidateSelectionResult를 반환하지 않았습니다.")
+                return result
+            except Exception as error:
+                _log_split_fallback(
+                    error=error,
+                    elapsed_ms=round((perf_counter() - started) * 1000),
+                    candidate_count=len(ranked),
+                )
         try:
             answer = await self._answer_generator.generate(
                 question=question,
@@ -170,6 +204,33 @@ def _original_question(request: DomainSearchRequest) -> str:
             else None
         )
         or request.search_query
+    )
+
+
+async def _run_split_runtime(
+    runtime,
+    answer_input,
+    *,
+    timeout_seconds: float,
+) -> CandidateSelectionResult:
+    return await asyncio.wait_for(
+        asyncio.to_thread(runtime.run, answer_input),
+        timeout=timeout_seconds,
+    )
+
+
+def _log_split_fallback(
+    *,
+    error: Exception,
+    elapsed_ms: int,
+    candidate_count: int,
+) -> None:
+    logger.warning(
+        "attraction_dspy_split_fallback stage=split_runtime "
+        "error_type=%s elapsed_ms=%s candidate_count=%s",
+        type(error).__name__,
+        elapsed_ms,
+        candidate_count,
     )
 
 

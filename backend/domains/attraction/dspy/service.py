@@ -11,9 +11,13 @@ import dspy
 
 from core.config import settings
 from domains.attraction.answer_models import AttractionAnswerInput
+from domains.attraction.dspy.contracts import AttractionReasonPrediction
+from domains.attraction.dspy.hydrator import hydrate_structured_answer
 from domains.attraction.dspy.renderer import render_selection_result
-from domains.attraction.dspy.programs import TourismAnswerProgram, TourismSelectionProgram
+from domains.attraction.dspy.programs import TourismReasonProgram, TourismSelectionProgram
+from domains.attraction.dspy.signatures import TourismReasonSignature
 from domains.attraction.dspy.validator import (
+    validate_reason_prediction,
     validate_selection_prediction,
     validate_structured_answer,
 )
@@ -42,9 +46,15 @@ class AttractionDspyRuntimeService:
 class SplitAttractionDspyRuntime:
     """Execute independently optimized selection and answer artifacts."""
 
-    def __init__(self, *, selection_program: Any, answer_program: Any, lm: Any) -> None:
+    def __init__(
+        self,
+        *,
+        selection_program: Any,
+        reason_program: Any,
+        lm: Any,
+    ) -> None:
         self._selection_program = selection_program
-        self._answer_program = answer_program
+        self._reason_program = reason_program
         self._lm = lm
 
     def run(self, answer_input: AttractionAnswerInput):
@@ -75,23 +85,41 @@ class SplitAttractionDspyRuntime:
             candidate for candidate in answer_input.candidates
             if candidate.place_id in selection.selected_place_ids
         ]
-        answer_prediction = _invoke(
-            self._answer_program,
-            self._lm,
-            {
-                "language": answer_input.language,
-                "question": answer_input.question,
-                "selected_candidates_json": json.dumps(
-                    [candidate.model_dump(mode="json") for candidate in selected],
-                    ensure_ascii=False,
-                ),
-                "selection_reasons_json": json.dumps(selection.selection_reasons, ensure_ascii=False),
-            },
+        if selected:
+            reason_prediction = _invoke(
+                self._reason_program,
+                self._lm,
+                {
+                    "language": answer_input.language,
+                    "question": answer_input.question,
+                    "selected_candidates_json": json.dumps(
+                        [candidate.model_dump(mode="json") for candidate in selected],
+                        ensure_ascii=False,
+                    ),
+                    "selection_reasons_json": json.dumps(selection.selection_reasons, ensure_ascii=False),
+                },
+            )
+            reasons = validate_reason_prediction(
+                selection.selected_place_ids,
+                {
+                    "recommendation_reasons": json.loads(
+                        reason_prediction.recommendation_reasons_json
+                    ),
+                },
+            )
+        else:
+            reasons = AttractionReasonPrediction(recommendation_reasons={})
+        selection = selection.model_copy(
+            update={"selection_reasons": reasons.recommendation_reasons}
         )
         answer = validate_structured_answer(
             answer_input,
             selection.selected_place_ids,
-            json.loads(answer_prediction.structured_answer_json),
+            hydrate_structured_answer(
+                answer_input,
+                selection.selected_place_ids,
+                reasons,
+            ),
         )
         return render_selection_result(
             selection,
@@ -111,9 +139,10 @@ def load_split_attraction_runtime(
     if not selection_path.is_file() or not answer_path.is_file():
         raise FileNotFoundError("분리 관광 DSPy artifact가 아직 준비되지 않았습니다.")
     selection_program = TourismSelectionProgram()
-    answer_program = TourismAnswerProgram()
+    reason_program = TourismReasonProgram()
     selection_program.load(str(selection_path))
-    answer_program.load(str(answer_path))
+    reason_program.load(str(answer_path))
+    reason_program.generate.signature = TourismReasonSignature
     api_key = (
         settings.openai_api_key.get_secret_value().strip()
         if settings.openai_api_key is not None
@@ -123,7 +152,7 @@ def load_split_attraction_runtime(
         raise RuntimeError("OPENAI_API_KEY가 없어 관광 DSPy를 호출할 수 없습니다.")
     return SplitAttractionDspyRuntime(
         selection_program=selection_program,
-        answer_program=answer_program,
+        reason_program=reason_program,
         lm=dspy.LM(
             settings.attraction_dspy_model,
             api_key=api_key,

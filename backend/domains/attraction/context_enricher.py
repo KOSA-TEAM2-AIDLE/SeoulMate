@@ -30,20 +30,17 @@ class AttractionContextEnricher:
         self,
         request: DomainSearchRequest,
         candidates: list[SearchCandidate],
-        *,
-        include_congestion: bool = True,
     ) -> list[SearchCandidate]:
         if not candidates:
             return []
         question = _original_question(request)
         enriched = candidates
 
-        if include_congestion and self._should_use_congestion(request, question):
-            enriched = await self._congestion.rerank(
-                enriched,
-                question,
-                language=request.language,
-            )
+        enriched = await self._congestion.rerank(
+            enriched,
+            question,
+            language=request.language,
+        )
 
         if self._weather.should_use_weather(
             question,
@@ -51,17 +48,6 @@ class AttractionContextEnricher:
         ):
             enriched = await self._enrich_weather(request, enriched, question)
         return enriched
-
-    @staticmethod
-    def _should_use_congestion(
-        request: DomainSearchRequest,
-        question: str,
-    ) -> bool:
-        return bool(
-            request.location
-            or (request.latitude is not None and request.longitude is not None)
-            or AttractionCongestionReranker.prefers_low_congestion(question)
-        )
 
     async def _enrich_weather(
         self,
