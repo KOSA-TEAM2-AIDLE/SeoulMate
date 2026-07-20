@@ -30,6 +30,42 @@ QUESTION_FACTORIES: dict[str, QuestionFactory] = {
     "date_confirmation": lambda _: "말씀하신 날짜를 정확한 날짜로 알려주세요.",
 }
 
+ENGLISH_QUESTION_FACTORIES: dict[str, QuestionFactory] = {
+    "intent": lambda _: (
+        "What kind of travel help would you like? "
+        "Please choose a place recommendation, itinerary, or weather information."
+    ),
+    "filters.location": lambda _: (
+        "Which area should I search around? You can also use your current location."
+    ),
+    "route_request.destination": lambda _: "Which area would you like to visit?",
+    "route_request.period": lambda _: (
+        "What are the start and end dates of your trip?"
+    ),
+    "route_request.target_places_per_day": lambda _: (
+        "How many places would you like to visit per day? "
+        "Please choose relaxed (3), normal (4), or packed (5)."
+    ),
+    "route_request.pace": lambda _: (
+        "Would you like a relaxed, normal, or packed itinerary?"
+    ),
+    "weather_request.location_name": lambda _: (
+        "Which area's weather would you like to check?"
+    ),
+    "weather_request.target_date": lambda _: (
+        "Which date's weather would you like to check?"
+    ),
+    "filters.budget_scope": lambda _: (
+        "Is that budget per person or for the entire group?"
+    ),
+    "filters.budget_range": lambda _: (
+        "Please provide the minimum and maximum budget again."
+    ),
+    "date_confirmation": lambda _: (
+        "Please provide the date you mentioned as an exact calendar date."
+    ),
+}
+
 MISSING_FIELD_PRIORITY = [
     "intent",
     "route_request.destination",
@@ -47,9 +83,15 @@ MISSING_FIELD_PRIORITY = [
 def questions_for_missing_fields(
     missing_fields: list[str],
     collected: dict[str, Any],
+    language: str = "ko",
 ) -> str:
+    factories = (
+        ENGLISH_QUESTION_FACTORIES
+        if str(language).lower().startswith("en")
+        else QUESTION_FACTORIES
+    )
     questions = [
-        QUESTION_FACTORIES[field](collected)
+        factories[field](collected)
         for field in missing_fields[:2]
     ]
     return " ".join(questions)
@@ -148,5 +190,6 @@ def check_required_information(
         "assistant_message": questions_for_missing_fields(
             missing_fields,
             collected,
+            state.get("language", collected.get("language", "ko")),
         ),
     }

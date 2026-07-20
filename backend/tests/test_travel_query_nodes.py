@@ -298,6 +298,46 @@ class TravelIntentExtractorTests(unittest.TestCase):
 
 
 class RequiredInformationTests(unittest.TestCase):
+    def test_english_query_uses_english_clarification(self) -> None:
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "Recommend a quiet cafe",
+                "language": "en",
+                "intent": "single_place_recommendation",
+                "collected": {"language": "en"},
+            }
+        )
+
+        result = check_required_information(state)
+
+        self.assertEqual(["filters.location"], result["missing_fields"])
+        self.assertEqual(
+            "Which area should I search around? "
+            "You can also use your current location.",
+            result["assistant_message"],
+        )
+
+    def test_english_route_questions_remain_english_on_next_hitl_turn(self) -> None:
+        state = _base_state()
+        state.update(
+            {
+                "original_question": "Plan a day trip to Hongdae",
+                "language": "en",
+                "intent": "day_trip_route",
+                "collected": {"language": "en", "location": "Hongdae"},
+            }
+        )
+
+        result = check_required_information(state)
+
+        self.assertEqual(
+            ["route_request.period", "route_request.target_places_per_day"],
+            result["missing_fields"],
+        )
+        self.assertIn("start and end dates", result["assistant_message"])
+        self.assertIn("How many places", result["assistant_message"])
+
     def test_single_recommendation_requires_location(self) -> None:
         state = _base_state()
         state["intent"] = "single_place_recommendation"
