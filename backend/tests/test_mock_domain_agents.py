@@ -2,7 +2,12 @@ import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from routers.chat import _route_slot_start_time, _route_slot_start_times, _stream
+from routers.chat import (
+    _route_candidate_window,
+    _route_slot_start_time,
+    _route_slot_start_times,
+    _stream,
+)
 from schemas.chat import ChatRequest
 from schemas.structured_query import StructuredTravelQuery
 from services.domain_agents import mock_places_for_task
@@ -102,6 +107,27 @@ def fake_route_plan(planner_input):
 
 
 class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
+    def test_accommodation_mock_candidates_are_available(self):
+        parsed = query_with_tasks(tasks=[{
+            "task_id": "hotel-1",
+            "domain": "accommodation",
+            "search_query": "서울 숙소",
+            "desired_count": 3,
+        }])
+
+        places = mock_places_for_task(parsed.tasks[0], candidate_count=7)
+
+        self.assertEqual(len(places), 7)
+        self.assertTrue(all(place.source_type == "accommodation" for place in places))
+        self.assertEqual(places[0].name, "임시 숙소 후보 1")
+
+    def test_repeated_route_slots_shift_candidate_window(self):
+        candidates = list(range(10))
+
+        self.assertEqual(_route_candidate_window(candidates, 0), [0, 1, 2, 3, 4])
+        self.assertEqual(_route_candidate_window(candidates, 1), [1, 2, 3, 4, 5])
+        self.assertEqual(_route_candidate_window(candidates, 5), [5, 6, 7, 8, 9])
+
     def test_restaurant_route_time_uses_meal_keyword_when_start_time_missing(self):
         parsed = query_with_tasks(tasks=[{
             "task_id": "lunch",
@@ -396,6 +422,11 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("routers.chat.generate_route_plan", side_effect=fake_route_plan),
             patch(
+                "routers.chat._search_route_accommodation",
+                new_callable=AsyncMock,
+                return_value=(None, []),
+            ),
+            patch(
                 "routers.chat.get_weather_via_mcp",
                 new_callable=AsyncMock,
                 return_value={"available": False, "error": "offline"},
@@ -429,6 +460,11 @@ class MockDomainAgentTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("domains.restaurant.search_service.search_restaurants_structured", return_value=restaurant_result()),
             patch("routers.chat.generate_route_plan", side_effect=fake_route_plan),
+            patch(
+                "routers.chat._search_route_accommodation",
+                new_callable=AsyncMock,
+                return_value=(None, []),
+            ),
             patch(
                 "routers.chat.get_weather_via_mcp",
                 new_callable=AsyncMock,

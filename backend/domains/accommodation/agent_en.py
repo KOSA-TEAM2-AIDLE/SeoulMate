@@ -30,6 +30,7 @@ from domains.accommodation.search_accommodation_rrf_en import (
 )
 
 from core.config import KAKAO_REST_API_KEY
+from domains.accommodation.agent import apply_structured_location_intent
 
 def parse_user_intent_with_kakao(user_message):
     if not user_message:
@@ -257,7 +258,7 @@ def run_local_rag_en(user_question, user_lat=None, user_lng=None, top_n=30):
         amenities_sample = amenities.split(',')[0].strip() if amenities else 'Basic amenities'
         description = c.get('description')
         if description and len(description) >= 10:
-            reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+            reason_text = description
         else:
             reason_text = f"Highly relevant to your preferences. (Features {amenities_sample} etc.)"
 
@@ -291,7 +292,10 @@ def search_accommodations_structured_en(request):
     current_lng = request.longitude
     top_n = request.candidate_count
     
-    intent = parse_user_intent_with_kakao(user_message)
+    intent = apply_structured_location_intent(
+        parse_user_intent_with_kakao(user_message),
+        request.location,
+    )
     is_valid_location = intent["location_type"] != "default"
 
     if not intent["is_live_booking"] and not is_valid_location:
@@ -423,7 +427,7 @@ def search_accommodations_structured_en(request):
             
             description = matched_db.get('description')
             if description and len(description) >= 10:
-                reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+                reason_text = description
             else:
                 reason_text = f"Recommended accommodation with live availability. (Features {amenities_sample} etc.)"
 

@@ -1,6 +1,7 @@
 import re
 from difflib import SequenceMatcher
 from core.config import KAKAO_REST_API_KEY
+from services.location import geocode_kakao, is_citywide_location
 from domains.accommodation.vector_search import (
     get_embedding,
     search_by_accommodation,
@@ -259,6 +260,25 @@ def parse_user_intent_with_kakao(user_message):
         "keyword": search_keyword if search_keyword else "서울",
     }
 
+
+def apply_structured_location_intent(intent, location):
+    """구조화 Task의 지역을 레거시 숙소 파서의 서울시청 기본값보다 우선한다."""
+
+    if not location or is_citywide_location(location):
+        return intent
+    geocoded = geocode_kakao(location)
+    if not geocoded:
+        return intent
+    latitude, longitude, _ = geocoded
+    return {
+        **intent,
+        "location": location,
+        "location_type": "district" if location.endswith("구") else "landmark",
+        "lat": latitude,
+        "lng": longitude,
+        "keyword": location,
+    }
+
 def find_best_db_match_pure(scraped_name, db_hotels):
     best_match = None
     highest_score = 0.0
@@ -301,7 +321,7 @@ def run_local_rag(user_question, user_lat=None, user_lng=None, top_n=30):
         
         description = c.get('description')
         if description and len(description) >= 10:
-            reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+            reason_text = description
         else:
             reason_text = f"{c['name']}은(는) {best_feature} 등을 갖추고 있어 일정 중 머무르기 좋은 추천 숙소입니다."
 
@@ -316,6 +336,7 @@ def run_local_rag(user_question, user_lat=None, user_lng=None, top_n=30):
             "image": c.get("image"),
             "lat": c.get("lat"),
             "lng": c.get("lng"),
+            "url": c.get("link"),
             "reason": reason_text,
             "features": f"편의시설: {amenities} / 특징: {c.get('room_features', '')}"
         })
@@ -335,7 +356,10 @@ def search_accommodations_structured(request):
     current_lng = request.longitude
     top_n = request.candidate_count
     
-    intent = parse_user_intent_with_kakao(user_message)
+    intent = apply_structured_location_intent(
+        parse_user_intent_with_kakao(user_message),
+        request.location,
+    )
     
     # LLM이 날짜를 추출해 task나 filters에 넣었을 수 있으므로 모든 곳에서 날짜를 찾아본다.
     visit_date_val = request.visit_date
@@ -348,6 +372,8 @@ def search_accommodations_structured(request):
         filters = parsed_query.get("filters") if isinstance(parsed_query, dict) else getattr(parsed_query, "filters", None)
         if filters:
             visit_date_val = filters.get("start_date") if isinstance(filters, dict) else getattr(filters, "start_date", None)
+    if not visit_date_val:
+        visit_date_val = request.context.get("visit_date")
 
     end_date_val = None
     if task:
@@ -356,6 +382,8 @@ def search_accommodations_structured(request):
         filters = parsed_query.get("filters") if isinstance(parsed_query, dict) else getattr(parsed_query, "filters", None)
         if filters:
             end_date_val = filters.get("end_date") if isinstance(filters, dict) else getattr(filters, "end_date", None)
+    if not end_date_val:
+        end_date_val = request.context.get("end_date")
             
     if visit_date_val:
         # 문자열인 경우 그대로 사용, date 객체인 경우 isoformat() 호출
@@ -524,7 +552,7 @@ def search_accommodations_structured(request):
                 
             description = matched_db.get('description')
             if description and len(description) >= 10:
-                reason_text = f"💡 {description[:100]}..." if len(description) > 100 else f"💡 {description}"
+                reason_text = description
             else:
                 reason_text = f"{matched_db['name']}은(는) {best_feature} 등을 갖추고 있어 여행 중 편안하게 휴식하기 좋은 곳입니다."
 

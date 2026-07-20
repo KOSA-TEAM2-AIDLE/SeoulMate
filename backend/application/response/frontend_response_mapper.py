@@ -65,11 +65,18 @@ def _slot_time(slot: TimeSlot) -> str | None:
     return slot.time
 
 
-def frontend_place(place: Place, *, visit_time: str | None = None) -> FrontendPlace:
+def frontend_place(
+    place: Place,
+    *,
+    visit_time: str | None = None,
+    slot_id: str | None = None,
+    alternatives: list[Place] | None = None,
+) -> FrontendPlace:
     """GPT가 상세 값을 만들지 못하도록 Place에 이미 존재하는 값만 복사한다."""
 
     return FrontendPlace(
         id=place.restaurant_id or place.source_id,
+        slotId=slot_id,
         name=place.name,
         category=CATEGORY_LABELS.get(place.source_type, place.category or "기타"),
         subCategory=_optional_text(place.category),
@@ -85,6 +92,7 @@ def frontend_place(place: Place, *, visit_time: str | None = None) -> FrontendPl
         price=_optional_text(place.price),
         live_rating=_optional_text(place.live_rating),
         features=_optional_text(place.features),
+        alternatives=[frontend_place(item) for item in (alternatives or [])],
     )
 
 
@@ -107,7 +115,13 @@ def recommendation_frontend_response(places: list[Place]) -> FrontendResponse:
     )
 
 
-def route_frontend_response(days: list[DayPlan], *, active_day: int = 1) -> FrontendResponse:
+def route_frontend_response(
+    days: list[DayPlan],
+    *,
+    active_day: int = 1,
+    accommodation: Place | None = None,
+    accommodation_alternatives: list[Place] | None = None,
+) -> FrontendResponse:
     """날짜별 내부 슬롯을 연속된 travelPath 키로 직렬화한다."""
 
     ordered_days = sorted(days, key=lambda item: item.day)
@@ -116,7 +130,12 @@ def route_frontend_response(days: list[DayPlan], *, active_day: int = 1) -> Fron
         if day_plan.day != expected_day:
             raise ValueError("루트 day는 1부터 연속이어야 합니다.")
         travel_path[str(day_plan.day)] = [
-            frontend_place(slot.place, visit_time=_slot_time(slot))
+            frontend_place(
+                slot.place,
+                visit_time=_slot_time(slot),
+                slot_id=slot.slot_id,
+                alternatives=slot.alternatives,
+            )
             for slot in sorted(day_plan.slots, key=lambda item: (item.time, item.slot_id or ""))
         ]
     if not travel_path:
@@ -126,6 +145,14 @@ def route_frontend_response(days: list[DayPlan], *, active_day: int = 1) -> Fron
         day=active_day,
         allDay=len(travel_path),
         travelPath=travel_path,
+        accommodation=(
+            frontend_place(
+                accommodation,
+                alternatives=accommodation_alternatives,
+            )
+            if accommodation is not None
+            else None
+        ),
         recommendList=None,
     )
 

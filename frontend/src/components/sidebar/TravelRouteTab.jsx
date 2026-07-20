@@ -7,8 +7,13 @@ export default function TravelRouteTab({ showToast }) {
     days,
     currentDay,
     currentRoute,
+    currentAccommodation,
     setSelectedDay,
+    setSelectedPlace,
     handleDeleteItem,
+    handleCycleCandidate,
+    handleCycleAccommodation,
+    handleDeleteAccommodation,
     handleSavePDF,
     handleSharePDF
   } = useTravelRoute(showToast);
@@ -24,14 +29,14 @@ export default function TravelRouteTab({ showToast }) {
             <button
                 type="button"
                 onClick={handleSavePDF}
-                className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+                className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm whitespace-nowrap"
             >
               {t.saveBtn}
             </button>
             <button
                 type="button"
                 onClick={handleSharePDF}
-                className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+                className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm whitespace-nowrap"
             >
               {t.shareBtn}
             </button>
@@ -61,10 +66,12 @@ export default function TravelRouteTab({ showToast }) {
           {currentRoute.length > 0 ? (
               currentRoute.map((place, index) => (
                   <RouteItem
-                      key={place.id}
+                      key={place.slotId ?? `${currentDay}:${place.id}:${place.time ?? index}`}
                       place={place}
                       index={index}
                       onDelete={handleDeleteItem}
+                      onCycleCandidate={handleCycleCandidate}
+                      onClick={() => setSelectedPlace(place)}
                       t={t}
                   />
               ))
@@ -78,6 +85,19 @@ export default function TravelRouteTab({ showToast }) {
                   {t.noRouteDesc}
                 </p>
               </div>
+          )}
+          {currentAccommodation && (
+              <section className="space-y-2 border-t border-dashed border-purple-200 pt-4 mt-4">
+                <RouteItem
+                    key={`accommodation:${currentAccommodation.id}`}
+                    place={currentAccommodation}
+                    isAccommodation={true}
+                    onDelete={handleDeleteAccommodation}
+                    onCycleCandidate={handleCycleAccommodation}
+                    onClick={() => setSelectedPlace(currentAccommodation)}
+                    t={t}
+                />
+              </section>
           )}
         </div>
       </div>

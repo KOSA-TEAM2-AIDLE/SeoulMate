@@ -657,6 +657,9 @@ class StructuredRestaurantSearchPlan:
     budget_min_krw: int | None
     budget_max_krw: int | None
     top_n: int
+    # 지역 필터에 쓰는 사용자 원본 지명("용산구" 등). location_name은 지오코딩되면
+    # POI명("YTN서울타워")으로 바뀌어 자치구 판정이 안 되므로 별도로 원본을 보관한다.
+    search_area_name: str | None = None
 
 
 __all__ = [

@@ -53,6 +53,7 @@ export default function useChatSidebar() {
 
     const {
         setTravelPath,
+        setAccommodation,
         setRecommendList,
         setAllDay,
         selectedDay,
@@ -173,6 +174,9 @@ export default function useChatSidebar() {
                         setAllDay(result.allDay);
                     }
                     if (result.travelPath) setTravelPath(result.travelPath);
+                    if (result.responseType === "route") {
+                        setAccommodation(result.accommodation ?? null);
+                    }
                     if (Array.isArray(result.recommendList)) {
                         setRecommendList(result.recommendList);
                     }

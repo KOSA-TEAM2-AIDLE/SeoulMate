@@ -14,6 +14,7 @@ from integrations.kakao.geocoding_client import geocode_kakao
 
 
 DEFAULT_LOCATION_RADIUS_KM = 2.0
+DEFAULT_ROUTE_LOCATION_RADIUS_KM = 5.0
 LOCATION_CAFE_VECTOR_LIMIT = 500
 LOCATION_REVIEW_VECTOR_POOL = 500
 CURRENT_LOCATION_ALIASES = frozenset({
@@ -97,6 +98,20 @@ def _is_current_location(target: str | None) -> bool:
     return target.strip().casefold() in CURRENT_LOCATION_ALIASES
 
 
+def _default_location_radius_km(request: DomainSearchRequest) -> float:
+    """루트는 인접 장소 재정렬에 필요한 넓은 후보 풀을 확보한다."""
+
+    parsed_query = request.context.get("parsed_query")
+    intent = (
+        parsed_query.get("intent")
+        if isinstance(parsed_query, dict)
+        else getattr(parsed_query, "intent", None)
+    )
+    if intent in {"day_trip_route", "multi_day_route"}:
+        return DEFAULT_ROUTE_LOCATION_RADIUS_KM
+    return DEFAULT_LOCATION_RADIUS_KM
+
+
 class CafeSearchService:
     domain = "cafe"
     implemented = True
@@ -138,7 +153,7 @@ class CafeSearchService:
         radius_km = request.radius_km
         has_origin = origin_latitude is not None and origin_longitude is not None
         if radius_km is None and target_location and has_origin:
-            radius_km = DEFAULT_LOCATION_RADIUS_KM
+            radius_km = _default_location_radius_km(request)
         if request.radius_km is not None and not has_origin:
             raise ValueError(
                 "요청한 카페 검색 반경을 적용할 목적지 좌표를 확인하지 못했습니다."

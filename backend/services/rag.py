@@ -766,6 +766,7 @@ def build_restaurant_search_plan(
         budget_min_krw=budget_min_krw,
         budget_max_krw=budget_max_krw,
         top_n=max(top_n, task.desired_count),
+        search_area_name=requested_location_term,
     )
 
 
@@ -934,7 +935,7 @@ def search_restaurants(
 
             cursor.execute(f"""
                 SELECT id, name, category, category_kakao, rating, review_count, hours,
-                       description, description_kakao, address, image, lat, lng,
+                       description, description_kakao, address, image, link, lat, lng,
                        menu_price_min, menu_price_median,
                        mp.menu_price_lo, mp.menu_price_hi,
                        has_parking, allows_pets, has_kids_menu,
@@ -1006,6 +1007,7 @@ def search_restaurants(
             "open_status_basis": open_status_basis,
             "address": _normalize_unicode_text(meta["address"]),
             "image": meta["image"],
+            "link": meta.get("link"),
             "lat": meta["lat"],
             "lng": meta["lng"],
             "distance_km": distance,
@@ -1079,7 +1081,9 @@ def _passes_candidate_filters(
     open_now: bool,
 ) -> tuple[bool, bool | None, str | None]:
     """구조화 하드 필터를 한 후보에 적용하고 영업 판정 근거를 함께 반환한다."""
-    if plan and not address_matches_search_area(plan.location_name, meta.get("address")):
+    if plan and not address_matches_search_area(
+        plan.search_area_name or plan.location_name, meta.get("address")
+    ):
         return False, None, None
     if min_rating is not None and (
         meta.get("rating") is None or meta["rating"] < min_rating

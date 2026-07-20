@@ -12,16 +12,59 @@ from schemas.route_planner import (
     RouteSlotCandidates,
     TripPeriod,
 )
-from services.route_planner import generate_route_plan, validate_route_planner_output
+from services.route_planner import (
+    generate_route_plan,
+    route_planner_payload,
+    validate_route_planner_output,
+)
 
 
-def candidate(candidate_id: str, domain: str = "restaurant") -> RouteCandidate:
+def candidate(
+    candidate_id: str,
+    domain: str = "restaurant",
+    *,
+    latitude: float | None = None,
+    longitude: float | None = None,
+) -> RouteCandidate:
     return RouteCandidate(
         candidate_id=candidate_id,
         domain=domain,
         place_id=candidate_id,
         restaurant_id=candidate_id if domain == "restaurant" else None,
         name=f"장소 {candidate_id}",
+        latitude=latitude,
+        longitude=longitude,
+    )
+
+
+def spatial_planner_input(*, include_second_slot_coordinates: bool = True):
+    base = planner_input()
+    second_coordinates = (
+        {"latitude": 37.5, "longitude": 127.2},
+        {"latitude": 37.5, "longitude": 127.051},
+    ) if include_second_slot_coordinates else ({}, {})
+    slots = [
+        base.slots[0].model_copy(update={
+            "slot_id": "first",
+            "start_time": "10:00",
+            "candidates": [
+                candidate("a1", latitude=37.5, longitude=127.0),
+                candidate("a2", latitude=37.5, longitude=127.05),
+            ],
+        }),
+        base.slots[1].model_copy(update={
+            "slot_id": "second",
+            "start_time": "14:00",
+            "candidates": [
+                candidate("b1", "cafe", **second_coordinates[0]),
+                candidate("b2", "cafe", **second_coordinates[1]),
+            ],
+        }),
+    ]
+    return RoutePlannerInput(
+        original_question="이동이 짧은 두 곳",
+        route_request=base.route_request,
+        slots=slots,
     )
 
 
@@ -61,6 +104,10 @@ def planner_input() -> RoutePlannerInput:
 
 
 class RoutePlannerSchemaTests(unittest.TestCase):
+    def test_candidate_coordinates_must_be_paired(self):
+        with self.assertRaisesRegex(ValidationError, "함께 제공"):
+            candidate("half-coordinate", latitude=37.5)
+
     def test_period_must_match_dates(self):
         with self.assertRaises(ValidationError):
             TripPeriod(
@@ -123,6 +170,30 @@ class RoutePlannerSchemaTests(unittest.TestCase):
                 target_places_per_day=3,
             )
 
+    def test_arrival_and_departure_bound_route_slots(self):
+        base = planner_input()
+        late_arrival = RouteRequest.model_validate({
+            **base.route_request.model_dump(),
+            "arrival_at": "20:00",
+        })
+        with self.assertRaisesRegex(ValidationError, "arrival_at"):
+            RoutePlannerInput(
+                original_question=base.original_question,
+                route_request=late_arrival,
+                slots=base.slots,
+            )
+
+        early_departure = RouteRequest.model_validate({
+            **base.route_request.model_dump(),
+            "departure_at": "20:00",
+        })
+        with self.assertRaisesRegex(ValidationError, "departure_at"):
+            RoutePlannerInput(
+                original_question=base.original_question,
+                route_request=early_departure,
+                slots=base.slots,
+            )
+
     def test_same_place_with_different_candidate_ids_is_rejected(self):
         base = planner_input()
         duplicate = candidate("alias")
@@ -174,6 +245,207 @@ class RoutePlannerSchemaTests(unittest.TestCase):
 
 
 class RoutePlannerValidationTests(unittest.TestCase):
+    def test_shifted_windows_keep_five_day_restaurant_route_unique(self):
+        period = TripPeriod(
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 5),
+            nights=4,
+            days=5,
+        )
+        request = RouteRequest(destination="서울", period=period)
+        ranked = [candidate(f"restaurant-{index}") for index in range(14)]
+        slots = []
+        for occurrence in range(10):
+            day_number = occurrence // 2 + 1
+            slots.append(RouteSlotCandidates(
+                slot_id=f"day{day_number}-restaurant-{occurrence}",
+                day_number=day_number,
+                date=date(2026, 8, day_number),
+                start_time="12:00" if occurrence % 2 == 0 else "19:00",
+                domain="restaurant",
+                candidates=ranked[occurrence:occurrence + 5],
+            ))
+        planner = RoutePlannerInput(
+            original_question="서울 4박 5일 맛집 일정",
+            route_request=request,
+            slots=slots,
+        )
+
+        result = validate_route_planner_output("{}", planner)
+
+        selected_place_ids = [slot.selected.place_id for slot in result.slots]
+        self.assertEqual(len(selected_place_ids), 10)
+        self.assertEqual(len(set(selected_place_ids)), 10)
+        self.assertEqual(
+            selected_place_ids,
+            [f"restaurant-{index}" for index in range(10)],
+        )
+
+    def test_payload_contains_coordinates_and_adjacent_distance_matrix(self):
+        payload = route_planner_payload(spatial_planner_input())
+
+        self.assertEqual(
+            payload["route_optimization"]["chronological_slot_ids"],
+            ["first", "second"],
+        )
+        self.assertEqual(
+            payload["slots"][0]["candidates"][0]["latitude"],
+            37.5,
+        )
+        matrix = payload["route_optimization"]["adjacent_slot_matrices"][0]
+        self.assertEqual(matrix["from_slot_id"], "first")
+        self.assertEqual(matrix["to_slot_id"], "second")
+        self.assertEqual(len(matrix["distances"]), 4)
+        self.assertTrue(all(item["distance_km"] >= 0 for item in matrix["distances"]))
+
+    def test_day_boundary_is_connected_only_from_accommodation(self):
+        period = TripPeriod(
+            start_date=date(2026, 7, 16),
+            end_date=date(2026, 7, 17),
+            nights=1,
+            days=2,
+        )
+        request = RouteRequest(destination="서울", period=period)
+        day_two = RouteSlotCandidates(
+            slot_id="day2-first",
+            day_number=2,
+            date=date(2026, 7, 17),
+            start_time="10:00",
+            domain="cafe",
+            candidates=[candidate("c1", "cafe", latitude=37.51, longitude=127.01)],
+        )
+        day_one_activity = RouteSlotCandidates(
+            slot_id="day1-last",
+            day_number=1,
+            date=date(2026, 7, 16),
+            start_time="19:00",
+            domain="restaurant",
+            candidates=[candidate("r1", latitude=37.5, longitude=127.0)],
+        )
+        without_hotel = RoutePlannerInput(
+            original_question="숙소 없는 1박 2일",
+            route_request=request,
+            slots=[day_one_activity, day_two],
+        )
+        self.assertEqual(
+            route_planner_payload(without_hotel)["route_optimization"]
+            ["adjacent_slot_matrices"],
+            [],
+        )
+
+        hotel = RouteSlotCandidates(
+            slot_id="hotel",
+            day_number=1,
+            date=date(2026, 7, 16),
+            start_time="22:00",
+            end_date=date(2026, 7, 17),
+            end_time="08:00",
+            domain="accommodation",
+            candidates=[candidate(
+                "h1",
+                "accommodation",
+                latitude=37.505,
+                longitude=127.005,
+            )],
+        )
+        with_hotel = RoutePlannerInput(
+            original_question="숙소 있는 1박 2일",
+            route_request=request,
+            slots=[day_one_activity, hotel, day_two],
+        )
+        edges = route_planner_payload(with_hotel)["route_optimization"][
+            "adjacent_slot_matrices"
+        ]
+        self.assertEqual(
+            [(edge["from_slot_id"], edge["to_slot_id"]) for edge in edges],
+            [("day1-last", "hotel"), ("hotel", "day2-first")],
+        )
+
+    def test_server_optimizes_ranked_candidates_by_consecutive_distance(self):
+        spatial = spatial_planner_input()
+        with patch("services.route_planner._client", side_effect=RuntimeError("offline")):
+            result = generate_route_plan(spatial)
+
+        self.assertEqual(
+            [slot.selected.candidate_id for slot in result.slots],
+            ["a2", "b2"],
+        )
+        self.assertTrue(result.route_optimized)
+        self.assertEqual(result.distance_method, "haversine")
+        self.assertEqual(result.coordinate_coverage, 1.0)
+        self.assertLess(result.travel_distance_km, 0.2)
+
+    def test_missing_slot_coordinates_keeps_safe_rank_fallback(self):
+        spatial = spatial_planner_input(include_second_slot_coordinates=False)
+        with patch("services.route_planner._client", side_effect=RuntimeError("offline")):
+            result = generate_route_plan(spatial)
+
+        self.assertEqual(
+            [slot.selected.candidate_id for slot in result.slots],
+            ["a1", "b1"],
+        )
+        self.assertFalse(result.route_optimized)
+        self.assertIsNone(result.travel_distance_km)
+        self.assertIsNone(result.distance_method)
+        self.assertEqual(result.coordinate_coverage, 0.5)
+
+    def test_coordinate_gap_does_not_disable_later_route_legs(self):
+        base = planner_input()
+        slots = [
+            RouteSlotCandidates(
+                slot_id="morning",
+                day_number=1,
+                date=date(2026, 7, 16),
+                start_time="10:00",
+                domain="attraction",
+                candidates=[candidate(
+                    "morning-1", "attraction", latitude=37.48, longitude=127.0
+                )],
+            ),
+            RouteSlotCandidates(
+                slot_id="cafe-without-coordinates",
+                day_number=1,
+                date=date(2026, 7, 16),
+                start_time="15:00",
+                domain="cafe",
+                candidates=[candidate("mock-cafe", "cafe")],
+            ),
+            RouteSlotCandidates(
+                slot_id="afternoon",
+                day_number=1,
+                date=date(2026, 7, 16),
+                start_time="17:00",
+                domain="attraction",
+                candidates=[candidate(
+                    "afternoon-1", "attraction", latitude=37.5, longitude=127.0
+                )],
+            ),
+            RouteSlotCandidates(
+                slot_id="dinner",
+                day_number=1,
+                date=date(2026, 7, 16),
+                start_time="19:00",
+                domain="restaurant",
+                candidates=[
+                    candidate("far", latitude=37.6, longitude=127.0),
+                    candidate("near", latitude=37.501, longitude=127.0),
+                ],
+            ),
+        ]
+        planner = RoutePlannerInput(
+            original_question="좌표 없는 카페가 포함된 저녁 동선",
+            route_request=base.route_request,
+            slots=slots,
+        )
+
+        with patch("services.route_planner._client", side_effect=RuntimeError("offline")):
+            result = generate_route_plan(planner)
+
+        self.assertTrue(result.route_optimized)
+        self.assertEqual("mock-cafe", result.slots[1].selected.candidate_id)
+        self.assertEqual("near", result.slots[3].selected.candidate_id)
+        self.assertLess(result.travel_distance_km, 1.0)
+
     def test_single_slot_single_candidate_needs_no_alternative(self):
         base = planner_input()
         single = RoutePlannerInput(

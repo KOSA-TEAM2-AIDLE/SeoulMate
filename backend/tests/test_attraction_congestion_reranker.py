@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 from domains.attraction.congestion_reranker import (
     AttractionCongestionReranker,
 )
+from domains.attraction.context_enricher import AttractionContextEnricher
 from domains.common.models import SearchCandidate
 from domains.common.models import DomainSearchRequest
 from integrations.mcp.base_client import ContextResult
@@ -53,6 +54,44 @@ class AttractionCongestionRerankerTests(unittest.IsolatedAsyncioTestCase):
         enrich.assert_awaited_once_with(request, [_candidate()])
         self.assertEqual([enriched], result)
         self.assertIn("Seoul-Congestion-MCP", sources)
+
+    async def test_route_mode_skips_congestion_but_keeps_other_enrichment(self):
+        class Congestion:
+            async def rerank(self, candidates, question, *, language="ko"):
+                raise AssertionError("루트 추천에서 혼잡도를 호출하면 안 됩니다.")
+
+        class WeatherProvider:
+            async def get_context(self, request):
+                self.request = request
+                return ContextResult(
+                    provider="weather",
+                    available=True,
+                    data={"available": True, "condition": "clear"},
+                )
+
+        request = DomainSearchRequest(
+            task_id="route-attraction-1",
+            domain="attraction",
+            search_query="강남구 관광지",
+            location="강남구",
+            latitude=37.5,
+            longitude=127.0,
+            visit_date=datetime.now(timezone.utc).date(),
+            start_time="10:00",
+        )
+        enricher = AttractionContextEnricher(
+            congestion_reranker=Congestion(),
+            weather_provider=WeatherProvider(),
+        )
+
+        result = await enricher.enrich(
+            request,
+            [_candidate()],
+            include_congestion=False,
+        )
+
+        self.assertNotIn("congestion_available", result[0].signals)
+        self.assertTrue(result[0].signals["weather_available"])
 
     async def test_candidate_coordinates_are_sent_and_fresh_congestion_is_applied(self):
         class Provider:
